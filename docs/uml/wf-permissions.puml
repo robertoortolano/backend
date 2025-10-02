@@ -1,0 +1,81 @@
+@startuml
+title Workflow di visibilità e permessi
+
+class Item {
+  +id: Long
+  +currentStatus: Status
+  +itemTypeConfig: ItemTypeConfiguration
+}
+
+class Viewer {
+  +id: Long
+  +user: User
+  +grant: Grant
+}
+
+class Editor {
+  +id: Long
+  +user: User
+  +grant: Grant
+}
+
+class Owner {
+  +id: Long
+  +user: User
+  +grant: Grant
+}
+
+class Role {
+  +name: String
+}
+
+class Grant {
+  +id: Long
+  +roles: List<Role>
+  +users: List<User>
+  +groups: List<Group>
+}
+
+class Status {
+  +name: String
+}
+
+class FieldSet {
+  +name: String
+}
+
+class ItemTypeConfiguration {
+  +id: Long
+  +grantOwner: Grant
+  +grantViewer: Grant
+  +grantEditor: Grant
+}
+
+Item --> Status : currentStatus
+Item --> ItemTypeConfiguration
+
+Viewer --> Grant
+Editor --> Grant
+Owner --> Grant
+
+Status --> FieldSet
+
+' Ruoli assegnati alle grant
+Grant --> Role
+
+note right of ItemTypeConfiguration
+  Per ogni stato e fieldset
+  vengono associati i ruoli:
+  - viewer (visibilità campi)
+  - editor (permessi di modifica)
+  - owner (default executor transizioni)
+end note
+
+note left of Item
+  L'accesso e la modifica
+  ai campi dell'item dipendono
+  dallo stato corrente, dal ruolo
+  dell'utente e dalla grant associata
+end note
+
+@enduml

@@ -1,0 +1,123 @@
+{
+  "itemTypes": [
+    {
+      "name": "Epic",
+      "description": "Default Epic Item Type",
+      "category": "CONTAINER"
+    },
+    {
+      "name": "Story",
+      "description": "Default Story Item Type",
+      "category": "STANDARD"
+    },
+    {
+      "name": "Bug",
+      "description": "Default Bug Item Type",
+      "category": "STANDARD"
+    }
+  ],
+  "itemTypeSets": [
+    {
+      "name": "Default Item Type Set",
+      "itemTypes": ["Epic", "Story", "Bug"]
+    }
+  ],
+  "fields": [
+    {
+      "name": "Title",
+      "fieldType": "SHORT_TEXT",
+      "description": "Default Title field"
+    },
+    {
+      "name": "Summary",
+      "fieldType": "SHORT_TEXT",
+      "description": "Default Summary field"
+    },
+    {
+      "name": "Status",
+      "fieldType": "RADIO",
+      "description": "Current status",
+      "options": ["Open", "In Progress", "Closed"]
+    },
+    {
+      "name": "Tags",
+      "fieldType": "CHECKBOX",
+      "description": "Applicable tags",
+      "options": ["UI", "Backend", "Bug", "Feature"]
+    }
+  ],
+  "fieldSets": [
+    {
+      "name": "Default Field Set",
+      "fields": [
+        { "name": "Title" },
+        { "name": "Summary" },
+        { "name": "Status" },
+        { "name": "Tags" }
+      ],
+      "description": "Contains default Fields"
+    }
+  ],
+  "status": [
+    {
+      "name": "To do",
+      "category": "BACKLOG"
+    },
+    {
+      "name": "In progress",
+      "category": "PROGRESS"
+    },
+    {
+      "name": "Done",
+      "category": "COMPLETED"
+    }
+  ],
+
+  "workflow": [
+    {
+      "name": "Default workflow",
+      "transitions": [
+        {
+          "fromStatus": "To do",
+          "toStatus": "In progress"
+        },
+        {
+          "fromStatus": "In progress",
+          "toStatus": "Done"
+        }
+      ],
+      "initialStatus": "To do"
+    }
+  ],
+  "workflowNodes": [
+    {
+      "nodeId": "To do",
+      "positionX": 100,
+      "positionY": 15
+    },
+    {
+      "nodeId": "In progress",
+      "positionX": 100,
+      "positionY": 115
+    },
+    {
+      "nodeId": "Done",
+      "positionX": 100,
+      "positionY": 215
+    }
+  ],
+  "workflowEdges": [
+    {
+      "sourceId": "To do",
+      "sourcePosition": "bottom-source",
+      "targetId": "In progress",
+      "targetPosition": "top-target"
+    },
+    {
+      "sourceId": "In progress",
+      "sourcePosition": "bottom-source",
+      "targetId": "Done",
+      "targetPosition": "top-target"
+    }
+  ]
+}

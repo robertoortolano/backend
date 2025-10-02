@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/mt_project_tool?useSSL=false&serverTimezone=UTC
+    username: root
+    password: oronero
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  application:
+    name: multi-tenant-project-tool
+
+server:
+  port: 8080

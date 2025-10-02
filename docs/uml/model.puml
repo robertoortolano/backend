@@ -1,0 +1,238 @@
+@startuml
+
+' ===============================
+' ENUM & DATI STATICI
+' ===============================
+enum FieldType {
+    SHORT_TEXT
+    TEXT_AREA
+    NUMBER
+    CHECKBOX
+    RADIO
+    DATE
+    DATETIME
+    RTF
+    SINGLE_SELECT
+    MULTI_SELECT
+    CASCADING_SELECT
+    LINK
+    SINGLE_USER
+    MULTI_USER
+    SINGLE_GROUP
+    MULTI_GROUP
+}
+
+enum ItemTypeCategory {
+  Standard
+  Container
+  Subtask
+}
+
+enum ScopeType {
+  GLOBAL
+  PROJECT
+}
+
+enum RoleName {
+  ADMIN
+  USER
+}
+
+enum StatusCategory {
+    BACKLOG
+    ONGOING
+    COMPLETED
+}
+
+' ===============================
+' SEZIONE: SICUREZZA E ACCESSI
+' ===============================
+class User {
+  +id: Long
+  +username: String
+}
+
+class Group {
+  +id: Long
+  +name: String
+  +description: String
+  +passwordHash: String
+  +fullNam: String
+}
+
+class Role {
+  +id: Long
+  +name: RoleName
+  +scope: ScopeType
+  +defaultRole: Boolean
+}
+
+class Grant {
+  +id: Long
+}
+
+class GrantRoleAssignment{
+  +id: Long
+}
+Grant --> "1" Role
+Grant --> "*" User
+Grant --> "*" Group
+Grant --> "*" User : negatedUsers
+Grant --> "*" Group : negatedGroups
+Role --> "1" Tenant
+User --> "*" Tenant
+Tenant --> "*" User
+GrantRoleAssignment --> "1" Role
+GrantRoleAssignment --> "1" Project
+GrantRoleAssignment --> "1" Tenant
+GrantRoleAssignment --> "1" Grant
+
+' ===============================
+' SEZIONE: FIELDING
+' ===============================
+class Field {
+  +id: Long
+  +name: String
+  +defaultField: Boolean
+}
+
+class FieldConfiguration {
+  +id: Long
+  +description: String
+  +type: FieldType
+  +scope: ScopeType
+  +defaultFieldConfiguration: Boolean
+  +order: Integer
+}
+
+class FieldValueOption {
+  +id: Long
+  +label: String
+  +value: String
+  +enabled: Boolean
+  +order: Integer
+}
+
+class FieldSet {
+  +id: Long
+  +name: String
+  +description: String
+  +scope: ScopeType
+  +defaultFieldSet: Boolean
+}
+
+FieldConfiguration --> "0..*" Project
+FieldConfiguration --> "1" Field
+FieldConfiguration --> "*" FieldValueOption
+FieldSet "*" --> "1..*" FieldConfiguration : ordered list
+FieldSet --> "0..*" Project
+Tenant --> "*" Field
+Tenant --> "*" FieldConfiguration
+Tenant --> "*" FieldSet
+
+' ===============================
+' SEZIONE: WORKFLOW
+' ===============================
+class Status {
+  +id: Long
+  +name: String
+  +defaultStatus: Boolean
+}
+
+class WorkflowStatus {
+    +id: Long
+}
+
+class Transition {
+  +id: Long
+  +name: String
+  +defaultTransition: Boolean
+}
+
+class Workflow {
+  +id: Long
+  +name: String
+  +scope: ScopeType
+  +defaultWorkflow: Boolean
+}
+
+class TransitionAlias {
+  +id: Long
+  +alias: String
+}
+
+WorkflowStatus --> "1" Status
+WorkflowStatus --> "1" StatusCategory
+Transition --> "1" WorkflowStatus : from
+Transition --> "1" WorkflowStatus : to
+Workflow "*" --> "1..*" WorkflowStatus
+Workflow --> "0..*" Project
+Tenant --> "*" Workflow
+TransitionAlias --> "1" Project
+TransitionAlias --> "1" Transition
+
+' ===============================
+' SEZIONE: ITEM TYPES
+' ===============================
+class ItemType {
+  +id: Long
+  +name: String
+  +scope: ScopeType
+  +defaultItemType: Boolean
+}
+
+class ItemTypeConfiguration {
+  +id: Long
+  +category: ItemTypeCategory
+  +scope: ScopeType
+  +isDefault: Boolean
+}
+
+class ItemTypeSet {
+  +id: Long
+  +name: String
+  +scope: ScopeType
+  +defaultItemTypeConfiguration: Boolean
+}
+
+ItemTypeConfiguration --> "1" ItemType
+ItemTypeConfiguration "*" --> "*" Role
+ItemTypeConfiguration --> "1" Workflow
+ItemTypeConfiguration --> "1" FieldSet
+ItemTypeConfiguration --> "0..*" Project
+ItemTypeSet --> "*" ItemTypeConfiguration
+ItemTypeSet --> "0..*" Project
+Tenant --> "*" ItemType
+Tenant --> "*" ItemTypeConfiguration
+Tenant --> "*" ItemTypeSet
+
+' ===============================
+' SEZIONE: PROGETTO E TENANT
+' ===============================
+class Project {
+  +id: Long
+  +projectKey: String
+  +name: String
+  +description: String
+  +createdAt: Date
+}
+
+class Tenant {
+  +id: Long
+  +subdomain: String
+  +createdAt: Date
+}
+
+class License {
+  +id: Long
+  +licenseKey: String
+  +startDate: Date
+  +startDate: expirationDate
+}
+
+Project --> "1" ItemTypeSet
+Tenant --> "*" Project
+Tenant --> "1" License
+Tenant --> "*" Role
+
+@enduml

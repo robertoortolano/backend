@@ -1,0 +1,231 @@
+// Questo è un primo esempio generato in base al tuo schema UML aggiornato.
+// Include tutte le entità JPA
+
+package com.example.model;
+
+import jakarta.persistence.*;
+import java.util.*;
+
+// =========================
+// SEZIONE: ENUM
+// =========================
+
+public enum RoleName {
+    ADMIN,
+    USER
+}
+
+public enum ScopeType {
+    GLOBAL,
+    PROJECT
+}
+
+public enum FieldType {
+    Checkbox,
+    RadioButton,
+    Date,
+    DateTime,
+    Number,
+    RTF,
+    SingleList,
+    MultiList,
+    CascadingList,
+    Text,
+    Link,
+    SingleUser,
+    MultiUser,
+    SingleGroup,
+    MultiGroup
+}
+
+public enum ItemTypeCategory {
+    Standard,
+    Container,
+    Subtask
+}
+
+// =========================
+// SEZIONE: SICUREZZA E ACCESSI
+// =========================
+
+@Entity
+public class User {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String email;
+
+    @ManyToMany(mappedBy = "users")
+    private Set<Tenant> tenants = new HashSet<>();
+}
+
+@Entity
+public class Group {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+}
+
+@Entity
+public class Role {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Enumerated(EnumType.STRING)
+    private RoleName name;
+
+    @Enumerated(EnumType.STRING)
+    private ScopeType scope;
+
+    private boolean isDefault;
+
+    @ManyToOne
+    private Tenant tenant;
+}
+
+@Entity
+public class Grant {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToMany
+    private Set<Role> roles = new HashSet<>();
+
+    @ManyToMany
+    private Set<User> users = new HashSet<>();
+
+    @ManyToMany
+    private Set<Group> groups = new HashSet<>();
+
+    @ManyToMany @JoinTable(name = "grant_negated_users")
+    private Set<User> negatedUsers = new HashSet<>();
+
+    @ManyToMany @JoinTable(name = "grant_negated_groups")
+    private Set<Group> negatedGroups = new HashSet<>();
+}
+
+@Entity
+public class Tenant {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+
+    @OneToMany(mappedBy = "tenant")
+    private Set<Project> projects = new HashSet<>();
+
+    @OneToMany(mappedBy = "tenant")
+    private Set<Role> roles = new HashSet<>();
+
+    @OneToOne
+    private License license;
+
+    @ManyToMany
+    @JoinTable(name = "tenant_users")
+    private Set<User> users = new HashSet<>();
+
+    @OneToMany(mappedBy = "tenant")
+    private Set<Field> fields = new HashSet<>();
+
+    @OneToMany(mappedBy = "tenant")
+    private Set<FieldConfiguration> fieldConfigurations = new HashSet<>();
+
+    @OneToMany(mappedBy = "tenant")
+    private Set<FieldSet> fieldSets = new HashSet<>();
+
+    @OneToMany(mappedBy = "tenant")
+    private Set<Workflow> workflows = new HashSet<>();
+
+    @OneToMany(mappedBy = "tenant")
+    private Set<ItemType> itemTypes = new HashSet<>();
+
+    @OneToMany(mappedBy = "tenant")
+    private Set<ItemTypeConfiguration> itemTypeConfigurations = new HashSet<>();
+
+    @OneToMany(mappedBy = "tenant")
+    private Set<ItemTypeSet> itemTypeSets = new HashSet<>();
+}
+
+@Entity
+public class License {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String licenseKey;
+}
+
+// =========================
+// SEZIONE: FIELDING
+// =========================
+
+@Entity
+public class Field {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+
+    @Enumerated(EnumType.STRING)
+    private ScopeType scope;
+
+    private boolean isDefault;
+
+    @ManyToOne
+    private Tenant tenant;
+}
+
+@Entity
+public class FieldConfiguration {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Enumerated(EnumType.STRING)
+    private FieldType type;
+
+    @Enumerated(EnumType.STRING)
+    private ScopeType scope;
+
+    private boolean isDefault;
+    private Integer order;
+
+    @ManyToOne
+    private Field field;
+
+    @OneToMany(mappedBy = "fieldConfiguration", cascade = CascadeType.ALL)
+    private Set<FieldValueOption> options = new HashSet<>();
+
+    @ManyToOne
+    private Tenant tenant;
+}
+
+@Entity
+public class FieldValueOption {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String label;
+    private String value;
+    private Boolean enabled;
+    private Integer order;
+
+    @ManyToOne
+    private FieldConfiguration fieldConfiguration;
+}
+
+@Entity
+public class FieldSet {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+
+    @Enumerated(EnumType.STRING)
+    private ScopeType scope;
+
+    private boolean isDefault;
+
+    @ManyToOne
+    private Tenant tenant;
+
+    @ManyToMany
+    @JoinTable(name = "fieldset_fieldconfigs",
+               joinColumns = @JoinColumn(name = "fieldset_id"),
+               inverseJoinColumns = @JoinColumn(name = "fieldconfig_id"))
+    private List<FieldConfiguration> fieldConfigurations = new ArrayList<>();
+}
+
+// Le sezioni Workflow, ItemType, Project verranno inserite nella prossima parte.
