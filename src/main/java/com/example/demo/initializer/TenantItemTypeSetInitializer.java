@@ -5,10 +5,7 @@ import com.example.demo.config.DefaultConfigLoader;
 import com.example.demo.entity.*;
 import com.example.demo.enums.ItemTypeCategory;
 import com.example.demo.enums.ScopeType;
-import com.example.demo.repository.ItemTypeConfigurationRepository;
-import com.example.demo.repository.ItemTypeRepository;
-import com.example.demo.repository.ItemTypeSetRepository;
-import com.example.demo.repository.WorkflowRepository;
+import com.example.demo.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -28,6 +25,7 @@ public class TenantItemTypeSetInitializer implements TenantInitializer {
     private final ItemTypeRepository itemTypeRepository;
     private final ItemTypeConfigurationRepository itemTypeConfigurationRepository;
     private final WorkflowRepository workflowRepository;
+    private final FieldSetRepository fieldSetRepository;
 
     @Override
     public void initialize(Tenant tenant) {
@@ -56,6 +54,7 @@ public class TenantItemTypeSetInitializer implements TenantInitializer {
                         configuration.setScope(ScopeType.GLOBAL);
                         configuration.setTenant(tenant);
                         configuration.setWorkflow(defaultWorkflow); // ✅ associazione al workflow
+                        configuration.setFieldSet(fieldSetRepository.findFirstByTenantAndDefaultFieldSetTrue(tenant));
 
                         itemTypeConfigurationRepository.save(configuration);
                         return configuration;

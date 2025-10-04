@@ -44,4 +44,8 @@ public class ItemTypeSet {
     @JoinColumn(name = "project_id")
     private Project project;
 
+    @Builder.Default
+    @OneToMany(mappedBy = "itemTypeSet", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ItemTypeSetRole> roles = new HashSet<>();
+
 }

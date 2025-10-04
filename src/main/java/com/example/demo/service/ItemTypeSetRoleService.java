@@ -1,0 +1,415 @@
+package com.example.demo.service;
+
+import com.example.demo.dto.ItemTypeSetRoleDTO;
+import com.example.demo.dto.ItemTypeSetRoleCreateDTO;
+import com.example.demo.dto.ItemTypeSetRoleGrantCreateDTO;
+import com.example.demo.dto.ItemTypeSetRoleGrantDTO;
+import com.example.demo.entity.*;
+import com.example.demo.enums.ItemTypeSetRoleType;
+import com.example.demo.exception.ApiException;
+import com.example.demo.mapper.ItemTypeSetRoleMapper;
+import com.example.demo.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+@Transactional
+public class ItemTypeSetRoleService {
+    
+    @Autowired
+    private ItemTypeSetRoleRepository itemTypeSetRoleRepository;
+    
+    @Autowired
+    private ItemTypeSetRoleGrantRepository itemTypeSetRoleGrantRepository;
+    
+    @Autowired
+    private ItemTypeSetRepository itemTypeSetRepository;
+    
+    
+    @Autowired
+    private GrantRepository grantRepository;
+    
+    @Autowired
+    private RoleRepository roleRepository;
+    
+    @Autowired
+    private TenantRepository tenantRepository;
+    
+    @Autowired
+    private ItemTypeSetRoleMapper itemTypeSetRoleMapper;
+    
+    /**
+     * Crea automaticamente tutti i ruoli necessari per un ItemTypeSet
+     */
+    public void createRolesForItemTypeSet(Long itemTypeSetId, Tenant tenant) {
+        ItemTypeSet itemTypeSet = itemTypeSetRepository.findById(itemTypeSetId)
+                .orElseThrow(() -> new RuntimeException("ItemTypeSet not found"));
+        
+        // 1. Creare ruoli WORKER per ogni ItemType
+        createWorkerRoles(itemTypeSet, tenant);
+        
+        // 2. Creare ruoli OWNER per ogni WorkflowStatus
+        createOwnerRoles(itemTypeSet, tenant);
+        
+        // 3. Creare ruoli FIELD_EDITOR per ogni FieldConfiguration
+        createFieldEditorRoles(itemTypeSet, tenant);
+        
+        // 4. Creare ruoli CREATOR per ogni Workflow
+        createCreatorRoles(itemTypeSet, tenant);
+        
+        // 5. Creare ruoli EXECUTOR per ogni Transition
+        createExecutorRoles(itemTypeSet, tenant);
+        
+        // 6. Creare ruoli EDITOR e VIEWER per ogni coppia (FieldConfiguration, WorkflowStatus) in ItemTypeConfiguration
+        createEditorAndViewerRolesForPairs(itemTypeSet, tenant);
+    }
+    
+    private void createWorkerRoles(ItemTypeSet itemTypeSet, Tenant tenant) {
+        Set<ItemTypeConfiguration> configurations = itemTypeSet.getItemTypeConfigurations();
+        
+        for (ItemTypeConfiguration config : configurations) {
+            if (config.getItemType() != null) {
+                ItemTypeSetRole role = ItemTypeSetRole.builder()
+                        .roleType(ItemTypeSetRoleType.WORKER)
+                        .name("Worker for " + config.getItemType().getName())
+                        .description("Worker role for ItemType: " + config.getItemType().getName())
+                        .itemTypeSet(itemTypeSet)
+                        .relatedEntityType("ItemType")
+                        .relatedEntityId(config.getItemType().getId())
+                        .tenant(tenant)
+                        .build();
+                
+                itemTypeSetRoleRepository.save(role);
+            }
+        }
+    }
+    
+    private void createOwnerRoles(ItemTypeSet itemTypeSet, Tenant tenant) {
+        Set<ItemTypeConfiguration> configurations = itemTypeSet.getItemTypeConfigurations();
+        
+        for (ItemTypeConfiguration config : configurations) {
+            if (config.getWorkflow() != null) {
+                Set<WorkflowStatus> statuses = config.getWorkflow().getStatuses();
+                for (WorkflowStatus status : statuses) {
+                    ItemTypeSetRole role = ItemTypeSetRole.builder()
+                            .roleType(ItemTypeSetRoleType.OWNER)
+                            .name("Owner for " + status.getStatus().getName() + " in " + config.getWorkflow().getName())
+                            .description("Owner role for WorkflowStatus: " + status.getStatus().getName())
+                            .itemTypeSet(itemTypeSet)
+                            .relatedEntityType("WorkflowStatus")
+                            .relatedEntityId(status.getId())
+                            .tenant(tenant)
+                            .build();
+                    
+                    itemTypeSetRoleRepository.save(role);
+                }
+            }
+        }
+    }
+    
+    private void createFieldEditorRoles(ItemTypeSet itemTypeSet, Tenant tenant) {
+        Set<ItemTypeConfiguration> configurations = itemTypeSet.getItemTypeConfigurations();
+        
+        for (ItemTypeConfiguration config : configurations) {
+            if (config.getFieldSet() != null) {
+                List<FieldSetEntry> entries = config.getFieldSet().getFieldSetEntries();
+                for (FieldSetEntry entry : entries) {
+                    FieldConfiguration fieldConfig = entry.getFieldConfiguration();
+                    
+                    // Ruolo FIELD_EDITOR
+                    ItemTypeSetRole fieldEditorRole = ItemTypeSetRole.builder()
+                            .roleType(ItemTypeSetRoleType.FIELD_EDITOR)
+                            .name("Field Editor for " + fieldConfig.getName())
+                            .description("Field Editor role for FieldConfiguration: " + fieldConfig.getName())
+                            .itemTypeSet(itemTypeSet)
+                            .relatedEntityType("FieldConfiguration")
+                            .relatedEntityId(fieldConfig.getId())
+                            .tenant(tenant)
+                            .build();
+                    
+                    itemTypeSetRoleRepository.save(fieldEditorRole);
+                }
+            }
+        }
+    }
+    
+    private void createEditorAndViewerRolesForPairs(ItemTypeSet itemTypeSet, Tenant tenant) {
+        Set<ItemTypeConfiguration> configurations = itemTypeSet.getItemTypeConfigurations();
+        
+        for (ItemTypeConfiguration config : configurations) {
+            if (config.getFieldSet() != null && config.getWorkflow() != null) {
+                List<FieldSetEntry> entries = config.getFieldSet().getFieldSetEntries();
+                Set<WorkflowStatus> statuses = config.getWorkflow().getStatuses();
+                
+                // Creare ruoli EDITOR e VIEWER per ogni coppia (FieldConfiguration, WorkflowStatus)
+                for (FieldSetEntry entry : entries) {
+                    FieldConfiguration fieldConfig = entry.getFieldConfiguration();
+                    
+                    for (WorkflowStatus status : statuses) {
+                        // Ruolo EDITOR per la coppia
+                        ItemTypeSetRole editorRole = ItemTypeSetRole.builder()
+                                .roleType(ItemTypeSetRoleType.EDITOR)
+                                .name("Editor for " + fieldConfig.getName() + " in " + status.getStatus().getName())
+                                .description("Editor role for FieldConfiguration " + fieldConfig.getName() + " in WorkflowStatus " + status.getStatus().getName())
+                                .itemTypeSet(itemTypeSet)
+                                .relatedEntityType("ItemTypeConfiguration")
+                                .relatedEntityId(config.getId())
+                                .secondaryEntityType("FieldConfiguration")
+                                .secondaryEntityId(fieldConfig.getId())
+                                .tenant(tenant)
+                                .build();
+                        
+                        // Ruolo VIEWER per la coppia
+                        ItemTypeSetRole viewerRole = ItemTypeSetRole.builder()
+                                .roleType(ItemTypeSetRoleType.VIEWER)
+                                .name("Viewer for " + fieldConfig.getName() + " in " + status.getStatus().getName())
+                                .description("Viewer role for FieldConfiguration " + fieldConfig.getName() + " in WorkflowStatus " + status.getStatus().getName())
+                                .itemTypeSet(itemTypeSet)
+                                .relatedEntityType("ItemTypeConfiguration")
+                                .relatedEntityId(config.getId())
+                                .secondaryEntityType("FieldConfiguration")
+                                .secondaryEntityId(fieldConfig.getId())
+                                .tenant(tenant)
+                                .build();
+                        
+                        itemTypeSetRoleRepository.save(editorRole);
+                        itemTypeSetRoleRepository.save(viewerRole);
+                    }
+                }
+            }
+        }
+    }
+    
+    private void createCreatorRoles(ItemTypeSet itemTypeSet, Tenant tenant) {
+        Set<ItemTypeConfiguration> configurations = itemTypeSet.getItemTypeConfigurations();
+        
+        for (ItemTypeConfiguration config : configurations) {
+            if (config.getWorkflow() != null) {
+                ItemTypeSetRole role = ItemTypeSetRole.builder()
+                        .roleType(ItemTypeSetRoleType.CREATOR)
+                        .name("Creator for " + config.getWorkflow().getName())
+                        .description("Creator role for Workflow: " + config.getWorkflow().getName())
+                        .itemTypeSet(itemTypeSet)
+                        .relatedEntityType("Workflow")
+                        .relatedEntityId(config.getWorkflow().getId())
+                        .tenant(tenant)
+                        .build();
+                
+                itemTypeSetRoleRepository.save(role);
+            }
+        }
+    }
+    
+    private void createExecutorRoles(ItemTypeSet itemTypeSet, Tenant tenant) {
+        Set<ItemTypeConfiguration> configurations = itemTypeSet.getItemTypeConfigurations();
+        
+        for (ItemTypeConfiguration config : configurations) {
+            if (config.getWorkflow() != null) {
+                Set<Transition> transitions = config.getWorkflow().getTransitions();
+                for (Transition transition : transitions) {
+                    ItemTypeSetRole role = ItemTypeSetRole.builder()
+                            .roleType(ItemTypeSetRoleType.EXECUTOR)
+                            .name("Executor for " + transition.getName())
+                            .description("Executor role for Transition: " + transition.getName())
+                            .itemTypeSet(itemTypeSet)
+                            .relatedEntityType("Transition")
+                            .relatedEntityId(transition.getId())
+                            .tenant(tenant)
+                            .build();
+                    
+                    itemTypeSetRoleRepository.save(role);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Assegna un grant a un ruolo specifico
+     */
+    public ItemTypeSetRoleGrantDTO assignGrantToRole(ItemTypeSetRoleGrantCreateDTO createDTO, Tenant tenant) {
+        ItemTypeSetRole role = itemTypeSetRoleRepository.findById(createDTO.getItemTypeSetRoleId())
+                .orElseThrow(() -> new RuntimeException("ItemTypeSetRole not found"));
+        
+        Grant grant = grantRepository.findById(createDTO.getGrantId())
+                .orElseThrow(() -> new RuntimeException("Grant not found"));
+        
+        // Verifica che non esista già l'associazione
+        if (itemTypeSetRoleGrantRepository.existsByItemTypeSetRoleIdAndGrantIdAndTenantId(
+                createDTO.getItemTypeSetRoleId(), createDTO.getGrantId(), tenant.getId())) {
+            throw new RuntimeException("Grant already assigned to this role");
+        }
+        
+        ItemTypeSetRoleGrant roleGrant = ItemTypeSetRoleGrant.builder()
+                .itemTypeSetRole(role)
+                .grant(grant)
+                .tenant(tenant)
+                .build();
+        
+        ItemTypeSetRoleGrant savedRoleGrant = itemTypeSetRoleGrantRepository.save(roleGrant);
+        
+        // Converti usando il mapper corretto
+        ItemTypeSetRoleGrantDTO result = ItemTypeSetRoleGrantDTO.builder()
+                .id(savedRoleGrant.getId())
+                .itemTypeSetRoleId(savedRoleGrant.getItemTypeSetRole().getId())
+                .grantId(savedRoleGrant.getGrant().getId())
+                .tenantId(savedRoleGrant.getTenant().getId())
+                .grantedUserIds(savedRoleGrant.getGrantedUsers().stream().map(User::getId).collect(Collectors.toSet()))
+                .grantedGroupIds(savedRoleGrant.getGrantedGroups().stream().map(Group::getId).collect(Collectors.toSet()))
+                .negatedUserIds(savedRoleGrant.getNegatedUsers().stream().map(User::getId).collect(Collectors.toSet()))
+                .negatedGroupIds(savedRoleGrant.getNegatedGroups().stream().map(Group::getId).collect(Collectors.toSet()))
+                .build();
+        
+        return result;
+    }
+    
+    /**
+     * Rimuove un grant da un ruolo specifico
+     */
+    public void removeGrantFromRole(Long roleId, Long grantId, Tenant tenant) {
+        itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleIdAndGrantIdAndTenantId(roleId, grantId, tenant.getId());
+    }
+    
+    /**
+     * Ottiene tutti i ruoli per un ItemTypeSet
+     */
+    public List<ItemTypeSetRoleDTO> getRolesByItemTypeSet(Long itemTypeSetId, Tenant tenant) {
+        List<ItemTypeSetRole> roles = itemTypeSetRoleRepository.findByItemTypeSetIdAndTenantId(itemTypeSetId, tenant.getId());
+        return roles.stream()
+                .map(itemTypeSetRoleMapper::toDTO)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Ottiene i ruoli per tipo specifico
+     */
+    public List<ItemTypeSetRoleDTO> getRolesByType(Long itemTypeSetId, ItemTypeSetRoleType roleType, Tenant tenant) {
+        List<ItemTypeSetRole> roles = itemTypeSetRoleRepository.findRolesByItemTypeSetAndType(itemTypeSetId, roleType, tenant.getId());
+        return roles.stream()
+                .map(itemTypeSetRoleMapper::toDTO)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Assegna un Grant diretto a un ruolo specifico
+     */
+    public ItemTypeSetRoleDTO assignGrantDirect(Long roleId, Long grantId, Tenant tenant) {
+        ItemTypeSetRole role = itemTypeSetRoleRepository.findById(roleId)
+                .orElseThrow(() -> new ApiException("Role not found"));
+        
+        if (!role.getTenant().getId().equals(tenant.getId())) {
+            throw new ApiException("Role does not belong to current tenant");
+        }
+        
+        Grant grant = grantRepository.findById(grantId)
+                .orElseThrow(() -> new ApiException("Grant not found"));
+        
+        /*
+        if (!grant.getTenant().getId().equals(tenant.getId())) {
+            throw new ApiException("Grant does not belong to current tenant");
+        }
+
+         */
+        
+        // Rimuovi eventuali assegnazioni precedenti
+        role.setGrant(grant);
+        role.setRoleTemplate(null);
+        
+        // Rimuovi tutti i grants associati tramite ItemTypeSetRoleGrant
+        itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleId(roleId);
+        
+        ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
+        return itemTypeSetRoleMapper.toDTO(savedRole);
+    }
+    
+    /**
+     * Assegna un Role template a un ruolo specifico
+     */
+    public ItemTypeSetRoleDTO assignRoleTemplate(Long roleId, Long roleTemplateId, Tenant tenant) {
+        ItemTypeSetRole role = itemTypeSetRoleRepository.findById(roleId)
+                .orElseThrow(() -> new ApiException("Role not found"));
+        
+        if (!role.getTenant().getId().equals(tenant.getId())) {
+            throw new ApiException("Role does not belong to current tenant");
+        }
+        
+        Role roleTemplate = roleRepository.findById(roleTemplateId)
+                .orElseThrow(() -> new ApiException("Role template not found"));
+        
+        if (!roleTemplate.getTenant().getId().equals(tenant.getId())) {
+            throw new ApiException("Role template does not belong to current tenant");
+        }
+        
+        // Rimuovi eventuali assegnazioni precedenti
+        role.setRoleTemplate(roleTemplate);
+        role.setGrant(null);
+        
+        // Rimuovi tutti i grants associati tramite ItemTypeSetRoleGrant
+        itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleId(roleId);
+        
+        ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
+        return itemTypeSetRoleMapper.toDTO(savedRole);
+    }
+    
+    /**
+     * Rimuove l'assegnazione (Grant o Role) da un ruolo specifico
+     */
+    public void removeAssignment(Long roleId, Tenant tenant) {
+        ItemTypeSetRole role = itemTypeSetRoleRepository.findById(roleId)
+                .orElseThrow(() -> new ApiException("Role not found"));
+        
+        if (!role.getTenant().getId().equals(tenant.getId())) {
+            throw new ApiException("Role does not belong to current tenant");
+        }
+        
+        // Rimuovi tutte le assegnazioni
+        role.setGrant(null);
+        role.setRoleTemplate(null);
+        
+        // Rimuovi tutti i grants associati tramite ItemTypeSetRoleGrant
+        itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleId(roleId);
+        
+        itemTypeSetRoleRepository.save(role);
+    }
+    
+    /**
+     * Elimina tutti i ruoli per un ItemTypeSet
+     */
+    public void deleteAllRolesForItemTypeSet(Long itemTypeSetId, Tenant tenant) {
+        List<ItemTypeSetRole> roles = itemTypeSetRoleRepository.findByItemTypeSetIdAndTenantId(itemTypeSetId, tenant.getId());
+        
+        // Elimina prima tutti i grants associati
+        for (ItemTypeSetRole role : roles) {
+            itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleId(role.getId());
+        }
+        
+        // Poi elimina tutti i ruoli
+        itemTypeSetRoleRepository.deleteByItemTypeSetIdAndTenantId(itemTypeSetId, tenant.getId());
+    }
+    
+    /**
+     * Crea un ruolo manualmente
+     */
+    public ItemTypeSetRoleDTO createRole(ItemTypeSetRoleCreateDTO createDTO, Tenant tenant) {
+        ItemTypeSet itemTypeSet = itemTypeSetRepository.findById(createDTO.getItemTypeSetId())
+                .orElseThrow(() -> new RuntimeException("ItemTypeSet not found"));
+        
+        ItemTypeSetRole role = ItemTypeSetRole.builder()
+                .roleType(createDTO.getRoleType())
+                .name(createDTO.getName())
+                .description(createDTO.getDescription())
+                .itemTypeSet(itemTypeSet)
+                .relatedEntityType(createDTO.getRelatedEntityType())
+                .relatedEntityId(createDTO.getRelatedEntityId())
+                .secondaryEntityType(createDTO.getSecondaryEntityType())
+                .secondaryEntityId(createDTO.getSecondaryEntityId())
+                .tenant(tenant)
+                .build();
+        
+        ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
+        return itemTypeSetRoleMapper.toDTO(savedRole);
+    }
+}

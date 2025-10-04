@@ -1,0 +1,44 @@
+package com.example.demo.dto;
+
+import com.example.demo.enums.ItemTypeSetRoleType;
+import lombok.*;
+
+import java.util.Set;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class ItemTypeSetRoleDTO {
+    
+    private Long id;
+    
+    private ItemTypeSetRoleType roleType;
+    
+    private String name;
+    
+    private String description;
+    
+    private Long itemTypeSetId;
+    
+    private String relatedEntityType;
+    
+    private Long relatedEntityId;
+    
+    private String secondaryEntityType;
+    
+    private Long secondaryEntityId;
+    
+    private Long tenantId;
+    
+    // Assegnazione DUAL
+    private Long grantId;
+    private String grantName;
+    private Long roleTemplateId;
+    private String roleTemplateName;
+    private String assignmentType; // "GRANT", "ROLE", "GRANTS", "NONE"
+    
+    @Builder.Default
+    private Set<ItemTypeSetRoleGrantDTO> grants = Set.of();
+}
