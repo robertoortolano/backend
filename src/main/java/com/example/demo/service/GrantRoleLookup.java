@@ -1,7 +1,6 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
-import com.example.demo.enums.RoleName;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.exception.ApiException;
 import com.example.demo.repository.GrantRoleAssignmentRepository;
@@ -20,20 +19,20 @@ public class GrantRoleLookup {
     private final GrantRoleAssignmentRepository grantRoleAssignmentRepository;
     private final RoleRepository roleRepository;
 
-    public boolean existsByUserGlobal(User user, Tenant tenant, RoleName roleName) {
+    public boolean existsByUserGlobal(User user, Tenant tenant, String roleName) {
         return grantRoleAssignmentRepository.existsByUserAndTenantAndRoleGlobal(
                 user.getId(), tenant.getId(), roleName
         );
     }
 
 
-    Role getRoleByNameAndScope(RoleName roleName, ScopeType scopeType, Tenant tenant) {
+    Role getRoleByNameAndScope(String roleName, ScopeType scopeType, Tenant tenant) {
         return roleRepository.findByNameAndScopeAndTenant(roleName, scopeType, tenant)
                 .orElseThrow(() -> new ApiException("Role not found"));
     }
 
 
-    public List<Project> getProjectsByUserAndProjectRole(User user, Tenant tenant, RoleName roleName) {
+    public List<Project> getProjectsByUserAndProjectRole(User user, Tenant tenant, String roleName) {
         return grantRoleAssignmentRepository.findProjectsByUserTenantAndRoleProject(
                 user.getId(), tenant.getId(), roleName
         );
@@ -45,7 +44,7 @@ public class GrantRoleLookup {
 
 
     GrantRoleAssignment getByRoleAndScope(Role role,ScopeType scopeType, Tenant tenant) {
-        return grantRoleAssignmentRepository.findFirstByRoleNameAndScopeAndTenant(role.getName(),scopeType, tenant)
+        return grantRoleAssignmentRepository.findFirstByStringAndScopeAndTenant(role.getName(),scopeType, tenant)
                 .orElseThrow(() -> new ApiException("Grant Role Assignment not found"));
     }
 

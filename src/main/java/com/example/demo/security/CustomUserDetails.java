@@ -29,7 +29,7 @@ public class CustomUserDetails implements UserDetails {
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return assignments.stream()
-                .map(ga -> "ROLE_" + ga.getRole().getName().name())
+                .map(ga -> "ROLE_" + ga.getRole().getName())
                 .distinct()
                 .map(SimpleGrantedAuthority::new)
                 .toList();

@@ -6,6 +6,7 @@ import com.example.demo.entity.*;
 import com.example.demo.enums.ItemTypeCategory;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.repository.*;
+import com.example.demo.service.ItemTypePermissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,7 @@ public class TenantItemTypeSetInitializer implements TenantInitializer {
     private final ItemTypeConfigurationRepository itemTypeConfigurationRepository;
     private final WorkflowRepository workflowRepository;
     private final FieldSetRepository fieldSetRepository;
+    private final ItemTypePermissionService itemTypePermissionService;
 
     @Override
     public void initialize(Tenant tenant) {
@@ -51,12 +53,16 @@ public class TenantItemTypeSetInitializer implements TenantInitializer {
                         ItemTypeConfiguration configuration = new ItemTypeConfiguration();
                         configuration.setItemType(itemType);
                         configuration.setCategory(ItemTypeCategory.valueOf(itemTypeDef.getCategory()));
-                        configuration.setScope(ScopeType.GLOBAL);
+                        configuration.setScope(ScopeType.TENANT);
                         configuration.setTenant(tenant);
                         configuration.setWorkflow(defaultWorkflow); // ✅ associazione al workflow
                         configuration.setFieldSet(fieldSetRepository.findFirstByTenantAndDefaultFieldSetTrue(tenant));
 
                         itemTypeConfigurationRepository.save(configuration);
+                        
+                        // Crea automaticamente tutte le permissions per questa configurazione
+                        itemTypePermissionService.createPermissionsForItemTypeConfiguration(configuration);
+                        
                         return configuration;
                     })
                     .filter(Objects::nonNull)
@@ -65,7 +71,7 @@ public class TenantItemTypeSetInitializer implements TenantInitializer {
             ItemTypeSet itemTypeSet = new ItemTypeSet();
             itemTypeSet.setName(setDto.getName());
             itemTypeSet.setTenant(tenant);
-            itemTypeSet.setScope(ScopeType.GLOBAL);
+            itemTypeSet.setScope(ScopeType.TENANT);
             itemTypeSet.setDefaultItemTypeSet(true);
             itemTypeSet.setItemTypeConfigurations(configurations);
 

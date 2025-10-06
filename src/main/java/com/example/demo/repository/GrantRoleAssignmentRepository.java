@@ -1,7 +1,6 @@
 package com.example.demo.repository;
 
 import com.example.demo.entity.*;
-import com.example.demo.enums.RoleName;
 import com.example.demo.enums.ScopeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -23,11 +22,11 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
         WHERE u.id = :userId
           AND ga.tenant.id = :tenantId
           AND ga.role.name = :roleName
-          AND ga.role.scope = 'GLOBAL'
+          AND ga.role.scope = 'TENANT'
     """)
     boolean existsByUserAndTenantAndRoleGlobal(@Param("userId") Long userId,
                                                @Param("tenantId") Long tenantId,
-                                               @Param("roleName") RoleName roleName);
+                                               @Param("roleName") String roleName);
 
     // Verifica se l'utente ha un ruolo con scope PROJECT su un progetto
     @Query("""
@@ -44,7 +43,7 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
     boolean existsByUserAndTenantAndProjectAndRoleProject(@Param("userId") Long userId,
                                                           @Param("tenantId") Long tenantId,
                                                           @Param("projectId") Long projectId,
-                                                          @Param("roleName") RoleName roleName);
+                                                          @Param("roleName") String roleName);
 
     @Query("""
     SELECT CASE WHEN COUNT(ga) > 0 THEN true ELSE false END
@@ -60,7 +59,7 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
     boolean existsByUserAndTenantAndProjectAndRoleProjectIn(@Param("userId") Long userId,
                                                             @Param("tenantId") Long tenantId,
                                                             @Param("projectId") Long projectId,
-                                                            @Param("roleNames") List<RoleName> roleNames);
+                                                            @Param("roleNames") List<String> roleNames);
 
 
     // Restituisce tutte le assegnazioni di ruolo per un utente in una tenant
@@ -119,7 +118,7 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
     """)
     List<Project> findProjectsByUserTenantAndRoleProject(@Param("userId") Long userId,
                                                          @Param("tenantId") Long tenantId,
-                                                         @Param("roleName") RoleName roleName);
+                                                         @Param("roleName") String roleName);
 
     // Verifica se esiste almeno un GrantRoleAssignment per utente, tenant e ruolo con scope PROJECT
     @Query("""
@@ -134,7 +133,7 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
     """)
     boolean existsByUserAndTenantAndRoleProject(@Param("userId") Long userId,
                                                 @Param("tenantId") Long tenantId,
-                                                @Param("roleName") RoleName roleName);
+                                                @Param("roleName") String roleName);
 
     // Restituisce solo gli ID dei progetti dove l’utente ha un certo ruolo PROJECT
     @Query("""
@@ -150,7 +149,7 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
     """)
     List<Long> findProjectIdsByUserAndTenantAndRole(@Param("userId") Long userId,
                                                     @Param("tenantId") Long tenantId,
-                                                    @Param("roleName") RoleName roleName);
+                                                    @Param("roleName") String roleName);
 
     @Query("""
     SELECT ga
@@ -159,8 +158,8 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
       AND ga.role.scope = :scope
       AND ga.tenant = :tenant
 """)
-    Optional<GrantRoleAssignment> findFirstByRoleNameAndScopeAndTenant(
-            @Param("roleName") RoleName roleName,
+    Optional<GrantRoleAssignment> findFirstByStringAndScopeAndTenant(
+            @Param("roleName") String roleName,
             @Param("scope") ScopeType scope,
             @Param("tenant") Tenant tenant);
 

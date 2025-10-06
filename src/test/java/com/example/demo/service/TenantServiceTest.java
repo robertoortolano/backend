@@ -95,8 +95,8 @@ class TenantServiceTest {
         // Setup admin role
         adminRole = new Role();
         adminRole.setId(1L);
-        adminRole.setName(RoleName.ADMIN);
-        adminRole.setScope(ScopeType.GLOBAL);
+        adminRole.setName("ADMIN");
+        adminRole.setScope(ScopeType.TENANT);
         adminRole.setDefaultRole(true);
         adminRole.setTenant(tenant);
 
@@ -206,8 +206,8 @@ class TenantServiceTest {
 
         Role userRole = new Role();
         userRole.setId(2L);
-        userRole.setName(RoleName.USER);
-        userRole.setScope(ScopeType.GLOBAL);
+        userRole.setName("USER");
+        userRole.setScope(ScopeType.TENANT);
         userRole.setTenant(tenant);
 
         GrantRoleAssignment userAssignment = new GrantRoleAssignment();
@@ -215,9 +215,9 @@ class TenantServiceTest {
         userAssignment.setGrant(adminGrant);
 
         when(grantRoleLookup.getAllByUser(adminUser, tenant)).thenReturn(Arrays.asList(adminAssignment));
-        when(grantRoleLookup.getRoleByNameAndScope(RoleName.USER, ScopeType.GLOBAL, tenant)).thenReturn(userRole);
-        when(grantRoleLookup.existsByUserGlobal(adminUser, tenant, RoleName.USER)).thenReturn(false);
-        when(grantRoleLookup.getByRoleAndScope(userRole, ScopeType.GLOBAL, tenant)).thenReturn(userAssignment);
+        when(grantRoleLookup.getRoleByNameAndScope("USER", ScopeType.TENANT, tenant)).thenReturn(userRole);
+        when(grantRoleLookup.existsByUserGlobal(adminUser, tenant, "USER")).thenReturn(false);
+        when(grantRoleLookup.getByRoleAndScope(userRole, ScopeType.TENANT, tenant)).thenReturn(userAssignment);
         when(grantRepository.save(any(Grant.class))).thenReturn(adminGrant);
 
         // When
@@ -225,8 +225,8 @@ class TenantServiceTest {
 
         // Then
         verify(grantRoleLookup).getAllByUser(adminUser, tenant);
-        verify(grantRoleLookup).getRoleByNameAndScope(RoleName.USER, ScopeType.GLOBAL, tenant);
-        verify(grantRoleLookup).existsByUserGlobal(adminUser, tenant, RoleName.USER);
+        verify(grantRoleLookup).getRoleByNameAndScope("USER", ScopeType.TENANT, tenant);
+        verify(grantRoleLookup).existsByUserGlobal(adminUser, tenant, "USER");
         verify(grantRepository).save(any(Grant.class));
     }
 
@@ -258,13 +258,13 @@ class TenantServiceTest {
 
         Role userRole = new Role();
         userRole.setId(2L);
-        userRole.setName(RoleName.USER);
-        userRole.setScope(ScopeType.GLOBAL);
+        userRole.setName("USER");
+        userRole.setScope(ScopeType.TENANT);
         userRole.setTenant(tenant);
 
         when(grantRoleLookup.getAllByUser(adminUser, tenant)).thenReturn(Arrays.asList(adminAssignment));
-        when(grantRoleLookup.getRoleByNameAndScope(RoleName.USER, ScopeType.GLOBAL, tenant)).thenReturn(userRole);
-        when(grantRoleLookup.existsByUserGlobal(adminUser, tenant, RoleName.USER)).thenReturn(true);
+        when(grantRoleLookup.getRoleByNameAndScope("USER", ScopeType.TENANT, tenant)).thenReturn(userRole);
+        when(grantRoleLookup.existsByUserGlobal(adminUser, tenant, "USER")).thenReturn(true);
 
         // When & Then
         assertThrows(ApiException.class, () -> tenantService.assignUserToTenant(request, tenant, adminUser));

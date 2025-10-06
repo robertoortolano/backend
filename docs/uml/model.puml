@@ -29,7 +29,7 @@ enum ItemTypeCategory {
 }
 
 enum ScopeType {
-  GLOBAL
+  TENANT
   PROJECT
 }
 

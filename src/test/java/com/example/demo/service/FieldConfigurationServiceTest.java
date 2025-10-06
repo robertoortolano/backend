@@ -79,7 +79,7 @@ class FieldConfigurationServiceTest {
         fieldConfiguration.setDescription("Test Description");
         fieldConfiguration.setField(field);
         fieldConfiguration.setFieldType(FieldType.SHORT_TEXT);
-        fieldConfiguration.setScope(ScopeType.GLOBAL);
+        fieldConfiguration.setScope(ScopeType.TENANT);
         fieldConfiguration.setTenant(tenant);
         fieldConfiguration.setDefaultFieldConfiguration(false);
         fieldConfiguration.setOptions(new HashSet<>());
@@ -118,7 +118,7 @@ class FieldConfigurationServiceTest {
         when(fieldConfigurationRepository.save(any(FieldConfiguration.class))).thenReturn(fieldConfiguration);
         when(dtoMapper.toFieldOptionEntitySetFromCreate(any())).thenReturn(new HashSet<>());
         when(dtoMapper.toFieldConfigurationViewDto(any(FieldConfiguration.class)))
-                .thenReturn(new FieldConfigurationViewDto(1L, "Test Configuration", "Test Description", 1L, "Test Field", "test-alias", false, null, ScopeType.GLOBAL, new HashSet<>(), new ArrayList<>()));
+                .thenReturn(new FieldConfigurationViewDto(1L, "Test Configuration", "Test Description", 1L, "Test Field", "test-alias", false, null, ScopeType.TENANT, new HashSet<>(), new ArrayList<>()));
 
         // When
         FieldConfigurationViewDto result = fieldConfigurationService.createGlobalFieldConfiguration(createDto, tenant);
@@ -134,9 +134,9 @@ class FieldConfigurationServiceTest {
     void testGetAllGlobalFieldConfigurations_Success() {
         // Given
         List<FieldConfiguration> configurations = Arrays.asList(fieldConfiguration);
-        when(fieldConfigurationRepository.findByTenantAndScope(tenant, ScopeType.GLOBAL)).thenReturn(configurations);
+        when(fieldConfigurationRepository.findByTenantAndScope(tenant, ScopeType.TENANT)).thenReturn(configurations);
         when(dtoMapper.toFieldConfigurationViewDtos(configurations))
-                .thenReturn(Arrays.asList(new FieldConfigurationViewDto(1L, "Test Configuration", "Test Description", 1L, "Test Field", "test-alias", false, null, ScopeType.GLOBAL, new HashSet<>(), new ArrayList<>())));
+                .thenReturn(Arrays.asList(new FieldConfigurationViewDto(1L, "Test Configuration", "Test Description", 1L, "Test Field", "test-alias", false, null, ScopeType.TENANT, new HashSet<>(), new ArrayList<>())));
 
         // When
         List<FieldConfigurationViewDto> result = fieldConfigurationService.getAllGlobalFieldConfigurations(tenant);
@@ -144,7 +144,7 @@ class FieldConfigurationServiceTest {
         // Then
         assertNotNull(result);
         assertEquals(1, result.size());
-        verify(fieldConfigurationRepository).findByTenantAndScope(tenant, ScopeType.GLOBAL);
+        verify(fieldConfigurationRepository).findByTenantAndScope(tenant, ScopeType.TENANT);
     }
 
     @Test
@@ -152,7 +152,7 @@ class FieldConfigurationServiceTest {
         // Given
         when(fieldConfigurationLookup.getById(1L, tenant)).thenReturn(fieldConfiguration);
         when(dtoMapper.toFieldConfigurationViewDto(fieldConfiguration))
-                .thenReturn(new FieldConfigurationViewDto(1L, "Test Configuration", "Test Description", 1L, "Test Field", "test-alias", false, null, ScopeType.GLOBAL, new HashSet<>(), new ArrayList<>()));
+                .thenReturn(new FieldConfigurationViewDto(1L, "Test Configuration", "Test Description", 1L, "Test Field", "test-alias", false, null, ScopeType.TENANT, new HashSet<>(), new ArrayList<>()));
 
         // When
         FieldConfigurationViewDto result = fieldConfigurationService.getById(1L, tenant);
@@ -171,7 +171,7 @@ class FieldConfigurationServiceTest {
         when(fieldLookup.getById(1L, tenant)).thenReturn(field);
         when(dtoMapper.toFieldOptionEntitySetFromUpdate(any())).thenReturn(new HashSet<>());
         when(fieldConfigurationRepository.save(any(FieldConfiguration.class))).thenReturn(fieldConfiguration);
-        when(dtoMapper.toFieldConfigurationViewDtos(any())).thenReturn(Arrays.asList(new FieldConfigurationViewDto(1L, "Updated Configuration", "Updated Description", 1L, "Test Field", "updated-alias", false, null, ScopeType.GLOBAL, new HashSet<>(), new ArrayList<>())));
+        when(dtoMapper.toFieldConfigurationViewDtos(any())).thenReturn(Arrays.asList(new FieldConfigurationViewDto(1L, "Updated Configuration", "Updated Description", 1L, "Test Field", "updated-alias", false, null, ScopeType.TENANT, new HashSet<>(), new ArrayList<>())));
 
         // When
         FieldConfigurationViewDto result = fieldConfigurationService.updateConfiguration(tenant, 1L, updateDto);
@@ -209,7 +209,7 @@ class FieldConfigurationServiceTest {
         when(fieldTypeDescriptor.isSupportsOptions()).thenReturn(false);
         when(fieldLookup.getById(1L, tenant)).thenReturn(field);
         when(fieldConfigurationRepository.save(any(FieldConfiguration.class))).thenReturn(fieldConfiguration);
-        when(dtoMapper.toFieldConfigurationViewDtos(any())).thenReturn(Arrays.asList(new FieldConfigurationViewDto(1L, "Updated Configuration", "Updated Description", 1L, "Test Field", "updated-alias", false, null, ScopeType.GLOBAL, new HashSet<>(), new ArrayList<>())));
+        when(dtoMapper.toFieldConfigurationViewDtos(any())).thenReturn(Arrays.asList(new FieldConfigurationViewDto(1L, "Updated Configuration", "Updated Description", 1L, "Test Field", "updated-alias", false, null, ScopeType.TENANT, new HashSet<>(), new ArrayList<>())));
 
         // When
         FieldConfigurationViewDto result = fieldConfigurationService.updateConfiguration(tenant, 1L, updateDto);

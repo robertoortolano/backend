@@ -2,62 +2,52 @@ package com.example.demo.mapper;
 
 import com.example.demo.dto.ItemTypeSetRoleGrantDTO;
 import com.example.demo.entity.ItemTypeSetRoleGrant;
-import org.springframework.stereotype.Component;
+import com.example.demo.entity.User;
+import com.example.demo.entity.Group;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Component
-public class ItemTypeSetRoleGrantMapper {
+@Mapper(componentModel = "spring")
+public interface ItemTypeSetRoleGrantMapper {
     
-    public ItemTypeSetRoleGrantDTO toDTO(ItemTypeSetRoleGrant entity) {
-        if (entity == null) {
-            return null;
+    @Mapping(target = "itemTypeSetRoleId", source = "itemTypeSetRole.id")
+    @Mapping(target = "grantId", source = "grant.id")
+    @Mapping(target = "tenantId", source = "tenant.id")
+    @Mapping(target = "grantedUserIds", expression = "java(mapUsersToIds(entity.getGrantedUsers()))")
+    @Mapping(target = "grantedGroupIds", expression = "java(mapGroupsToIds(entity.getGrantedGroups()))")
+    @Mapping(target = "negatedUserIds", expression = "java(mapUsersToIds(entity.getNegatedUsers()))")
+    @Mapping(target = "negatedGroupIds", expression = "java(mapGroupsToIds(entity.getNegatedGroups()))")
+    ItemTypeSetRoleGrantDTO toDTO(ItemTypeSetRoleGrant entity);
+    
+    List<ItemTypeSetRoleGrantDTO> toDTOList(List<ItemTypeSetRoleGrant> entities);
+    
+    Set<ItemTypeSetRoleGrantDTO> toDTOSet(Set<ItemTypeSetRoleGrant> entities);
+    
+    @Mapping(target = "itemTypeSetRole", ignore = true)
+    @Mapping(target = "grant", ignore = true)
+    @Mapping(target = "tenant", ignore = true)
+    ItemTypeSetRoleGrant toEntity(ItemTypeSetRoleGrantDTO dto);
+    
+    default Set<Long> mapUsersToIds(Set<User> users) {
+        if (users == null) {
+            return Set.of();
         }
-        
-        Set<Long> grantedUserIds = entity.getGrant() != null && entity.getGrant().getUsers() != null 
-            ? entity.getGrant().getUsers().stream()
-                .map(user -> user.getId())
-                .collect(Collectors.toSet())
-            : Set.of();
-            
-        Set<Long> grantedGroupIds = entity.getGrant() != null && entity.getGrant().getGroups() != null 
-            ? entity.getGrant().getGroups().stream()
-                .map(group -> group.getId())
-                .collect(Collectors.toSet())
-            : Set.of();
-            
-        Set<Long> negatedUserIds = entity.getGrant() != null && entity.getGrant().getNegatedUsers() != null 
-            ? entity.getGrant().getNegatedUsers().stream()
-                .map(user -> user.getId())
-                .collect(Collectors.toSet())
-            : Set.of();
-            
-        Set<Long> negatedGroupIds = entity.getGrant() != null && entity.getGrant().getNegatedGroups() != null 
-            ? entity.getGrant().getNegatedGroups().stream()
-                .map(group -> group.getId())
-                .collect(Collectors.toSet())
-            : Set.of();
-        
-        return ItemTypeSetRoleGrantDTO.builder()
-                .id(entity.getId())
-                .itemTypeSetRoleId(entity.getItemTypeSetRole() != null ? entity.getItemTypeSetRole().getId() : null)
-                .grantId(entity.getGrant() != null ? entity.getGrant().getId() : null)
-                .tenantId(entity.getTenant() != null ? entity.getTenant().getId() : null)
-                .grantedUserIds(grantedUserIds)
-                .grantedGroupIds(grantedGroupIds)
-                .negatedUserIds(negatedUserIds)
-                .negatedGroupIds(negatedGroupIds)
-                .build();
+        return users.stream()
+                .map(User::getId)
+                .collect(Collectors.toSet());
     }
     
-    public ItemTypeSetRoleGrant toEntity(ItemTypeSetRoleGrantDTO dto) {
-        if (dto == null) {
-            return null;
+    default Set<Long> mapGroupsToIds(Set<Group> groups) {
+        if (groups == null) {
+            return Set.of();
         }
-        
-        return ItemTypeSetRoleGrant.builder()
-                .id(dto.getId())
-                .build();
+        return groups.stream()
+                .map(Group::getId)
+                .collect(Collectors.toSet());
     }
 }
+

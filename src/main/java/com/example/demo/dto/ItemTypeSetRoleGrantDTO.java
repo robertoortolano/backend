@@ -28,3 +28,4 @@ public class ItemTypeSetRoleGrantDTO {
     
     private Set<Long> negatedGroupIds;
 }
+

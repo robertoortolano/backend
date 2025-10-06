@@ -1,11 +1,11 @@
 package com.example.demo.dto;
 
-import com.example.demo.enums.RoleName;
 import com.example.demo.enums.ScopeType;
 
 public record RoleViewDto (
     Long id,
-    RoleName name,
+    String name,
+    String description,
     ScopeType scope,
     boolean defaultRole
 ) {}

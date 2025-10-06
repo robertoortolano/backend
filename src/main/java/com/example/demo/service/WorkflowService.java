@@ -31,7 +31,7 @@ public class WorkflowService {
 
     @Transactional
     public WorkflowViewDto createGlobal(WorkflowCreateDto dto, Tenant tenant) {
-        Workflow workflow = createBaseWorkflow(dto, tenant, ScopeType.GLOBAL);
+        Workflow workflow = createBaseWorkflow(dto, tenant, ScopeType.TENANT);
 
         // Imposta lo status iniziale
         Status initialStatus = statusLookup.getById(tenant, dto.initialStatusId());

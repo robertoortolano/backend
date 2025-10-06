@@ -2,7 +2,6 @@ package com.example.demo.service;
 
 import com.example.demo.dto.AssignUserRequest;
 import com.example.demo.entity.*;
-import com.example.demo.enums.RoleName;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.exception.ApiException;
 import com.example.demo.initializer.TenantInitializer;
@@ -81,8 +80,8 @@ public class TenantService {
 
         // ✅ Crea il ruolo TENANT_ADMIN
         Role tenantAdminRole = new Role();
-        tenantAdminRole.setName(RoleName.ADMIN);
-        tenantAdminRole.setScope(ScopeType.GLOBAL);
+        tenantAdminRole.setName("ADMIN");
+        tenantAdminRole.setScope(ScopeType.TENANT);
         tenantAdminRole.setDefaultRole(true);
         tenantAdminRole.setTenant(persistedTenant);
         roleRepository.save(tenantAdminRole);
@@ -119,13 +118,13 @@ public class TenantService {
     public void assignUserToTenant(AssignUserRequest request, Tenant tenant, User adminUser) {
         // Controlla se adminUser è admin tenant (con Grant e Role)
         boolean isAdmin = grantRoleLookup.getAllByUser(adminUser, tenant).stream()
-                .anyMatch(gra -> gra.getRole().getName() == RoleName.ADMIN && gra.getRole().getScope().equals(ScopeType.GLOBAL));
+                .anyMatch(gra -> "ADMIN".equals(gra.getRole().getName()) && gra.getRole().getScope().equals(ScopeType.TENANT));
 
         if (!isAdmin) {
             throw new ApiException("Non autorizzato");
         }
 
-        Role role = grantRoleLookup.getRoleByNameAndScope(RoleName.valueOf(request.role()), ScopeType.GLOBAL, tenant);
+        Role role = grantRoleLookup.getRoleByNameAndScope(request.role(), ScopeType.TENANT, tenant);
 
         // Verifica se l’utente è già assegnato a questo ruolo nella tenant
         boolean alreadyAssigned = grantRoleLookup.existsByUserGlobal(adminUser, tenant, role.getName());
@@ -135,7 +134,7 @@ public class TenantService {
         }
 
         // Cerca un Grant esistente per quel ruolo e tenant oppure creane uno nuovo
-        GrantRoleAssignment gra = grantRoleLookup.getByRoleAndScope(role,ScopeType.GLOBAL, tenant);
+        GrantRoleAssignment gra = grantRoleLookup.getByRoleAndScope(role,ScopeType.TENANT, tenant);
 
         Grant grant = gra.getGrant();
          if (grant == null) {

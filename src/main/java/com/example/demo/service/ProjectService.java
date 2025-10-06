@@ -4,7 +4,6 @@ import com.example.demo.dto.ProjectCreateDto;
 import com.example.demo.dto.ProjectUpdateDto;
 import com.example.demo.dto.ProjectViewDto;
 import com.example.demo.entity.*;
-import com.example.demo.enums.RoleName;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.exception.ApiException;
 import com.example.demo.initializer.ProjectInitializer;
@@ -47,7 +46,7 @@ public class ProjectService {
 
     public ProjectViewDto createProjectForCurrentUser(ProjectCreateDto dto, User user, Tenant tenant) {
 
-        boolean authorized = grantRoleLookup.existsByUserGlobal(user, tenant, RoleName.ADMIN);
+        boolean authorized = grantRoleLookup.existsByUserGlobal(user, tenant, "ADMIN");
 
         if (!authorized) {
             throw new ApiException("Accesso negato: non sei TENANT_ADMIN per questa tenant");
@@ -61,7 +60,7 @@ public class ProjectService {
         projectInitializers.forEach(init -> init.initialize(project, tenant));
         projectRepository.save(project);
 
-        Role projectRole = grantRoleLookup.getRoleByNameAndScope(RoleName.ADMIN, ScopeType.PROJECT, tenant);
+        Role projectRole = grantRoleLookup.getRoleByNameAndScope("ADMIN", ScopeType.PROJECT, tenant);
 
         // Crea il Grant relativo al ruolo (tenant è implicito in role)
         Grant newGrant = new Grant();
@@ -84,7 +83,7 @@ public class ProjectService {
     public List<ProjectViewDto> getProjectsForUser(Tenant tenant, User user) {
 
         // Controllo se l'utente ha un ruolo globale da ADMIN sul tenant
-        boolean isTenantAdmin = grantRoleLookup.existsByUserGlobal(user, tenant, RoleName.ADMIN);
+        boolean isTenantAdmin = grantRoleLookup.existsByUserGlobal(user, tenant, "ADMIN");
 
         if (isTenantAdmin) {
             // Se è admin tenant, restituisco tutti i progetti della tenant
@@ -93,7 +92,7 @@ public class ProjectService {
 
         // Altrimenti restituisco solo i progetti dove ha ruolo di PROJECT_ADMIN
         return dtoMapper.toProjectViewDtos(grantRoleLookup.getProjectsByUserAndProjectRole(
-                user, tenant, RoleName.ADMIN
+                user, tenant, "ADMIN"
         ));
     }
 

@@ -29,7 +29,7 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
     @Query("""
         SELECT DISTINCT its FROM ItemTypeSet its
         LEFT JOIN FETCH its.itemTypeConfigurations
-        WHERE its.tenant = :tenant AND its.scope = 'GLOBAL'
+        WHERE its.tenant = :tenant AND its.scope = 'TENANT'
     """)
     List<ItemTypeSet> findAllGlobalWithItemTypeConfigurationsByTenant(@Param("tenant") Tenant tenant);
 
@@ -49,6 +49,8 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
     SELECT s FROM ItemTypeSet s
     LEFT JOIN FETCH s.itemTypeConfigurations e
     LEFT JOIN FETCH e.itemType
+    LEFT JOIN FETCH e.workflow w
+    LEFT JOIN FETCH e.fieldSet fs
     WHERE s.id = :id AND s.tenant = :tenant
 """)
     Optional<ItemTypeSet> findByIdWithItemTypeConfigurationsAndTenant(@Param("id") Long id, @Param("tenant") Tenant tenant);
@@ -56,5 +58,22 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
     boolean existsByItemTypeConfigurations_IdAndTenant_Id(Long itemTypeConfigurationId, Long tenantId);
 
     void deleteByIdAndTenant(Long id, Tenant tenant);
+
+    @Query("""
+    SELECT DISTINCT s FROM ItemTypeSet s
+    LEFT JOIN FETCH s.itemTypeConfigurations e
+    LEFT JOIN FETCH e.itemType
+    LEFT JOIN FETCH e.workflow w
+    LEFT JOIN FETCH w.statuses ws
+    LEFT JOIN FETCH ws.status
+    LEFT JOIN FETCH w.transitions t
+    LEFT JOIN FETCH t.fromStatus fs
+    LEFT JOIN FETCH fs.status
+    LEFT JOIN FETCH t.toStatus ts
+    LEFT JOIN FETCH ts.status
+    LEFT JOIN FETCH e.fieldSet fs2
+    WHERE s.id = :id AND s.tenant = :tenant
+""")
+    Optional<ItemTypeSet> findByIdWithAllRelations(@Param("id") Long id, @Param("tenant") Tenant tenant);
 
 }

@@ -133,3 +133,5 @@ Quando viene creato un ItemTypeSet, il sistema crea automaticamente:
 - Tutti i ruoli sono validi solo nel contesto dell'ItemTypeSet
 - Ogni ruolo può avere multiple Grant assegnate
 - Le Grant definiscono chi può assumere il ruolo
+
+

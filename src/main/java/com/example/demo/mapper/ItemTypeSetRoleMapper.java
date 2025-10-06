@@ -1,65 +1,39 @@
 package com.example.demo.mapper;
 
 import com.example.demo.dto.ItemTypeSetRoleDTO;
-import com.example.demo.dto.ItemTypeSetRoleGrantDTO;
 import com.example.demo.entity.ItemTypeSetRole;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.List;
 
-@Component
-public class ItemTypeSetRoleMapper {
+@Mapper(componentModel = "spring", uses = {ItemTypeSetRoleGrantMapper.class})
+public interface ItemTypeSetRoleMapper {
     
-    @Autowired
-    private ItemTypeSetRoleGrantMapper itemTypeSetRoleGrantMapper;
+    @Mapping(target = "itemTypeSetId", source = "itemTypeSet.id")
+    @Mapping(target = "tenantId", source = "tenant.id")
+    @Mapping(target = "grantId", source = "grant.id")
+    @Mapping(target = "grantName", ignore = true)
+    @Mapping(target = "roleTemplateId", source = "roleTemplate.id")
+    @Mapping(target = "roleTemplateName", source = "roleTemplate.name")
+    @Mapping(target = "grants", source = "grants")
+    ItemTypeSetRoleDTO toDTO(ItemTypeSetRole entity);
     
-    public ItemTypeSetRoleDTO toDTO(ItemTypeSetRole entity) {
-        if (entity == null) {
-            return null;
-        }
-        
-        Set<ItemTypeSetRoleGrantDTO> grantDTOs = entity.getGrants() != null 
-            ? entity.getGrants().stream()
-                .map(itemTypeSetRoleGrantMapper::toDTO)
-                .collect(Collectors.toSet())
-            : Set.of();
-        
-        return ItemTypeSetRoleDTO.builder()
-                .id(entity.getId())
-                .roleType(entity.getRoleType())
-                .name(entity.getName())
-                .description(entity.getDescription())
-                .itemTypeSetId(entity.getItemTypeSet() != null ? entity.getItemTypeSet().getId() : null)
-                .relatedEntityType(entity.getRelatedEntityType())
-                .relatedEntityId(entity.getRelatedEntityId())
-                .secondaryEntityType(entity.getSecondaryEntityType())
-                .secondaryEntityId(entity.getSecondaryEntityId())
-                .tenantId(entity.getTenant() != null ? entity.getTenant().getId() : null)
-                .grantId(entity.getGrant() != null ? entity.getGrant().getId() : null)
-                //.grantName(entity.getGrant() != null ? entity.getGrant().getName() : null)
-                .roleTemplateId(entity.getRoleTemplate() != null ? entity.getRoleTemplate().getId() : null)
-                .roleTemplateName(entity.getRoleTemplate() != null ? entity.getRoleTemplate().getName().toString() : null)
-                .assignmentType(entity.getAssignmentType())
-                .grants(grantDTOs)
-                .build();
-    }
+    List<ItemTypeSetRoleDTO> toDTOList(List<ItemTypeSetRole> entities);
     
-    public ItemTypeSetRole toEntity(ItemTypeSetRoleDTO dto) {
-        if (dto == null) {
-            return null;
-        }
-        
-        return ItemTypeSetRole.builder()
-                .id(dto.getId())
-                .roleType(dto.getRoleType())
-                .name(dto.getName())
-                .description(dto.getDescription())
-                .relatedEntityType(dto.getRelatedEntityType())
-                .relatedEntityId(dto.getRelatedEntityId())
-                .secondaryEntityType(dto.getSecondaryEntityType())
-                .secondaryEntityId(dto.getSecondaryEntityId())
-                .build();
-    }
+    @Mapping(target = "itemTypeSet", ignore = true)
+    @Mapping(target = "tenant", ignore = true)
+    @Mapping(target = "grant", ignore = true)
+    @Mapping(target = "roleTemplate", ignore = true)
+    @Mapping(target = "grants", ignore = true)
+    ItemTypeSetRole toEntity(ItemTypeSetRoleDTO dto);
+    
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "itemTypeSet", ignore = true)
+    @Mapping(target = "tenant", ignore = true)
+    @Mapping(target = "grant", ignore = true)
+    @Mapping(target = "roleTemplate", ignore = true)
+    @Mapping(target = "grants", ignore = true)
+    void updateEntity(ItemTypeSetRoleDTO dto, @MappingTarget ItemTypeSetRole entity);
 }

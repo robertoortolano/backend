@@ -30,6 +30,12 @@ public class DtoMapperFacade {
     private final FieldTypeDescriptorMapper fieldTypeDescriptorMapper;
     private final WorkflowMapper workflowMapper;
     private final WorkflowStatusMapper workflowStatusMapper;
+    private final UserSimpleMapper userSimpleMapper;
+    private final UserResponseMapper userResponseMapper;
+    private final GroupSimpleMapper groupSimpleMapper;
+    private final GroupMapper groupMapper;
+    private final ItemTypeSetRoleMapper itemTypeSetRoleMapper;
+    private final ItemTypeSetRoleGrantMapper itemTypeSetRoleGrantMapper;
 
     // ---------------------
     // Project
@@ -220,6 +226,94 @@ public class DtoMapperFacade {
 
     public List<WorkflowStatusViewDto> toWorkflowStatusViewDtos (List<WorkflowStatus> workflowStatus) {
         return workflowStatusMapper.toViewDtos(workflowStatus);
+    }
+
+    // ---------------------
+    // User
+    // ---------------------
+    public UserSimpleDto toUserSimpleDto(User user) {
+        return userSimpleMapper.toDto(user);
+    }
+
+    public List<UserSimpleDto> toUserSimpleDtos(List<User> users) {
+        return userSimpleMapper.toDtoList(users);
+    }
+
+    public UserResponseDto toUserResponseDto(User user) {
+        return userResponseMapper.toDto(user);
+    }
+
+    public List<UserResponseDto> toUserResponseDtos(List<User> users) {
+        return userResponseMapper.toDtoList(users);
+    }
+
+    public Set<UserResponseDto> toUserResponseDtoSet(Set<User> users) {
+        return userResponseMapper.toDtoSet(users);
+    }
+
+    // ---------------------
+    // Group
+    // ---------------------
+    public GroupSimpleDto toGroupSimpleDto(Group group) {
+        return groupSimpleMapper.toDto(group);
+    }
+
+    public List<GroupSimpleDto> toGroupSimpleDtos(List<Group> groups) {
+        return groupSimpleMapper.toDtoList(groups);
+    }
+
+    public GroupViewDto toGroupViewDto(Group group) {
+        return groupMapper.toViewDto(group);
+    }
+
+    public List<GroupViewDto> toGroupViewDtos(List<Group> groups) {
+        return groupMapper.toViewDtos(groups);
+    }
+
+    public Group toGroup(GroupCreateDto dto) {
+        return groupMapper.toEntity(dto);
+    }
+
+    public void updateGroupFromDto(GroupUpdateDto dto, Group group) {
+        groupMapper.updateGroupFromDto(dto, group);
+    }
+
+    // ---------------------
+    // ItemTypeSetRole
+    // ---------------------
+    public ItemTypeSetRoleDTO toItemTypeSetRoleDTO(ItemTypeSetRole role) {
+        return itemTypeSetRoleMapper.toDTO(role);
+    }
+
+    public List<ItemTypeSetRoleDTO> toItemTypeSetRoleDTOs(List<ItemTypeSetRole> roles) {
+        return itemTypeSetRoleMapper.toDTOList(roles);
+    }
+
+    public ItemTypeSetRole toItemTypeSetRole(ItemTypeSetRoleDTO dto) {
+        return itemTypeSetRoleMapper.toEntity(dto);
+    }
+
+    public void updateItemTypeSetRole(ItemTypeSetRoleDTO dto, ItemTypeSetRole entity) {
+        itemTypeSetRoleMapper.updateEntity(dto, entity);
+    }
+
+    // ---------------------
+    // ItemTypeSetRoleGrant
+    // ---------------------
+    public ItemTypeSetRoleGrantDTO toItemTypeSetRoleGrantDTO(ItemTypeSetRoleGrant grant) {
+        return itemTypeSetRoleGrantMapper.toDTO(grant);
+    }
+
+    public List<ItemTypeSetRoleGrantDTO> toItemTypeSetRoleGrantDTOs(List<ItemTypeSetRoleGrant> grants) {
+        return itemTypeSetRoleGrantMapper.toDTOList(grants);
+    }
+
+    public Set<ItemTypeSetRoleGrantDTO> toItemTypeSetRoleGrantDTOSet(Set<ItemTypeSetRoleGrant> grants) {
+        return itemTypeSetRoleGrantMapper.toDTOSet(grants);
+    }
+
+    public ItemTypeSetRoleGrant toItemTypeSetRoleGrant(ItemTypeSetRoleGrantDTO dto) {
+        return itemTypeSetRoleGrantMapper.toEntity(dto);
     }
 
 }

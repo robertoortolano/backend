@@ -42,7 +42,7 @@ public class TenantFieldSetInitializer implements TenantInitializer {
             FieldSet fieldSet = new FieldSet();
             fieldSet.setName(fsDto.getName());
             fieldSet.setDescription(fsDto.getDescription());
-            fieldSet.setScope(ScopeType.GLOBAL);
+            fieldSet.setScope(ScopeType.TENANT);
             fieldSet.setTenant(tenant);
             fieldSet.setDefaultFieldSet(true);
             fieldSet.setFieldSetEntries(new ArrayList<>());
@@ -65,7 +65,7 @@ public class TenantFieldSetInitializer implements TenantInitializer {
                                 def.getDescription(),
                                 FieldType.valueOf(def.getFieldType()),
                                 def.getOptions(),
-                                ScopeType.GLOBAL,
+                                ScopeType.TENANT,
                                 true,
                                 tenant
                         )

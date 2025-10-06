@@ -45,7 +45,7 @@ public class FieldConfigurationService {
         entity.setAlias(dto.alias());
         entity.setTenant(tenant);
         entity.setFieldType(fieldType);
-        entity.setScope(ScopeType.GLOBAL); // o GLOBAL, a seconda del contesto
+        entity.setScope(ScopeType.TENANT); // o GLOBAL, a seconda del contesto
         entity.setDefaultFieldConfiguration(false); // oppure true, se è il default
         entity.setOptions(dtoMapper.toFieldOptionEntitySetFromCreate(dto.options()));
 
@@ -56,7 +56,7 @@ public class FieldConfigurationService {
     @Transactional(readOnly = true)
     public List<FieldConfigurationViewDto> getAllGlobalFieldConfigurations(Tenant tenant) {
 
-        List<FieldConfiguration> configurations = fieldConfigurationRepository.findByTenantAndScope(tenant, ScopeType.GLOBAL);
+        List<FieldConfiguration> configurations = fieldConfigurationRepository.findByTenantAndScope(tenant, ScopeType.TENANT);
         return dtoMapper.toFieldConfigurationViewDtos(configurations);
     }
 

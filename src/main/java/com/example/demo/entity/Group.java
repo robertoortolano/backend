@@ -6,31 +6,43 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.HashSet;
 import java.util.Set;
 
 @Entity
+@Table(name = "user_groups") // "Group" is a reserved keyword in MySQL
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "user_group")
 public class Group {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String name;
-    private String description;
 
-    @ManyToMany
-    @JoinTable(
-            name = "group_user",
-            joinColumns = @JoinColumn(name = "group_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id")
-    )
-    private Set<User> users;
+    @Column(nullable = false)
+    private String name;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "tenant_id", nullable = false)
     private Tenant tenant;
 
+    @ManyToMany
+    @JoinTable(
+        name = "user_groups_users",
+        joinColumns = @JoinColumn(name = "group_id"),
+        inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    private Set<User> users = new HashSet<>();
+
+    @ManyToMany
+    @JoinTable(
+        name = "user_groups_denied_users",
+        joinColumns = @JoinColumn(name = "group_id"),
+        inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    private Set<User> deniedUsers = new HashSet<>();
 }

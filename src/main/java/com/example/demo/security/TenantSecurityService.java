@@ -1,7 +1,6 @@
 package com.example.demo.security;
 
 import com.example.demo.entity.*;
-import com.example.demo.enums.RoleName;
 import com.example.demo.repository.*;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,7 +18,7 @@ public class TenantSecurityService {
     private final ProjectRepository projectRepository;
 
 
-    public boolean hasTenantRoleName(User user, Tenant tenant, RoleName roleName) {
+    public boolean hasTenantRoleName(User user, Tenant tenant, String roleName) {
         return grantRoleAssignmentRepository.existsByUserAndTenantAndRoleGlobal(user.getId(), tenant.getId(), roleName);
     }
 

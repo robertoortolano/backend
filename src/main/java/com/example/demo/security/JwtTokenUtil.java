@@ -59,11 +59,11 @@ public class JwtTokenUtil {
         claims.put("userId", user.getId());
         claims.put("tenantId", tenantId);
 
-        // 🔍 Ottieni i ruoli GLOBALI dell’utente per quella tenant
+        // 🔍 Ottieni i ruoli TENANT dell'utente per quella tenant
         List<Map<String, String>> roles = grantRoleAssignmentRepository.findAllByUserAndTenant(user.getId(), tenantId).stream()
                 .map(GrantRoleAssignment::getRole)
-                .filter(role -> role.getScope() == ScopeType.GLOBAL)
-                .map(role -> Map.of("name", role.getName().name(), "scope", role.getScope().name()))
+                .filter(role -> role.getScope() == ScopeType.TENANT)
+                .map(role -> Map.of("name", role.getName(), "scope", role.getScope().name()))
                 .toList();
 
         claims.put(ROLES, roles);

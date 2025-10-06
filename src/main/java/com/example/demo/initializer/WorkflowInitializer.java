@@ -58,7 +58,7 @@ public class WorkflowInitializer implements TenantInitializer {
                     .orElseGet(() -> {
                         Workflow w = new Workflow();
                         w.setTenant(tenant);
-                        w.setScope(ScopeType.GLOBAL);
+                        w.setScope(ScopeType.TENANT);
                         w.setName(workflowName);
                         w.setDefaultWorkflow(true);
                         w.setInitialStatus(initialStatus);

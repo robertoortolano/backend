@@ -1,7 +1,6 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
-import com.example.demo.enums.RoleName;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.repository.GrantRoleAssignmentRepository;
 import com.example.demo.repository.RoleRepository;
@@ -21,10 +20,10 @@ public class GrantRoleService {
      * Restituisce i ruoli GLOBALI effettivi assegnati a un utente.
      */
     @Transactional(readOnly = true)
-    public List<RoleName> getGlobalRolesForUser(Tenant tenant, User user) {
+    public List<String> getGlobalRolesForUser(Tenant tenant, User user) {
         return grantRoleLookup.getAllByUser(user, tenant).stream()
                 .map(GrantRoleAssignment::getRole)
-                .filter(role -> role.getScope() == ScopeType.GLOBAL)
+                .filter(role -> role.getScope() == ScopeType.TENANT)
                 .map(Role::getName)
                 .distinct()
                 .toList();

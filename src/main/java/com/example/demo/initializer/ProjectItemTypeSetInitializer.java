@@ -16,7 +16,7 @@ import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
-@Order(1)
+@Order(7)
 public class ProjectItemTypeSetInitializer implements ProjectInitializer {
 
     private final ItemTypeSetRepository itemTypeSetRepository;

@@ -109,7 +109,7 @@ public class FieldSetService {
 
 
     public FieldSetViewDto createGlobalFieldSet(FieldSetCreateDto dto, Tenant tenant) {
-        FieldSet fieldSet = createFieldSet(dto, tenant, ScopeType.GLOBAL, null);
+        FieldSet fieldSet = createFieldSet(dto, tenant, ScopeType.TENANT, null);
         return dtoMapper.toFieldSetViewDto(fieldSet);
     }
 
@@ -133,7 +133,7 @@ public class FieldSetService {
     @Transactional(readOnly = true)
     public List<FieldSetViewDto> getGlobalFieldSets(Tenant tenant) {
 
-        List<FieldSet> sets = fieldSetRepository.findByTenantAndScope(tenant, ScopeType.GLOBAL);
+        List<FieldSet> sets = fieldSetRepository.findByTenantAndScope(tenant, ScopeType.TENANT);
         return sets.stream().map(dtoMapper::toFieldSetViewDto).toList();
     }
 

@@ -239,3 +239,5 @@ Le modifiche apportate standardizzano completamente la gestione del tenant nel s
 4. **Più Manutenibile**: Codice più facile da mantenere e estendere
 
 Il sistema è ora completamente allineato con gli standard del progetto e pronto per la produzione.
+
+

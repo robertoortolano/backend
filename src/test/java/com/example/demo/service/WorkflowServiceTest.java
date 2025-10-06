@@ -92,7 +92,7 @@ class WorkflowServiceTest {
         workflow = new Workflow();
         workflow.setId(1L);
         workflow.setName("Test Workflow");
-        workflow.setScope(ScopeType.GLOBAL);
+        workflow.setScope(ScopeType.TENANT);
         workflow.setTenant(tenant);
         workflow.setStatuses(new HashSet<>());
         workflow.setTransitions(new HashSet<>());
@@ -150,7 +150,7 @@ class WorkflowServiceTest {
         WorkflowViewDto workflowViewDto = new WorkflowViewDto();
         workflowViewDto.setId(1L);
         workflowViewDto.setName("Test Workflow");
-        workflowViewDto.setScope(ScopeType.GLOBAL);
+        workflowViewDto.setScope(ScopeType.TENANT);
         workflowViewDto.setDefaultWorkflow(false);
         when(dtoMapper.toWorkflowViewDto(any(Workflow.class))).thenReturn(workflowViewDto);
 
@@ -208,7 +208,7 @@ class WorkflowServiceTest {
         WorkflowViewDto updatedWorkflowViewDto = new WorkflowViewDto();
         updatedWorkflowViewDto.setId(1L);
         updatedWorkflowViewDto.setName("Updated Workflow");
-        updatedWorkflowViewDto.setScope(ScopeType.GLOBAL);
+        updatedWorkflowViewDto.setScope(ScopeType.TENANT);
         updatedWorkflowViewDto.setDefaultWorkflow(false);
         when(dtoMapper.toWorkflowViewDto(any(Workflow.class))).thenReturn(updatedWorkflowViewDto);
 

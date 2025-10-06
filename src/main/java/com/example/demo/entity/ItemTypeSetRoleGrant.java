@@ -48,3 +48,4 @@ public class ItemTypeSetRoleGrant {
         return grant != null ? grant.getNegatedGroups() : new HashSet<>();
     }
 }
+

@@ -27,12 +27,15 @@ public class Grant {
     private Set<User> users = new HashSet<>();
 
     @ManyToMany
+    @JoinTable(name = "grant_assignment_groups")
     private Set<Group> groups = new HashSet<>();
 
-    @ManyToMany @JoinTable(name = "grant_negated_users")
+    @ManyToMany 
+    @JoinTable(name = "grant_negated_users")
     private Set<User> negatedUsers = new HashSet<>();
 
-    @ManyToMany @JoinTable(name = "grant_negated_groups")
+    @ManyToMany 
+    @JoinTable(name = "grant_negated_groups")
     private Set<Group> negatedGroups = new HashSet<>();
 
 }

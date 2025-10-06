@@ -7,7 +7,7 @@ import com.example.demo.dto.ItemTypeSetRoleGrantDTO;
 import com.example.demo.entity.*;
 import com.example.demo.enums.ItemTypeSetRoleType;
 import com.example.demo.exception.ApiException;
-import com.example.demo.mapper.ItemTypeSetRoleMapper;
+import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -40,7 +40,7 @@ public class ItemTypeSetRoleService {
     private TenantRepository tenantRepository;
     
     @Autowired
-    private ItemTypeSetRoleMapper itemTypeSetRoleMapper;
+    private DtoMapperFacade dtoMapper;
     
     /**
      * Crea automaticamente tutti i ruoli necessari per un ItemTypeSet
@@ -278,9 +278,7 @@ public class ItemTypeSetRoleService {
      */
     public List<ItemTypeSetRoleDTO> getRolesByItemTypeSet(Long itemTypeSetId, Tenant tenant) {
         List<ItemTypeSetRole> roles = itemTypeSetRoleRepository.findByItemTypeSetIdAndTenantId(itemTypeSetId, tenant.getId());
-        return roles.stream()
-                .map(itemTypeSetRoleMapper::toDTO)
-                .collect(Collectors.toList());
+        return dtoMapper.toItemTypeSetRoleDTOs(roles);
     }
     
     /**
@@ -288,9 +286,7 @@ public class ItemTypeSetRoleService {
      */
     public List<ItemTypeSetRoleDTO> getRolesByType(Long itemTypeSetId, ItemTypeSetRoleType roleType, Tenant tenant) {
         List<ItemTypeSetRole> roles = itemTypeSetRoleRepository.findRolesByItemTypeSetAndType(itemTypeSetId, roleType, tenant.getId());
-        return roles.stream()
-                .map(itemTypeSetRoleMapper::toDTO)
-                .collect(Collectors.toList());
+        return dtoMapper.toItemTypeSetRoleDTOs(roles);
     }
     
     /**
@@ -322,7 +318,7 @@ public class ItemTypeSetRoleService {
         itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleId(roleId);
         
         ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
-        return itemTypeSetRoleMapper.toDTO(savedRole);
+        return dtoMapper.toItemTypeSetRoleDTO(savedRole);
     }
     
     /**
@@ -351,7 +347,7 @@ public class ItemTypeSetRoleService {
         itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleId(roleId);
         
         ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
-        return itemTypeSetRoleMapper.toDTO(savedRole);
+        return dtoMapper.toItemTypeSetRoleDTO(savedRole);
     }
     
     /**
@@ -410,6 +406,6 @@ public class ItemTypeSetRoleService {
                 .build();
         
         ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
-        return itemTypeSetRoleMapper.toDTO(savedRole);
+        return dtoMapper.toItemTypeSetRoleDTO(savedRole);
     }
 }

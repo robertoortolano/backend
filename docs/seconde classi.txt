@@ -16,7 +16,7 @@ public enum RoleName {
 }
 
 public enum ScopeType {
-    GLOBAL,
+    TENANT,
     PROJECT
 }
 

@@ -119,5 +119,35 @@
       "targetId": "Done",
       "targetPosition": "top-target"
     }
+  ],
+  "permissions": [
+    {
+      "name": "Workers",
+      "description": "Utenti che possono lavorare sugli item di questo tipo"
+    },
+    {
+      "name": "StatusOwner",
+      "description": "Proprietari degli item di questo tipo per stato specifico"
+    },
+    {
+      "name": "FieldEditors",
+      "description": "Utenti che possono modificare i campi specifici"
+    },
+    {
+      "name": "Creators",
+      "description": "Utenti che possono creare nuovi item di questo tipo"
+    },
+    {
+      "name": "Executors",
+      "description": "Utenti che possono eseguire azioni sugli item"
+    },
+    {
+      "name": "Editors",
+      "description": "Utenti che possono modificare gli item di questo tipo"
+    },
+    {
+      "name": "Viewers",
+      "description": "Utenti che possono visualizzare gli item di questo tipo"
+    }
   ]
 }

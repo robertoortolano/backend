@@ -8,6 +8,7 @@ import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.security.CurrentTenant;
 import com.example.demo.service.ItemTypeSetService;
 import com.example.demo.service.ItemTypeSetRoleService;
+import com.example.demo.service.ItemTypeSetPermissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,6 +24,7 @@ public class ItemTypeSetController {
     private final ItemTypeSetService itemTypeSetService;
     private final DtoMapperFacade dtoMapper;
     private final ItemTypeSetRoleService itemTypeSetRoleService;
+    private final ItemTypeSetPermissionService itemTypeSetPermissionService;
 
     @GetMapping("/global")
     @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
@@ -51,12 +53,12 @@ public class ItemTypeSetController {
     ) {
         ItemTypeSetViewDto created = itemTypeSetService.createGlobal(tenant, dto);
         
-        // Crea automaticamente i ruoli per il nuovo ItemTypeSet
+        // Crea automaticamente le permissions per il nuovo ItemTypeSet
         try {
-            itemTypeSetRoleService.createRolesForItemTypeSet(created.id(), tenant);
+            itemTypeSetPermissionService.createPermissionsForItemTypeSet(created.id(), tenant);
         } catch (Exception e) {
             // Log dell'errore ma non bloccare la creazione dell'ItemTypeSet
-            System.err.println("Error creating roles for ItemTypeSet " + created.id() + ": " + e.getMessage());
+            System.err.println("Error creating permissions for ItemTypeSet " + created.id() + ": " + e.getMessage());
         }
         
         return ResponseEntity.ok(created);

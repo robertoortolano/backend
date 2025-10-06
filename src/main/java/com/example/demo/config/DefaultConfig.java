@@ -16,6 +16,7 @@ public class DefaultConfig {
     private List<Workflow> workflow;
     private List<WorkflowNode> workflowNodes;
     private List<WorkflowEdge> workflowEdges;
+    private List<Permission> permissions;
 
     @Getter
     @Setter
@@ -86,6 +87,13 @@ public class DefaultConfig {
         private String sourcePosition;
         private String targetId;
         private String targetPosition;
+    }
+
+    @Getter
+    @Setter
+    public static class Permission {
+        private String name;
+        private String description;
     }
 
 }

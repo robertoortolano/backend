@@ -1,14 +1,13 @@
 package com.example.demo.dto;
 
-import com.example.demo.enums.RoleName;
-import com.example.demo.enums.ScopeType;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 public record RoleCreateDto (
-    @NotBlank(message = "Role name required")
-    RoleName name,
-    @NotNull(message = "Role scope required")
-    ScopeType scope
-
+    @NotBlank(message = "Role name is required")
+    @Size(max = 100, message = "Role name must not exceed 100 characters")
+    String name,
+    
+    @Size(max = 500, message = "Description must not exceed 500 characters")
+    String description
 ) {}

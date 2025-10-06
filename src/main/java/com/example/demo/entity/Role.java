@@ -1,6 +1,5 @@
 package com.example.demo.entity;
 
-import com.example.demo.enums.RoleName;
 import com.example.demo.enums.ScopeType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -18,9 +17,11 @@ public class Role {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private RoleName name;
+    private String name;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

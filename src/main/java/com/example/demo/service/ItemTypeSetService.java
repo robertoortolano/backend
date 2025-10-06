@@ -55,7 +55,7 @@ public class ItemTypeSetService {
         set.setTenant(tenant);
         set.setName(dto.name());
 
-        if (!scopeType.equals(ScopeType.GLOBAL)) {
+        if (!scopeType.equals(ScopeType.TENANT)) {
             if (project == null) throw new ApiException("Project must be specified for non-global ItemTypeSet");
             set.getProjectsAssociation().add(project);
         }
@@ -81,7 +81,7 @@ public class ItemTypeSetService {
             configuration.setFieldSet(fieldSet);
 
             /*
-            if (!scopeType.equals(ScopeType.GLOBAL)) {
+            if (!scopeType.equals(ScopeType.TENANT)) {
                 // Clona il FieldSet di default per ogni entry con il FieldSetCloner aggiornato
                 FieldSet clonedFieldSet = fieldSetCloner.cloneFieldSet(defaultFieldSet, " (copy for " + itemType.getName() + ")");
                 fieldSetRepository.save(clonedFieldSet);
@@ -102,7 +102,7 @@ public class ItemTypeSetService {
 
 
     public ItemTypeSetViewDto createGlobal(Tenant tenant, ItemTypeSetCreateDto dto) {
-        return this.createItemTypeSet(tenant, dto, ScopeType.GLOBAL, null);
+        return this.createItemTypeSet(tenant, dto, ScopeType.TENANT, null);
     }
 
 
@@ -142,7 +142,7 @@ public class ItemTypeSetService {
             entry.setCategory(entryDto.category());
             entry.setWorkflow(workflow);
 
-            if (!set.getScope().equals(ScopeType.GLOBAL)) {
+            if (!set.getScope().equals(ScopeType.TENANT)) {
                 // Clona il FieldSet associato
                 FieldSet clonedFieldSet = fieldSetCloner.cloneFieldSet(defaultFieldSet, " (copy for " + itemType.getName() + ")");
                 fieldSetRepository.save(clonedFieldSet);
