@@ -12,3 +12,4 @@ public interface WorkerPermissionRepository extends JpaRepository<WorkerPermissi
     List<WorkerPermission> findAllByItemTypeConfiguration(ItemTypeConfiguration config);
 }
 
+
