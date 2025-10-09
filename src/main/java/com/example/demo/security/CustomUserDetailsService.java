@@ -34,7 +34,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         List<GrantRoleAssignment> assignments = Collections.emptyList();
         if (user.getActiveTenant() != null) {
             assignments = grantRoleAssignmentRepository.findAllByUserAndTenant(
-                    user.getId(), user.getActiveTenant().getId());
+                    user.getId(), user.getActiveTenant());
         }
 
         return new CustomUserDetails(user, assignments);

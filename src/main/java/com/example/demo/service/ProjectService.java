@@ -44,7 +44,7 @@ public class ProjectService {
     }
 
 
-    public ProjectViewDto createProjectForCurrentUser(ProjectCreateDto dto, User user, Tenant tenant) {
+    public ProjectViewDto createProjectForCurrentUser(Tenant tenant, User user, ProjectCreateDto dto) {
 
         boolean authorized = grantRoleLookup.existsByUserGlobal(user, tenant, "ADMIN");
 
@@ -68,7 +68,7 @@ public class ProjectService {
         newGrant.getUsers().add(user);
         grantRepository.save(newGrant);
 
-        // Crea l’assegnazione tra grant, tenant e progetto
+        // Crea l'assegnazione tra grant, tenant e progetto
         GrantRoleAssignment newGra = new GrantRoleAssignment();
         newGra.setGrant(newGrant);
         newGra.setTenant(tenant);
@@ -126,7 +126,7 @@ public class ProjectService {
 
 
     public void assignItemTypeSet(Tenant tenant, Long projectId, Long setId, User user) {
-        Project project = projectRepository.findByIdAndTenant(projectId, user.getActiveTenant())
+        Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Progetto non trovato"));
 
         ItemTypeSet itemTypeSet = itemTypeSetLookup.getById(tenant, setId);

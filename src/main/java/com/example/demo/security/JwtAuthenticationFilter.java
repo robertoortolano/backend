@@ -7,31 +7,36 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+
 import java.io.IOException;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenUtil jwtTokenUtil;
-    private final UserDetailsService userDetailsService;
+    private final CustomUserDetailsService userDetailsService;
     private final TokenBlacklistRepository tokenBlacklistRepository;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    @NonNull HttpServletResponse response,
-                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
-
-        final String authHeader = request.getHeader("Authorization");
-
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain
+    ) throws ServletException, IOException {
         try {
+            final String authHeader = request.getHeader("Authorization");
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
                 filterChain.doFilter(request, response);
@@ -40,44 +45,79 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             final String token = authHeader.substring(7);
 
+            // Verifica se il token è nella blacklist
             if (tokenBlacklistRepository.existsByToken(token)) {
-                logger.warn("Token nella blacklist: accesso negato");
-                filterChain.doFilter(request, response);
+                log.warn("Tentativo di accesso con token revocato");
+                sendErrorResponse(response, HttpStatus.UNAUTHORIZED, "Token revocato");
                 return;
             }
 
+            // Verifica la scadenza del token
+            if (jwtTokenUtil.isTokenExpired(token)) {
+                log.warn("Tentativo di accesso con token scaduto");
+                sendErrorResponse(response, HttpStatus.UNAUTHORIZED, "Token scaduto");
+                return;
+            }
+
+            // Estrai username e verifica il token
             final String username = jwtTokenUtil.extractUsername(token);
+            if (username == null) {
+                log.warn("Token JWT non valido: username mancante");
+                sendErrorResponse(response, HttpStatus.UNAUTHORIZED, "Token non valido");
+                return;
+            }
 
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-
-                if (jwtTokenUtil.isTokenExpired(token)) {
-                    filterChain.doFilter(request, response);
-                    return;
-                }
-
-                CustomUserDetails customUserDetails =
-                        (CustomUserDetails) userDetailsService.loadUserByUsername(username);
-
-                if (jwtTokenUtil.validateToken(token, customUserDetails)) {
-                    UsernamePasswordAuthenticationToken authToken =
-                            new UsernamePasswordAuthenticationToken(customUserDetails, null, customUserDetails.getAuthorities());
+            // Carica i dettagli dell'utente solo se necessario
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                
+                if (jwtTokenUtil.validateToken(token, userDetails)) {
+                    // Crea il contesto di autenticazione
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            userDetails.getAuthorities()
+                    );
+                    
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                    
+                    // Imposta il contesto di sicurezza
+                    SecurityContext context = SecurityContextHolder.createEmptyContext();
+                    context.setAuthentication(authToken);
+                    SecurityContextHolder.setContext(context);
+
+                    // Imposta il tenant dal token se presente
                     Long tenantId = jwtTokenUtil.extractTenantId(token);
                     if (tenantId != null) {
+                        log.debug("Impostato tenant ID: {}", tenantId);
                         TenantContext.setCurrentTenantId(tenantId);
                     } else {
-                        // TenantId mancante: probabilmente è la richiesta di creazione tenant
-                        TenantContext.clear(); // oppure lascialo nullo, a seconda della logica downstream
+                        log.debug("Nessun tenant ID trovato nel token");
+                        TenantContext.clear();
                     }
+                } else {
+                    log.warn("Validazione del token fallita per l'utente: {}", username);
+                    sendErrorResponse(response, HttpStatus.UNAUTHORIZED, "Token non valido");
+                    return;
                 }
             }
-            logger.info("Auth set: " + SecurityContextHolder.getContext().getAuthentication());
+
             filterChain.doFilter(request, response);
+            
+        } catch (Exception e) {
+            log.error("Errore durante l'autenticazione", e);
+            sendErrorResponse(response, HttpStatus.INTERNAL_SERVER_ERROR, "Errore di autenticazione");
         } finally {
-            // ✅ Pulisci sempre il contesto, per evitare memory leak
+            // Pulisci sempre il contesto del tenant per evitare memory leak
             TenantContext.clear();
         }
+    }
+
+    private void sendErrorResponse(HttpServletResponse response, HttpStatus status, String message) throws IOException {
+        response.setStatus(status.value());
+        response.setContentType("application/json");
+        response.getWriter().write(String.format("{\"status\":%d,\"error\":\"%s\",\"message\":\"%s\"}",
+                status.value(), status.getReasonPhrase(), message));
     }
 }
 

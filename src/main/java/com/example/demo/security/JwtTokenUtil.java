@@ -6,7 +6,6 @@ import com.example.demo.enums.ScopeType;
 import com.example.demo.entity.User;
 import com.example.demo.repository.GrantRoleAssignmentRepository;
 import io.jsonwebtoken.*;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -123,7 +122,7 @@ public class JwtTokenUtil {
     }
 
     private Key getSigningKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secret);
+        byte[] keyBytes = secret.getBytes();
         return Keys.hmacShaKeyFor(keyBytes);
     }
 

@@ -38,12 +38,12 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public String getPassword() {
-        return user.getPasswordHash(); // assicurati che sia cifrata
+        return user.getPassword();
     }
 
     @Override
     public String getUsername() {
-        return user.getUsername(); // o username se preferisci
+        return user.getUsername();
     }
 
     @Override
@@ -67,6 +67,6 @@ public class CustomUserDetails implements UserDetails {
     }
 
     public Long getTenantId() {
-        return user.getActiveTenant().getId();
+        return user.getActiveTenant();
     }
 }

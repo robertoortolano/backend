@@ -58,6 +58,54 @@ public class AuthController {
         ));
     }
 
+    @PostMapping("/select-tenant")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> selectTenant(
+            @RequestBody Map<String, Object> request,
+            @CurrentUser User user
+    ) {
+        System.out.println("=== Select Tenant Request ===");
+        System.out.println("Request body: " + request);
+        System.out.println("User: " + (user != null ? user.getUsername() : "null"));
+        
+        Object tenantIdObj = request.get("tenantId");
+        System.out.println("TenantId object: " + tenantIdObj + " (type: " + (tenantIdObj != null ? tenantIdObj.getClass().getName() : "null") + ")");
+        
+        if (tenantIdObj == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    MESSAGE, "tenantId is required"
+            ));
+        }
+        
+        Long tenantId;
+        if (tenantIdObj instanceof Integer) {
+            tenantId = ((Integer) tenantIdObj).longValue();
+        } else if (tenantIdObj instanceof Long) {
+            tenantId = (Long) tenantIdObj;
+        } else {
+            return ResponseEntity.badRequest().body(Map.of(
+                    MESSAGE, "Invalid tenantId format"
+            ));
+        }
+        
+        System.out.println("Parsed tenantId: " + tenantId);
+
+        try {
+            String newToken = tenantService.selectTenant(user, tenantId);
+            System.out.println("Token generated successfully");
+            return ResponseEntity.ok(Map.of(
+                    MESSAGE, "Tenant selezionato",
+                    "token", newToken
+            ));
+        } catch (Exception e) {
+            System.err.println("Error selecting tenant: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(Map.of(
+                    MESSAGE, "Error: " + e.getMessage()
+            ));
+        }
+    }
+
 
 
 

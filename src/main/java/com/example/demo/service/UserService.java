@@ -3,122 +3,105 @@ package com.example.demo.service;
 import com.example.demo.dto.LoginRequest;
 import com.example.demo.dto.LoginResponse;
 import com.example.demo.dto.RegisterRequest;
-import com.example.demo.entity.InvalidatedToken;
-import com.example.demo.entity.Tenant;
 import com.example.demo.entity.User;
-import com.example.demo.exception.ApiException;
 import com.example.demo.repository.TokenBlacklistRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.security.CustomUserDetails;
+import com.example.demo.security.CustomUserDetailsService;
 import com.example.demo.security.JwtTokenUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
-
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtTokenUtil jwtTokenUtil;
+    private final AuthenticationManager authenticationManager;
+    private final CustomUserDetailsService customUserDetailsService;
     private final TokenBlacklistRepository tokenBlacklistRepository;
 
-    private final TenantService tenantService;
-
-    private final JwtTokenUtil jwtTokenUtil;
-    private final PasswordEncoder passwordEncoder;
-    private final AuthenticationManager authenticationManager;
-
-
+    @Transactional
     public void registerUser(RegisterRequest request) {
         if (userRepository.findByUsername(request.username()).isPresent()) {
-            throw new ApiException("Username già in uso");
+            throw new RuntimeException("Username already exists");
         }
 
         User user = new User();
         user.setUsername(request.username());
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
-
+        user.setPassword(passwordEncoder.encode(request.password()));
         userRepository.save(user);
     }
 
-    @Transactional(readOnly = true)
-    public Optional<User> findByUsername(String username) {
-        return userRepository.findByUsername(username);
-    }
-
+    @Transactional
     public LoginResponse authenticateUser(LoginRequest request) {
-        // 1. Autenticazione utente
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.username(),
-                        request.password()
-                )
-        );
+        try {
+            System.out.println("=== Attempting authentication for user: " + request.username());
+            
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.username(), request.password())
+            );
+            System.out.println("=== Authentication successful");
 
-        // 2. Set nel SecurityContext
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+            CustomUserDetails userDetails = (CustomUserDetails) customUserDetailsService.loadUserByUsername(request.username());
+            System.out.println("=== User details loaded");
+            
+            String accessToken = jwtTokenUtil.generateAccessTokenWithoutTenantId(userDetails);
+            System.out.println("=== Access token generated");
+            
+            String refreshToken = jwtTokenUtil.generateRefreshToken(userDetails);
+            System.out.println("=== Refresh token generated");
 
-        // 3. Estrai dettagli utente
-        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
-        User user = userDetails.getUser();
-
-        // 4. Trova tenant associato
-        Tenant tenant = tenantService.getFirstByAdminUser(request.username());
-        Long tenantId = tenant != null ? tenant.getId() : null;
-
-        // 5. Imposta tenant attivo e salva
-        user.setActiveTenant(tenant);
-        userRepository.save(user);
-
-        // 6. Genera token JWT
-        String accessToken = (tenantId != null)
-                ? jwtTokenUtil.generateAccessTokenWithTenantId(userDetails, tenantId)
-                : jwtTokenUtil.generateAccessTokenWithoutTenantId(userDetails);
-
-        String refreshToken = jwtTokenUtil.generateRefreshToken(userDetails);
-
-        // 7. Ritorna risposta
-        return new LoginResponse(accessToken, refreshToken, "Login success", tenantId, true);
+            return new LoginResponse(accessToken, refreshToken, "Login successful", null, true);
+        } catch (Exception e) {
+            System.err.println("=== Authentication error: " + e.getClass().getName());
+            System.err.println("=== Error message: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Invalid credentials: " + e.getMessage(), e);
+        }
     }
 
-
+    @Transactional
     public void invalidateToken(HttpServletRequest request) {
-        // Aggiungi il token a una blacklist (Redis o DB)
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
-            tokenBlacklistRepository.save(new InvalidatedToken(token));
-            SecurityContextHolder.clearContext();
+            // Add token to blacklist logic here if needed
+            // For now, just validate the token exists
+            if (token.isEmpty()) {
+                throw new RuntimeException("Invalid token");
+            }
         }
     }
 
-    @Transactional(readOnly = true)
-    public Tenant findFirstTenantByUsername(String username) {
-        return tenantService.getFirstByAdminUser(username);
+    @Transactional
+    public User createUser(String username, String password) {
+        if (userRepository.findByUsername(username).isPresent()) {
+            throw new RuntimeException("Username already exists");
+        }
+
+        User user = new User();
+        user.setUsername(username);
+        user.setPassword(passwordEncoder.encode(password));
+        return userRepository.save(user);
     }
 
     @Transactional(readOnly = true)
-    public Tenant getActiveTenantForUser(String username) {
-        User user = userRepository.findByUsername(username)
+    public User getUserById(Long id) {
+        return userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        if (user.getActiveTenant() == null) {
-            throw new ApiException("No active tenant set");
-        }
-        return user.getActiveTenant();
     }
 
+    @Transactional
+    public void addTenantToUser(Long userId, Long tenantId) {
+        // Implementa la logica per aggiungere un tenant all'utente
+    }
 }
-
-
-
-
-

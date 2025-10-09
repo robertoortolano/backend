@@ -7,14 +7,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class ItemTypePermissionService {
 
-    private final PermissionRepository permissionRepository;
     private final WorkerPermissionRepository workerPermissionRepository;
     private final StatusOwnerPermissionRepository statusOwnerPermissionRepository;
     private final FieldEditorPermissionRepository fieldEditorPermissionRepository;
@@ -60,9 +58,6 @@ public class ItemTypePermissionService {
     }
 
     private void createStatusOwnerPermissions(ItemTypeConfiguration itemTypeConfiguration) {
-        Permission statusOwnerPermission = permissionRepository.findByName("StatusOwner")
-                .orElseThrow(() -> new IllegalArgumentException("StatusOwner permission not found"));
-
         // Crea una permission per ogni WorkflowStatus del workflow
         for (WorkflowStatus workflowStatus : itemTypeConfiguration.getWorkflow().getStatuses()) {
             if (!statusOwnerPermissionRepository.existsByItemTypeConfigurationIdAndWorkflowStatusId(
@@ -80,9 +75,6 @@ public class ItemTypePermissionService {
     }
 
     private void createFieldEditorPermissions(ItemTypeConfiguration itemTypeConfiguration) {
-        Permission fieldEditorPermission = permissionRepository.findByName("FieldEditors")
-                .orElseThrow(() -> new IllegalArgumentException("FieldEditors permission not found"));
-
         // Crea una permission per ogni FieldConfiguration del FieldSet
         for (FieldSetEntry entry : itemTypeConfiguration.getFieldSet().getFieldSetEntries()) {
             FieldConfiguration fieldConfig = entry.getFieldConfiguration();
@@ -102,9 +94,6 @@ public class ItemTypePermissionService {
     }
 
     private void createCreatorPermission(ItemTypeConfiguration itemTypeConfiguration) {
-        Permission creatorPermission = permissionRepository.findByName("Creators")
-                .orElseThrow(() -> new IllegalArgumentException("Creators permission not found"));
-
         if (!creatorPermissionRepository.existsByItemTypeConfigurationId(itemTypeConfiguration.getId())) {
             CreatorPermission permission = new CreatorPermission();
             permission.setItemTypeConfiguration(itemTypeConfiguration);
@@ -116,9 +105,6 @@ public class ItemTypePermissionService {
     }
 
     private void createExecutorPermissions(ItemTypeConfiguration itemTypeConfiguration) {
-        Permission executorPermission = permissionRepository.findByName("Executors")
-                .orElseThrow(() -> new IllegalArgumentException("Executors permission not found"));
-
         // Crea una permission per ogni Transition del Workflow
         for (Transition transition : itemTypeConfiguration.getWorkflow().getTransitions()) {
             if (!executorPermissionRepository.existsByItemTypeConfigurationIdAndTransitionId(
@@ -136,11 +122,6 @@ public class ItemTypePermissionService {
     }
 
     private void createFieldStatusPermissions(ItemTypeConfiguration itemTypeConfiguration) {
-        Permission editorPermission = permissionRepository.findByName("Editors")
-                .orElseThrow(() -> new IllegalArgumentException("Editors permission not found"));
-        Permission viewerPermission = permissionRepository.findByName("Viewers")
-                .orElseThrow(() -> new IllegalArgumentException("Viewers permission not found"));
-
         // Crea una permission per ogni coppia (FieldConfiguration, WorkflowStatus)
         for (FieldSetEntry entry : itemTypeConfiguration.getFieldSet().getFieldSetEntries()) {
             FieldConfiguration fieldConfig = entry.getFieldConfiguration();

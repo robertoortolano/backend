@@ -1,21 +1,19 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.AssignUserRequest;
+import com.example.demo.dto.TenantDTO;
 import com.example.demo.entity.*;
 import com.example.demo.enums.ScopeType;
-import com.example.demo.exception.ApiException;
 import com.example.demo.initializer.TenantInitializer;
 import com.example.demo.repository.*;
 import com.example.demo.security.CustomUserDetails;
-import com.example.demo.security.CustomUserDetailsService;
 import com.example.demo.security.JwtTokenUtil;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -23,136 +21,150 @@ import java.util.Set;
 public class TenantService {
 
     private final TenantRepository tenantRepository;
-
     private final UserRepository userRepository;
-    private final LicenseRepository licenseRepository;
+    private final JwtTokenUtil jwtTokenUtil;
     private final RoleRepository roleRepository;
     private final GrantRepository grantRepository;
     private final GrantRoleAssignmentRepository grantRoleAssignmentRepository;
-
-    private final CustomUserDetailsService customUserDetailsService;
-    private final LicenseService licenseService;
-
-    private final GrantRoleLookup grantRoleLookup;
-
     private final List<TenantInitializer> tenantInitializers;
-    private final JwtTokenUtil jwtTokenUtil;
 
-    @Value("${app.domain}")
-    private String baseDomain;
+    public Tenant createTenant(Tenant tenant) {
+        return tenantRepository.save(tenant);
+    }
 
+    @Transactional(readOnly = true)
+    public List<TenantDTO> getTenantsByUser(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return tenantRepository.findByUsersContaining(user).stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
 
     @Transactional
     public String createTenantForCurrentUser(User user, String licenseKey, String subdomain) {
-
-        // ✅ Validazioni iniziali
-        if (licenseService.exists(licenseKey)) {
-            throw new ApiException("Licenza già utilizzata");
+        // Validate license key (for now, just check if it's not empty)
+        if (licenseKey == null || licenseKey.trim().isEmpty()) {
+            throw new RuntimeException("License key is required");
         }
 
-        if (!licenseService.isValidLicenseKey(licenseKey)) {
-            throw new ApiException("Licenza non valida");
+        // Check if license key is already used
+        if (tenantRepository.existsByLicenseKey(licenseKey)) {
+            throw new RuntimeException("License key is already in use");
         }
 
-        if (tenantRepository.existsBySubdomain(subdomain)) {
-            throw new ApiException("Dominio già utilizzato");
+        // Check if subdomain already exists
+        if (tenantRepository.findBySubdomain(subdomain).isPresent()) {
+            throw new RuntimeException("Subdomain already exists");
         }
 
-        // ✅ Crea licenza e tenant
-        License license = new License();
-        license.setLicenseKey(licenseKey);
+        // Reload user to ensure it's managed by the current Hibernate session
+        User managedUser = userRepository.findById(user.getId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
+        // Create tenant
         Tenant tenant = new Tenant();
         tenant.setSubdomain(subdomain);
-        tenant.setLicense(license);
-        tenant.setTenantAdmin(user);
-        license.setTenant(tenant); // bidirezionale
+        tenant.setName(subdomain); // Use subdomain as name for now
+        tenant.setLicenseKey(licenseKey);
+        
+        // Save tenant first
+        tenant = tenantRepository.save(tenant);
+        
+        // Add tenant to user (owning side of the relationship)
+        managedUser.getTenants().add(tenant);
+        userRepository.save(managedUser);
 
-        licenseRepository.save(license);
-        Tenant persistedTenant = license.getTenant();
+        // Initialize tenant with default data (Fields, Statuses, Workflows, etc.)
+        for (TenantInitializer initializer : tenantInitializers) {
+            initializer.initialize(tenant);
+        }
 
-        // ✅ Imposta tenant attivo all'utente
-        user.setActiveTenant(persistedTenant);
+        // Create ADMIN role with TENANT scope for the creator
+        Role adminRole = new Role();
+        adminRole.setName("ADMIN");
+        adminRole.setDescription("Tenant Administrator");
+        adminRole.setScope(ScopeType.TENANT);
+        adminRole.setDefaultRole(true);
+        adminRole.setTenant(tenant);
+        adminRole = roleRepository.save(adminRole);
 
-        // ✅ Crea Grant iniziale per il tenant admin
+        // Create Grant for the user
         Grant adminGrant = new Grant();
-        adminGrant.setUsers(Set.of(user)); // solo l'utente creatore
+        adminGrant.setRole(adminRole);
+        adminGrant.setUsers(new HashSet<>(Set.of(managedUser)));
+        adminGrant = grantRepository.save(adminGrant);
 
-        // ✅ Crea il ruolo TENANT_ADMIN
-        Role tenantAdminRole = new Role();
-        tenantAdminRole.setName("ADMIN");
-        tenantAdminRole.setScope(ScopeType.TENANT);
-        tenantAdminRole.setDefaultRole(true);
-        tenantAdminRole.setTenant(persistedTenant);
-        roleRepository.save(tenantAdminRole);
-
-        // ✅ Associa il ruolo alla grant
+        // Create GrantRoleAssignment to link Grant, Role and Tenant
         GrantRoleAssignment assignment = new GrantRoleAssignment();
         assignment.setGrant(adminGrant);
-        assignment.setRole(tenantAdminRole);
-        assignment.setTenant(persistedTenant);
+        assignment.setRole(adminRole);
+        assignment.setTenant(tenant);
+        assignment.setProject(null); // Tenant-level, no project
+        assignment = grantRoleAssignmentRepository.save(assignment);
 
-        // ✅ Persisti il tenant (con cascade sulla licenza)
-        licenseRepository.save(license);
+        // Load the assignments for the token
+        List<GrantRoleAssignment> assignments = grantRoleAssignmentRepository.findAllByUserAndTenant(
+                managedUser.getId(), tenant.getId());
 
-        // ✅ Salva grant e associazione ruolo
-        grantRepository.save(adminGrant);
-        grantRoleAssignmentRepository.save(assignment);
-
-        userRepository.save(user); // aggiorna activeTenant
-
-        // ✅ Inizializza il contenuto della tenant (workflow, ruoli, status...)
-        tenantInitializers.forEach(initializer -> initializer.initialize(persistedTenant));
-
-        // ✅ Ricarica UserDetails aggiornato
-        CustomUserDetails userDetails = (CustomUserDetails) customUserDetailsService.loadUserByUsername(user.getUsername());
-
-        // ✅ Genera token CON tenantId
-        return jwtTokenUtil.generateAccessTokenWithTenantId(userDetails, persistedTenant.getId());
+        // Generate new token with tenantId and roles
+        CustomUserDetails userDetails = new CustomUserDetails(managedUser, assignments);
+        return jwtTokenUtil.generateAccessTokenWithTenantId(userDetails, tenant.getId());
     }
 
-
-
-
-
-    public void assignUserToTenant(AssignUserRequest request, Tenant tenant, User adminUser) {
-        // Controlla se adminUser è admin tenant (con Grant e Role)
-        boolean isAdmin = grantRoleLookup.getAllByUser(adminUser, tenant).stream()
-                .anyMatch(gra -> "ADMIN".equals(gra.getRole().getName()) && gra.getRole().getScope().equals(ScopeType.TENANT));
-
-        if (!isAdmin) {
-            throw new ApiException("Non autorizzato");
+    @Transactional(readOnly = true)
+    public String selectTenant(User user, Long tenantId) {
+        // Verify tenant exists
+        if (!tenantRepository.existsById(tenantId)) {
+            throw new RuntimeException("Tenant not found");
         }
 
-        Role role = grantRoleLookup.getRoleByNameAndScope(request.role(), ScopeType.TENANT, tenant);
-
-        // Verifica se l’utente è già assegnato a questo ruolo nella tenant
-        boolean alreadyAssigned = grantRoleLookup.existsByUserGlobal(adminUser, tenant, role.getName());
-
-        if (alreadyAssigned) {
-            throw new ApiException("Utente già assegnato a questo ruolo nella tenant");
+        // Verify user has access to this tenant (without loading collections)
+        if (!tenantRepository.existsByIdAndUserId(tenantId, user.getId())) {
+            throw new RuntimeException("You don't have access to this tenant");
         }
 
-        // Cerca un Grant esistente per quel ruolo e tenant oppure creane uno nuovo
-        GrantRoleAssignment gra = grantRoleLookup.getByRoleAndScope(role,ScopeType.TENANT, tenant);
+        // Reload user to ensure it's managed by the current Hibernate session
+        User managedUser = userRepository.findById(user.getId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Grant grant = gra.getGrant();
-         if (grant == null) {
-             grant = new Grant();
-             gra.setGrant(grant);
-             grant.setRole(role);
-         }
+        // Load user's role assignments for this tenant
+        List<GrantRoleAssignment> assignments = grantRoleAssignmentRepository.findAllByUserAndTenant(
+                managedUser.getId(), tenantId);
 
-        // Aggiungi l’utente al grant
-        grant.getUsers().add(adminUser);
-
-        // Salva il grant
-        grantRepository.save(grant);
+        // Generate new token with tenantId and roles
+        CustomUserDetails userDetails = new CustomUserDetails(managedUser, assignments);
+        return jwtTokenUtil.generateAccessTokenWithTenantId(userDetails, tenantId);
     }
 
-    public Tenant getFirstByAdminUser(String username) {
-        return tenantRepository.findFirstByTenantAdminUsername(username).orElse(null);
+    @Transactional
+    public void assignUserToTenant(AssignUserRequest request, Tenant tenant, User currentUser) {
+        // Check if current user has access to the tenant (without loading collections)
+        if (!tenantRepository.existsByIdAndUserId(tenant.getId(), currentUser.getId())) {
+            throw new RuntimeException("You don't have access to this tenant");
+        }
+        
+        // Find the user to assign
+        User userToAssign = userRepository.findByUsername(request.username())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Check if user is already assigned to this tenant (without loading collections)
+        if (tenantRepository.existsByIdAndUserId(tenant.getId(), userToAssign.getId())) {
+            return; // User already assigned
+        }
+
+        // Add tenant to user (owning side of the relationship)
+        userToAssign.getTenants().add(tenant);
+        userRepository.save(userToAssign);
     }
 
-
+    private TenantDTO convertToDTO(Tenant tenant) {
+        TenantDTO dto = new TenantDTO();
+        dto.setId(tenant.getId());
+        dto.setName(tenant.getName());
+        dto.setSubdomain(tenant.getSubdomain());
+        dto.setCreatedAt(tenant.getCreatedAt());
+        return dto;
+    }
 }

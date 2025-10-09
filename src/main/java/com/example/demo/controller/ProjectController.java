@@ -30,7 +30,7 @@ public class ProjectController {
             @CurrentUser User user,
             @Valid @RequestBody ProjectCreateDto projectCreateDTO) {
 
-            return ResponseEntity.ok(projectService.createProjectForCurrentUser(projectCreateDTO, user, tenant));
+            return ResponseEntity.ok(projectService.createProjectForCurrentUser(tenant, user, projectCreateDTO));
     }
 
 

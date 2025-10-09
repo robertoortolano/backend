@@ -37,9 +37,6 @@ public class ItemTypeSetRoleService {
     private RoleRepository roleRepository;
     
     @Autowired
-    private TenantRepository tenantRepository;
-    
-    @Autowired
     private DtoMapperFacade dtoMapper;
     
     /**
