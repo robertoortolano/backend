@@ -48,5 +48,4 @@ public interface ItemTypeConfigurationRepository extends JpaRepository<ItemTypeC
 
     boolean existsByWorkflowIdAndWorkflowTenantId(Long workflowId, Long tenantId);
 
-
 }

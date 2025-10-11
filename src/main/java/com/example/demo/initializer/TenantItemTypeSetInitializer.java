@@ -7,6 +7,7 @@ import com.example.demo.enums.ItemTypeCategory;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.repository.*;
 import com.example.demo.service.ItemTypePermissionService;
+import com.example.demo.service.ItemTypeSetPermissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,7 @@ public class TenantItemTypeSetInitializer implements TenantInitializer {
     private final WorkflowRepository workflowRepository;
     private final FieldSetRepository fieldSetRepository;
     private final ItemTypePermissionService itemTypePermissionService;
+    private final ItemTypeSetPermissionService itemTypeSetPermissionService;
 
     @Override
     public void initialize(Tenant tenant) {
@@ -60,7 +62,7 @@ public class TenantItemTypeSetInitializer implements TenantInitializer {
 
                         itemTypeConfigurationRepository.save(configuration);
                         
-                        // Crea automaticamente tutte le permissions per questa configurazione
+                        // Crea le permissions base per questa configurazione (Creator, Executor, ecc.)
                         itemTypePermissionService.createPermissionsForItemTypeConfiguration(configuration);
                         
                         return configuration;
@@ -75,7 +77,10 @@ public class TenantItemTypeSetInitializer implements TenantInitializer {
             itemTypeSet.setDefaultItemTypeSet(true);
             itemTypeSet.setItemTypeConfigurations(configurations);
 
-            itemTypeSetRepository.save(itemTypeSet);
+            itemTypeSet = itemTypeSetRepository.save(itemTypeSet);
+            
+            // Crea tutte le permissions per l'ItemTypeSet (WORKER, STATUS_OWNER, FIELD_EDITOR, ecc.)
+            itemTypeSetPermissionService.createPermissionsForItemTypeSet(itemTypeSet.getId(), tenant);
         }
     }
 }

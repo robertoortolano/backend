@@ -33,7 +33,7 @@ public class WorkerPermission {
     private Set<Role> assignedRoles = new HashSet<>();
 
     // Relazioni con grants (utenti/gruppi)
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "workerpermission_grant",
             joinColumns = @JoinColumn(name = "workerpermission_id"),

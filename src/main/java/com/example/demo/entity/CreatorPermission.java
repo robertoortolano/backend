@@ -33,7 +33,7 @@ public class CreatorPermission {
     private Set<Role> assignedRoles = new HashSet<>();
 
     // Relazioni con grants (utenti/gruppi)
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "creatorpermission_grant",
             joinColumns = @JoinColumn(name = "creatorpermission_id"),

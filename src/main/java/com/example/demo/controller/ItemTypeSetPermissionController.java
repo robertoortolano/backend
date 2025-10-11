@@ -74,9 +74,10 @@ public class ItemTypeSetPermissionController {
     public ResponseEntity<String> assignRoleToPermission(
             @RequestParam Long permissionId,
             @RequestParam Long roleId,
+            @RequestParam(required = false) String permissionType,
             @CurrentTenant Tenant tenant) {
         try {
-            itemTypeSetPermissionService.assignRoleToPermission(permissionId, roleId);
+            itemTypeSetPermissionService.assignRoleToPermission(permissionId, roleId, permissionType);
             return ResponseEntity.ok("Role assigned successfully to permission");
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
@@ -91,14 +92,20 @@ public class ItemTypeSetPermissionController {
     @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
     public ResponseEntity<String> assignGrantToPermission(
             @RequestParam Long permissionId,
+            @RequestParam(required = false) String permissionType,
             @RequestBody Map<String, Object> grantData,
             @CurrentTenant Tenant tenant) {
         try {
-            itemTypeSetPermissionService.assignGrantToPermission(permissionId, grantData);
+            System.out.println("DEBUG: Received permissionId=" + permissionId);
+            System.out.println("DEBUG: Received permissionType=" + permissionType);
+            System.out.println("DEBUG: Received grantData=" + grantData);
+            itemTypeSetPermissionService.assignGrantToPermission(permissionId, permissionType, grantData);
             return ResponseEntity.ok("Grant assigned successfully to permission");
         } catch (Exception e) {
+            e.printStackTrace();
+            String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             return ResponseEntity.internalServerError()
-                    .body("Error assigning grant: " + e.getMessage());
+                    .body("Error assigning grant: " + errorMsg);
         }
     }
     
@@ -154,9 +161,10 @@ public class ItemTypeSetPermissionController {
     public ResponseEntity<String> removeRoleFromPermission(
             @RequestParam Long permissionId,
             @RequestParam Long roleId,
+            @RequestParam(required = false) String permissionType,
             @CurrentTenant Tenant tenant) {
         try {
-            itemTypeSetPermissionService.removeRoleFromPermission(permissionId, roleId);
+            itemTypeSetPermissionService.removeRoleFromPermission(permissionId, roleId, permissionType);
             return ResponseEntity.ok("Role removed successfully from permission");
         } catch (Exception e) {
             return ResponseEntity.internalServerError()

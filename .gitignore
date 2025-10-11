@@ -2,3 +2,6 @@ target/
 *.iml
 .idea/
 *.log
+/.aider.tags.cache.v4/cache.db
+/.aider.tags.cache.v4/cache.db-wal
+/.aider.tags.cache.v4/cache.db-shm

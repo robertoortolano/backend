@@ -2,6 +2,7 @@ package com.example.demo.service;
 
 import com.example.demo.entity.*;
 import com.example.demo.repository.*;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ public class ItemTypeSetPermissionService {
     private final GrantRepository grantRepository;
     private final UserRepository userRepository;
     private final GroupRepository groupRepository;
+    private final EntityManager entityManager;
     
     /**
      * Crea automaticamente tutte le permissions per un ItemTypeSet
@@ -171,6 +173,21 @@ public class ItemTypeSetPermissionService {
                 worker.put("assignedRolesCount", perm.getAssignedRoles().size());
                 worker.put("assignedGrantsCount", perm.getAssignedGrants().size());
                 
+                // Calcola se ci sono effettivamente assegnazioni (ruoli, utenti o gruppi)
+                boolean hasAssignments = !perm.getAssignedRoles().isEmpty(); // Controlla prima i ruoli
+                
+                if (!hasAssignments) {
+                    // Se non ci sono ruoli, controlla utenti e gruppi nelle grants
+                    for (Grant grant : perm.getAssignedGrants()) {
+                        if (!grant.getUsers().isEmpty() || !grant.getGroups().isEmpty() || 
+                            !grant.getNegatedUsers().isEmpty() || !grant.getNegatedGroups().isEmpty()) {
+                            hasAssignments = true;
+                            break;
+                        }
+                    }
+                }
+                worker.put("hasAssignments", hasAssignments);
+                
                 // Aggiungi i dati delle assegnazioni esistenti
                 List<Map<String, Object>> assignedRoles = new ArrayList<>();
                 for (Role role : perm.getAssignedRoles()) {
@@ -264,6 +281,21 @@ public class ItemTypeSetPermissionService {
                         statusOwner.put("assignedRolesCount", perm.getAssignedRoles().size());
                         statusOwner.put("assignedGrantsCount", perm.getAssignedGrants().size());
                         
+                        // Calcola se ci sono effettivamente assegnazioni (ruoli, utenti o gruppi)
+                        boolean hasAssignments = !perm.getAssignedRoles().isEmpty(); // Controlla prima i ruoli
+                        
+                        if (!hasAssignments) {
+                            // Se non ci sono ruoli, controlla utenti e gruppi nelle grants
+                            for (Grant grant : perm.getAssignedGrants()) {
+                                if (!grant.getUsers().isEmpty() || !grant.getGroups().isEmpty() || 
+                                    !grant.getNegatedUsers().isEmpty() || !grant.getNegatedGroups().isEmpty()) {
+                                    hasAssignments = true;
+                                    break;
+                                }
+                            }
+                        }
+                        statusOwner.put("hasAssignments", hasAssignments);
+                        
                         // Aggiungi i dati delle assegnazioni esistenti
                         List<Map<String, Object>> assignedRoles = new ArrayList<>();
                         for (Role role : perm.getAssignedRoles()) {
@@ -332,6 +364,7 @@ public class ItemTypeSetPermissionService {
                         statusOwner.put("assignedGroups", assignedGroups);
                         statusOwner.put("deniedUsers", deniedUsers);
                         statusOwner.put("deniedGroups", deniedGroups);
+                        
                 statusOwners.add(statusOwner);
             }
         }
@@ -360,6 +393,19 @@ public class ItemTypeSetPermissionService {
                 fieldEditor.put("itemType", itemTypeMap3);
                         fieldEditor.put("assignedRolesCount", perm.getAssignedRoles().size());
                         fieldEditor.put("assignedGrantsCount", perm.getAssignedGrants().size());
+                        
+                        // Calcola hasAssignments
+                        boolean hasAssignmentsField = !perm.getAssignedRoles().isEmpty();
+                        if (!hasAssignmentsField) {
+                            for (Grant grant : perm.getAssignedGrants()) {
+                                if (!grant.getUsers().isEmpty() || !grant.getGroups().isEmpty() || 
+                                    !grant.getNegatedUsers().isEmpty() || !grant.getNegatedGroups().isEmpty()) {
+                                    hasAssignmentsField = true;
+                                    break;
+                                }
+                            }
+                        }
+                        fieldEditor.put("hasAssignments", hasAssignmentsField);
                         
                         // Aggiungi i dati delle assegnazioni esistenti
                         List<Map<String, Object>> assignedRoles = new ArrayList<>();
@@ -455,6 +501,19 @@ public class ItemTypeSetPermissionService {
                 creator.put("itemType", itemTypeMap4);
                         creator.put("assignedRolesCount", perm.getAssignedRoles().size());
                         creator.put("assignedGrantsCount", perm.getAssignedGrants().size());
+                        
+                        // Calcola hasAssignments
+                        boolean hasAssignmentsCreator = !perm.getAssignedRoles().isEmpty();
+                        if (!hasAssignmentsCreator) {
+                            for (Grant grant : perm.getAssignedGrants()) {
+                                if (!grant.getUsers().isEmpty() || !grant.getGroups().isEmpty() || 
+                                    !grant.getNegatedUsers().isEmpty() || !grant.getNegatedGroups().isEmpty()) {
+                                    hasAssignmentsCreator = true;
+                                    break;
+                                }
+                            }
+                        }
+                        creator.put("hasAssignments", hasAssignmentsCreator);
                         
                         // Aggiungi i dati delle assegnazioni esistenti
                         List<Map<String, Object>> assignedRoles = new ArrayList<>();
@@ -574,6 +633,19 @@ public class ItemTypeSetPermissionService {
                         executor.put("assignedRolesCount", perm.getAssignedRoles().size());
                         executor.put("assignedGrantsCount", perm.getAssignedGrants().size());
                         
+                        // Calcola hasAssignments
+                        boolean hasAssignmentsExec = !perm.getAssignedRoles().isEmpty();
+                        if (!hasAssignmentsExec) {
+                            for (Grant grant : perm.getAssignedGrants()) {
+                                if (!grant.getUsers().isEmpty() || !grant.getGroups().isEmpty() || 
+                                    !grant.getNegatedUsers().isEmpty() || !grant.getNegatedGroups().isEmpty()) {
+                                    hasAssignmentsExec = true;
+                                    break;
+                                }
+                            }
+                        }
+                        executor.put("hasAssignments", hasAssignmentsExec);
+                        
                         // Aggiungi i dati delle assegnazioni esistenti
                         List<Map<String, Object>> assignedRoles = new ArrayList<>();
                         for (Role role : perm.getAssignedRoles()) {
@@ -674,6 +746,19 @@ public class ItemTypeSetPermissionService {
                 editor.put("itemType", itemTypeMap6);
                         editor.put("assignedRolesCount", perm.getAssignedRoles().size());
                         editor.put("assignedGrantsCount", perm.getAssignedGrants().size());
+                        
+                        // Calcola hasAssignments
+                        boolean hasAssignmentsEditor = !perm.getAssignedRoles().isEmpty();
+                        if (!hasAssignmentsEditor) {
+                            for (Grant grant : perm.getAssignedGrants()) {
+                                if (!grant.getUsers().isEmpty() || !grant.getGroups().isEmpty() || 
+                                    !grant.getNegatedUsers().isEmpty() || !grant.getNegatedGroups().isEmpty()) {
+                                    hasAssignmentsEditor = true;
+                                    break;
+                                }
+                            }
+                        }
+                        editor.put("hasAssignments", hasAssignmentsEditor);
                         
                         // Aggiungi i dati delle assegnazioni esistenti
                         List<Map<String, Object>> assignedRoles = new ArrayList<>();
@@ -776,6 +861,19 @@ public class ItemTypeSetPermissionService {
                         viewer.put("assignedRolesCount", perm.getAssignedRoles().size());
                         viewer.put("assignedGrantsCount", perm.getAssignedGrants().size());
                         
+                        // Calcola hasAssignments
+                        boolean hasAssignmentsViewer = !perm.getAssignedRoles().isEmpty();
+                        if (!hasAssignmentsViewer) {
+                            for (Grant grant : perm.getAssignedGrants()) {
+                                if (!grant.getUsers().isEmpty() || !grant.getGroups().isEmpty() || 
+                                    !grant.getNegatedUsers().isEmpty() || !grant.getNegatedGroups().isEmpty()) {
+                                    hasAssignmentsViewer = true;
+                                    break;
+                                }
+                            }
+                        }
+                        viewer.put("hasAssignments", hasAssignmentsViewer);
+                        
                         // Aggiungi i dati delle assegnazioni esistenti
                         List<Map<String, Object>> assignedRoles = new ArrayList<>();
                         for (Role role : perm.getAssignedRoles()) {
@@ -859,94 +957,169 @@ public class ItemTypeSetPermissionService {
     /**
      * Assegna un ruolo a una permission
      */
-    public void assignRoleToPermission(Long permissionId, Long roleId) {
-        // Trova la permission per ID
-        WorkerPermission workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
-        if (workerPermission != null) {
-            Role role = roleRepository.findById(roleId).orElseThrow(() -> new RuntimeException("Role not found"));
-            workerPermission.getAssignedRoles().add(role);
-            workerPermissionRepository.save(workerPermission);
-            return;
-        }
+    public void assignRoleToPermission(Long permissionId, Long roleId, String permissionType) {
+        Role role = roleRepository.findById(roleId).orElseThrow(() -> new RuntimeException("Role not found"));
         
-        StatusOwnerPermission statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
-        if (statusOwnerPermission != null) {
-            Role role = roleRepository.findById(roleId).orElseThrow(() -> new RuntimeException("Role not found"));
-            statusOwnerPermission.getAssignedRoles().add(role);
-            statusOwnerPermissionRepository.save(statusOwnerPermission);
-            return;
-        }
-        
-        FieldEditorPermission fieldEditorPermission = fieldEditorPermissionRepository.findById(permissionId).orElse(null);
-        if (fieldEditorPermission != null) {
-            Role role = roleRepository.findById(roleId).orElseThrow(() -> new RuntimeException("Role not found"));
-            fieldEditorPermission.getAssignedRoles().add(role);
-            fieldEditorPermissionRepository.save(fieldEditorPermission);
-            return;
-        }
-        
-        CreatorPermission creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
-        if (creatorPermission != null) {
-            Role role = roleRepository.findById(roleId).orElseThrow(() -> new RuntimeException("Role not found"));
-            creatorPermission.getAssignedRoles().add(role);
-            creatorPermissionRepository.save(creatorPermission);
-            return;
-        }
-        
-        ExecutorPermission executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
-        if (executorPermission != null) {
-            Role role = roleRepository.findById(roleId).orElseThrow(() -> new RuntimeException("Role not found"));
-            executorPermission.getAssignedRoles().add(role);
-            executorPermissionRepository.save(executorPermission);
-            return;
-        }
-        
-        FieldStatusPermission fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
-        if (fieldStatusPermission != null) {
-            Role role = roleRepository.findById(roleId).orElseThrow(() -> new RuntimeException("Role not found"));
-            fieldStatusPermission.getAssignedRoles().add(role);
-            fieldStatusPermissionRepository.save(fieldStatusPermission);
-            return;
-        }
-        
-        throw new RuntimeException("Permission not found with ID: " + permissionId);
-    }
-    
-    /**
-     * Assegna una grant a una permission
-     */
-    public void assignGrantToPermission(Long permissionId, Map<String, Object> grantData) {
-        // Trova la permission per ID
-        WorkerPermission workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
+        // Trova la permission per ID e TIPO
+        WorkerPermission workerPermission = null;
         StatusOwnerPermission statusOwnerPermission = null;
         FieldEditorPermission fieldEditorPermission = null;
         CreatorPermission creatorPermission = null;
         ExecutorPermission executorPermission = null;
         FieldStatusPermission fieldStatusPermission = null;
         
-        if (workerPermission == null) {
+        if (permissionType == null) {
+            throw new RuntimeException("Permission type must be provided");
+        }
+        
+        // Cerca solo nella tabella specifica in base al tipo
+        switch (permissionType) {
+            case "WORKER":
+                workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
+                if (workerPermission != null) {
+                    workerPermission.getAssignedRoles().add(role);
+                    workerPermissionRepository.save(workerPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            case "STATUS_OWNER":
+                statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
+                if (statusOwnerPermission != null) {
+                    statusOwnerPermission.getAssignedRoles().add(role);
+                    statusOwnerPermissionRepository.save(statusOwnerPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            case "FIELD_EDITOR":
+                fieldEditorPermission = fieldEditorPermissionRepository.findById(permissionId).orElse(null);
+                if (fieldEditorPermission != null) {
+                    fieldEditorPermission.getAssignedRoles().add(role);
+                    fieldEditorPermissionRepository.save(fieldEditorPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            case "CREATOR":
+                creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
+                if (creatorPermission != null) {
+                    creatorPermission.getAssignedRoles().add(role);
+                    creatorPermissionRepository.save(creatorPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            case "EXECUTOR":
+                executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
+                if (executorPermission != null) {
+                    executorPermission.getAssignedRoles().add(role);
+                    executorPermissionRepository.save(executorPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            case "EDITOR":
+            case "VIEWER":
+                fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
+                if (fieldStatusPermission != null) {
+                    fieldStatusPermission.getAssignedRoles().add(role);
+                    fieldStatusPermissionRepository.save(fieldStatusPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            default:
+                throw new RuntimeException("Unknown permission type: " + permissionType);
+        }
+        
+        throw new RuntimeException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
+    }
+    
+    /**
+     * Assegna una grant a una permission
+     */
+    public void assignGrantToPermission(Long permissionId, String permissionType, Map<String, Object> grantData) {
+        if (permissionId == null) {
+            throw new RuntimeException("Permission ID cannot be null");
+        }
+        if (grantData == null) {
+            throw new RuntimeException("Grant data cannot be null");
+        }
+        
+        // Trova la permission per ID e TIPO
+        WorkerPermission workerPermission = null;
+        StatusOwnerPermission statusOwnerPermission = null;
+        FieldEditorPermission fieldEditorPermission = null;
+        CreatorPermission creatorPermission = null;
+        ExecutorPermission executorPermission = null;
+        FieldStatusPermission fieldStatusPermission = null;
+        
+        if (permissionType == null) {
+            // Fallback: cerca in tutte le tabelle (vecchio comportamento)
+            workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
             statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
-        }
-        
-        if (statusOwnerPermission == null) {
             fieldEditorPermission = fieldEditorPermissionRepository.findById(permissionId).orElse(null);
-        }
-        if (statusOwnerPermission == null && fieldEditorPermission == null) {
             creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
-        }
-        if (statusOwnerPermission == null && fieldEditorPermission == null && creatorPermission == null) {
             executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
-        }
-        if (statusOwnerPermission == null && fieldEditorPermission == null && creatorPermission == null && executorPermission == null) {
             fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
+            
+            int foundCount = 0;
+            if (workerPermission != null) foundCount++;
+            if (statusOwnerPermission != null) foundCount++;
+            if (fieldEditorPermission != null) foundCount++;
+            if (creatorPermission != null) foundCount++;
+            if (executorPermission != null) foundCount++;
+            if (fieldStatusPermission != null) foundCount++;
+            
+            if (foundCount > 1) {
+                throw new RuntimeException("Ambiguous permission ID: " + permissionId + " - found in " + foundCount + " tables. Please provide permissionType.");
+            }
+            if (foundCount == 0) {
+                throw new RuntimeException("Permission not found with ID: " + permissionId);
+            }
+        } else {
+            // Cerca solo nella tabella specifica in base al tipo
+            switch (permissionType) {
+                case "WORKER":
+                    workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
+                    break;
+                case "STATUS_OWNER":
+                    statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
+                    break;
+                case "FIELD_EDITOR":
+                    fieldEditorPermission = fieldEditorPermissionRepository.findById(permissionId).orElse(null);
+                    break;
+                case "CREATOR":
+                    creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
+                    break;
+                case "EXECUTOR":
+                    executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
+                    break;
+                case "EDITOR":
+                case "VIEWER":
+                    fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
+                    break;
+                default:
+                    throw new RuntimeException("Unknown permission type: " + permissionType);
+            }
+            
+            if (workerPermission == null && statusOwnerPermission == null && fieldEditorPermission == null && 
+                creatorPermission == null && executorPermission == null && fieldStatusPermission == null) {
+                throw new RuntimeException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
+            }
         }
         
-        if (workerPermission == null && statusOwnerPermission == null && fieldEditorPermission == null && creatorPermission == null && executorPermission == null && fieldStatusPermission == null) {
-            throw new RuntimeException("Permission not found with ID: " + permissionId);
-        }
-        
-        // Trova o crea una grant esistente per questa permission
+        // Riutilizza la grant esistente se presente, altrimenti creane una nuova
         Grant grant = null;
+        
+        // Controlla se esiste già una grant per questa permission
         if (workerPermission != null && !workerPermission.getAssignedGrants().isEmpty()) {
             grant = workerPermission.getAssignedGrants().iterator().next();
         } else if (statusOwnerPermission != null && !statusOwnerPermission.getAssignedGrants().isEmpty()) {
@@ -961,18 +1134,15 @@ public class ItemTypeSetPermissionService {
             grant = fieldStatusPermission.getAssignedGrants().iterator().next();
         }
         
-        // Se non esiste una grant, creane una nuova
-        boolean isNewGrant = (grant == null);
+        // Se non esiste, creane una nuova
         if (grant == null) {
             grant = new Grant();
         } else {
-            // Pulisci i dati esistenti e salva per aggiornare le relazioni
+            // Se esiste, pulisci le collezioni esistenti per riempirle con i nuovi dati
             grant.getUsers().clear();
             grant.getGroups().clear();
             grant.getNegatedUsers().clear();
             grant.getNegatedGroups().clear();
-            // Salva la grant vuota per aggiornare le relazioni
-            grant = grantRepository.save(grant);
         }
         
         // Popola gli utenti assegnati
@@ -980,10 +1150,12 @@ public class ItemTypeSetPermissionService {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> usersData = (List<Map<String, Object>>) grantData.get("users");
             for (Map<String, Object> userData : usersData) {
-                Long userId = ((Number) userData.get("id")).longValue();
-                User user = userRepository.findById(userId).orElse(null);
-                if (user != null) {
-                    grant.getUsers().add(user);
+                if (userData != null && userData.containsKey("id")) {
+                    Long userId = ((Number) userData.get("id")).longValue();
+                    User user = userRepository.findById(userId).orElse(null);
+                    if (user != null) {
+                        grant.getUsers().add(user);
+                    }
                 }
             }
         }
@@ -993,10 +1165,12 @@ public class ItemTypeSetPermissionService {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> groupsData = (List<Map<String, Object>>) grantData.get("groups");
             for (Map<String, Object> groupData : groupsData) {
-                Long groupId = ((Number) groupData.get("id")).longValue();
-                Group group = groupRepository.findById(groupId).orElse(null);
-                if (group != null) {
-                    grant.getGroups().add(group);
+                if (groupData != null && groupData.containsKey("id")) {
+                    Long groupId = ((Number) groupData.get("id")).longValue();
+                    Group group = groupRepository.findById(groupId).orElse(null);
+                    if (group != null) {
+                        grant.getGroups().add(group);
+                    }
                 }
             }
         }
@@ -1006,10 +1180,12 @@ public class ItemTypeSetPermissionService {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> deniedUsersData = (List<Map<String, Object>>) grantData.get("deniedUsers");
             for (Map<String, Object> userData : deniedUsersData) {
-                Long userId = ((Number) userData.get("id")).longValue();
-                User user = userRepository.findById(userId).orElse(null);
-                if (user != null) {
-                    grant.getNegatedUsers().add(user);
+                if (userData != null && userData.containsKey("id")) {
+                    Long userId = ((Number) userData.get("id")).longValue();
+                    User user = userRepository.findById(userId).orElse(null);
+                    if (user != null) {
+                        grant.getNegatedUsers().add(user);
+                    }
                 }
             }
         }
@@ -1019,102 +1195,135 @@ public class ItemTypeSetPermissionService {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> deniedGroupsData = (List<Map<String, Object>>) grantData.get("deniedGroups");
             for (Map<String, Object> groupData : deniedGroupsData) {
-                Long groupId = ((Number) groupData.get("id")).longValue();
-                Group group = groupRepository.findById(groupId).orElse(null);
-                if (group != null) {
-                    grant.getNegatedGroups().add(group);
+                if (groupData != null && groupData.containsKey("id")) {
+                    Long groupId = ((Number) groupData.get("id")).longValue();
+                    Group group = groupRepository.findById(groupId).orElse(null);
+                    if (group != null) {
+                        grant.getNegatedGroups().add(group);
+                    }
                 }
             }
         }
         
+        // Salva la grant (nuova o aggiornata)
         grant = grantRepository.save(grant);
+        entityManager.flush(); // Forza la scrittura delle relazioni ManyToMany
         
-        // Assegna la grant alla permission solo se è nuova
-        if (isNewGrant) {
-            if (workerPermission != null) {
+        // Aggiungi la grant alla permission SOLO se non era già presente
+        if (workerPermission != null) {
+            if (!workerPermission.getAssignedGrants().contains(grant)) {
                 workerPermission.getAssignedGrants().add(grant);
-                workerPermissionRepository.save(workerPermission);
-            } else if (statusOwnerPermission != null) {
+            }
+            workerPermissionRepository.save(workerPermission);
+            entityManager.flush();
+        } else if (statusOwnerPermission != null) {
+            if (!statusOwnerPermission.getAssignedGrants().contains(grant)) {
                 statusOwnerPermission.getAssignedGrants().add(grant);
-                statusOwnerPermissionRepository.save(statusOwnerPermission);
-            } else if (fieldEditorPermission != null) {
+            }
+            statusOwnerPermissionRepository.save(statusOwnerPermission);
+            entityManager.flush();
+        } else if (fieldEditorPermission != null) {
+            if (!fieldEditorPermission.getAssignedGrants().contains(grant)) {
                 fieldEditorPermission.getAssignedGrants().add(grant);
-                fieldEditorPermissionRepository.save(fieldEditorPermission);
-            } else if (creatorPermission != null) {
+            }
+            fieldEditorPermissionRepository.save(fieldEditorPermission);
+            entityManager.flush();
+        } else if (creatorPermission != null) {
+            if (!creatorPermission.getAssignedGrants().contains(grant)) {
                 creatorPermission.getAssignedGrants().add(grant);
-                creatorPermissionRepository.save(creatorPermission);
-            } else if (executorPermission != null) {
+            }
+            creatorPermissionRepository.save(creatorPermission);
+            entityManager.flush();
+        } else if (executorPermission != null) {
+            if (!executorPermission.getAssignedGrants().contains(grant)) {
                 executorPermission.getAssignedGrants().add(grant);
-                executorPermissionRepository.save(executorPermission);
-            } else if (fieldStatusPermission != null) {
+            }
+            executorPermissionRepository.save(executorPermission);
+            entityManager.flush();
+        } else if (fieldStatusPermission != null) {
+            if (!fieldStatusPermission.getAssignedGrants().contains(grant)) {
                 fieldStatusPermission.getAssignedGrants().add(grant);
-                fieldStatusPermissionRepository.save(fieldStatusPermission);
             }
-        } else {
-            // Se è una grant esistente, salva solo la permission per aggiornare le relazioni
-            if (workerPermission != null) {
-                workerPermissionRepository.save(workerPermission);
-            } else if (statusOwnerPermission != null) {
-                statusOwnerPermissionRepository.save(statusOwnerPermission);
-            } else if (fieldEditorPermission != null) {
-                fieldEditorPermissionRepository.save(fieldEditorPermission);
-            } else if (creatorPermission != null) {
-                creatorPermissionRepository.save(creatorPermission);
-            } else if (executorPermission != null) {
-                executorPermissionRepository.save(executorPermission);
-            } else if (fieldStatusPermission != null) {
-                fieldStatusPermissionRepository.save(fieldStatusPermission);
-            }
+            fieldStatusPermissionRepository.save(fieldStatusPermission);
+            entityManager.flush();
         }
     }
     
     /**
      * Rimuove un ruolo da una permission
      */
-    public void removeRoleFromPermission(Long permissionId, Long roleId) {
-        // Trova la permission per ID
-        WorkerPermission workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
-        if (workerPermission != null) {
-            workerPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
-            workerPermissionRepository.save(workerPermission);
-            return;
+    public void removeRoleFromPermission(Long permissionId, Long roleId, String permissionType) {
+        if (permissionType == null) {
+            throw new RuntimeException("Permission type must be provided");
         }
         
-        StatusOwnerPermission statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
-        if (statusOwnerPermission != null) {
-            statusOwnerPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
-            statusOwnerPermissionRepository.save(statusOwnerPermission);
-            return;
+        // Cerca solo nella tabella specifica in base al tipo
+        switch (permissionType) {
+            case "WORKER":
+                WorkerPermission workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
+                if (workerPermission != null) {
+                    workerPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
+                    workerPermissionRepository.save(workerPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            case "STATUS_OWNER":
+                StatusOwnerPermission statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
+                if (statusOwnerPermission != null) {
+                    statusOwnerPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
+                    statusOwnerPermissionRepository.save(statusOwnerPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            case "FIELD_EDITOR":
+                FieldEditorPermission fieldEditorPermission = fieldEditorPermissionRepository.findById(permissionId).orElse(null);
+                if (fieldEditorPermission != null) {
+                    fieldEditorPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
+                    fieldEditorPermissionRepository.save(fieldEditorPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            case "CREATOR":
+                CreatorPermission creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
+                if (creatorPermission != null) {
+                    creatorPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
+                    creatorPermissionRepository.save(creatorPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            case "EXECUTOR":
+                ExecutorPermission executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
+                if (executorPermission != null) {
+                    executorPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
+                    executorPermissionRepository.save(executorPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            case "EDITOR":
+            case "VIEWER":
+                FieldStatusPermission fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
+                if (fieldStatusPermission != null) {
+                    fieldStatusPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
+                    fieldStatusPermissionRepository.save(fieldStatusPermission);
+                    entityManager.flush();
+                    entityManager.clear();
+                    return;
+                }
+                break;
+            default:
+                throw new RuntimeException("Unknown permission type: " + permissionType);
         }
         
-        FieldEditorPermission fieldEditorPermission = fieldEditorPermissionRepository.findById(permissionId).orElse(null);
-        if (fieldEditorPermission != null) {
-            fieldEditorPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
-            fieldEditorPermissionRepository.save(fieldEditorPermission);
-            return;
-        }
-        
-        CreatorPermission creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
-        if (creatorPermission != null) {
-            creatorPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
-            creatorPermissionRepository.save(creatorPermission);
-            return;
-        }
-        
-        ExecutorPermission executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
-        if (executorPermission != null) {
-            executorPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
-            executorPermissionRepository.save(executorPermission);
-            return;
-        }
-        
-        FieldStatusPermission fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
-        if (fieldStatusPermission != null) {
-            fieldStatusPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
-            fieldStatusPermissionRepository.save(fieldStatusPermission);
-            return;
-        }
-        
-        throw new RuntimeException("Permission not found with ID: " + permissionId);
+        throw new RuntimeException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
     }
 }

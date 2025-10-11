@@ -37,7 +37,7 @@ public class FieldEditorPermission {
     private Set<Role> assignedRoles = new HashSet<>();
 
     // Relazioni con grants (utenti/gruppi)
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "fieldeditorpermission_grant",
             joinColumns = @JoinColumn(name = "fieldeditorpermission_id"),

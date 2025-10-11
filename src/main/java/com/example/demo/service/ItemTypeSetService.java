@@ -37,6 +37,9 @@ public class ItemTypeSetService {
     private final DtoMapperFacade dtoMapper;
 
     private final FieldSetCloner fieldSetCloner;
+    private final ItemTypePermissionService itemTypePermissionService;
+    private final ItemTypeSetPermissionService itemTypeSetPermissionService;
+    
     private static final String ITEMTYPESET_NOT_FOUND = "ItemTypeSet not found";
 
 
@@ -91,12 +94,20 @@ public class ItemTypeSetService {
              */
 
             itemTypeConfigurationRepository.save(configuration);
+            
+            // Crea le permissions base per questa configurazione (Creator, Executor, ecc.)
+            itemTypePermissionService.createPermissionsForItemTypeConfiguration(configuration);
+            
             configurations.add(configuration);
         }
 
         set.setItemTypeConfigurations(configurations);
 
         ItemTypeSet saved = itemTypeSetRepository.save(set);
+        
+        // Crea tutte le permissions per l'ItemTypeSet (WORKER, STATUS_OWNER, FIELD_EDITOR, ecc.)
+        itemTypeSetPermissionService.createPermissionsForItemTypeSet(saved.getId(), tenant);
+        
         return dtoMapper.toItemTypeSetViewDto(saved);
     }
 

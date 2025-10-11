@@ -19,28 +19,34 @@ public class ItemTypePermissionService {
     private final CreatorPermissionRepository creatorPermissionRepository;
     private final ExecutorPermissionRepository executorPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
+    private final ItemTypeConfigurationRepository itemTypeConfigurationRepository;
+    private final WorkflowStatusRepository workflowStatusRepository;
+    private final TransitionRepository transitionRepository;
 
     /**
      * Crea automaticamente tutte le permissions per un ItemTypeConfiguration
      */
     public void createPermissionsForItemTypeConfiguration(ItemTypeConfiguration itemTypeConfiguration) {
+        ItemTypeConfiguration config = itemTypeConfigurationRepository.findById(itemTypeConfiguration.getId())
+                .orElseThrow(() -> new RuntimeException("ItemTypeConfiguration not found with id: " + itemTypeConfiguration.getId()));
+        
         // 1. Workers - uno per ItemType
-        createWorkersPermission(itemTypeConfiguration);
+        createWorkersPermission(config);
 
         // 2. StatusOwner - uno per ogni WorkflowStatus
-        createStatusOwnerPermissions(itemTypeConfiguration);
+        createStatusOwnerPermissions(config);
 
         // 3. FieldEditors - uno per ogni FieldConfiguration
-        createFieldEditorPermissions(itemTypeConfiguration);
+        createFieldEditorPermissions(config);
 
         // 4. Creators - uno per ItemType
-        createCreatorPermission(itemTypeConfiguration);
+        createCreatorPermission(config);
 
         // 5. Executors - uno per ogni Transition del Workflow
-        createExecutorPermissions(itemTypeConfiguration);
+        createExecutorPermissions(config);
 
         // 6. Editors e Viewers - uno per ogni coppia (FieldConfiguration, WorkflowStatus)
-        createFieldStatusPermissions(itemTypeConfiguration);
+        createFieldStatusPermissions(config);
     }
 
     private void createWorkersPermission(ItemTypeConfiguration itemTypeConfiguration) {
@@ -59,7 +65,16 @@ public class ItemTypePermissionService {
 
     private void createStatusOwnerPermissions(ItemTypeConfiguration itemTypeConfiguration) {
         // Crea una permission per ogni WorkflowStatus del workflow
-        for (WorkflowStatus workflowStatus : itemTypeConfiguration.getWorkflow().getStatuses()) {
+        if (itemTypeConfiguration.getWorkflow() == null) {
+            return;
+        }
+        
+        // Carica ESPLICITAMENTE tutti i WorkflowStatus per questo workflow dal database
+        // Questo bypassa il problema del lazy loading
+        var workflowStatuses = workflowStatusRepository.findAllByWorkflowId(
+                itemTypeConfiguration.getWorkflow().getId());
+        
+        for (WorkflowStatus workflowStatus : workflowStatuses) {
             if (!statusOwnerPermissionRepository.existsByItemTypeConfigurationIdAndWorkflowStatusId(
                     itemTypeConfiguration.getId(), workflowStatus.getId())) {
                 
@@ -76,6 +91,10 @@ public class ItemTypePermissionService {
 
     private void createFieldEditorPermissions(ItemTypeConfiguration itemTypeConfiguration) {
         // Crea una permission per ogni FieldConfiguration del FieldSet
+        if (itemTypeConfiguration.getFieldSet() == null || itemTypeConfiguration.getFieldSet().getFieldSetEntries().isEmpty()) {
+            return;
+        }
+        
         for (FieldSetEntry entry : itemTypeConfiguration.getFieldSet().getFieldSetEntries()) {
             FieldConfiguration fieldConfig = entry.getFieldConfiguration();
             
@@ -106,7 +125,14 @@ public class ItemTypePermissionService {
 
     private void createExecutorPermissions(ItemTypeConfiguration itemTypeConfiguration) {
         // Crea una permission per ogni Transition del Workflow
-        for (Transition transition : itemTypeConfiguration.getWorkflow().getTransitions()) {
+        if (itemTypeConfiguration.getWorkflow() == null) {
+            return;
+        }
+        
+        // Carica ESPLICITAMENTE tutte le Transitions per questo workflow dal repository
+        var transitions = transitionRepository.findByWorkflow(itemTypeConfiguration.getWorkflow());
+        
+        for (Transition transition : transitions) {
             if (!executorPermissionRepository.existsByItemTypeConfigurationIdAndTransitionId(
                     itemTypeConfiguration.getId(), transition.getId())) {
                 
@@ -123,10 +149,22 @@ public class ItemTypePermissionService {
 
     private void createFieldStatusPermissions(ItemTypeConfiguration itemTypeConfiguration) {
         // Crea una permission per ogni coppia (FieldConfiguration, WorkflowStatus)
+        if (itemTypeConfiguration.getFieldSet() == null || itemTypeConfiguration.getFieldSet().getFieldSetEntries().isEmpty()) {
+            return;
+        }
+        
+        if (itemTypeConfiguration.getWorkflow() == null) {
+            return;
+        }
+        
+        // Carica ESPLICITAMENTE i WorkflowStatus per questo workflow
+        var workflowStatuses = workflowStatusRepository.findAllByWorkflowId(
+                itemTypeConfiguration.getWorkflow().getId());
+        
         for (FieldSetEntry entry : itemTypeConfiguration.getFieldSet().getFieldSetEntries()) {
             FieldConfiguration fieldConfig = entry.getFieldConfiguration();
             
-            for (WorkflowStatus workflowStatus : itemTypeConfiguration.getWorkflow().getStatuses()) {
+            for (WorkflowStatus workflowStatus : workflowStatuses) {
                 // Editor permission
                 if (!fieldStatusPermissionRepository.existsByItemTypeConfigurationIdAndFieldConfigurationIdAndWorkflowStatusIdAndPermissionType(
                         itemTypeConfiguration.getId(), fieldConfig.getId(), workflowStatus.getId(), 

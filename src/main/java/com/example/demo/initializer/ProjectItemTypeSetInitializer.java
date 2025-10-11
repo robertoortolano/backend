@@ -4,9 +4,11 @@ import com.example.demo.entity.*;
 import com.example.demo.exception.ApiException;
 import com.example.demo.factory.FieldSetCloner;
 import com.example.demo.repository.FieldSetRepository;
+import com.example.demo.repository.ItemTypeConfigurationRepository;
 import com.example.demo.repository.ItemTypeSetRepository;
 import com.example.demo.repository.ProjectRepository;
-import com.example.demo.repository.TenantRepository;
+import com.example.demo.service.ItemTypePermissionService;
+import com.example.demo.service.ItemTypeSetPermissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -20,10 +22,12 @@ import java.util.Set;
 public class ProjectItemTypeSetInitializer implements ProjectInitializer {
 
     private final ItemTypeSetRepository itemTypeSetRepository;
+    private final ItemTypeConfigurationRepository itemTypeConfigurationRepository;
     private final FieldSetRepository fieldSetRepository;
     private final ProjectRepository projectRepository;
-    private final TenantRepository tenantRepository;
     private final FieldSetCloner fieldSetCloner;
+    private final ItemTypePermissionService itemTypePermissionService;
+    private final ItemTypeSetPermissionService itemTypeSetPermissionService;
 
     @Override
     public void initialize(Project project, Tenant tenant) {
@@ -60,13 +64,23 @@ public class ProjectItemTypeSetInitializer implements ProjectInitializer {
                 copy.setFieldSet(clonedFieldSet);
             }
 
+            // Salva la configurazione per ottenere l'ID
+            copy = itemTypeConfigurationRepository.save(copy);
             newConfigs.add(copy);
         }
 
         newSet.setItemTypeConfigurations(newConfigs);
 
         // Salva il nuovo ItemTypeSet
-        itemTypeSetRepository.save(newSet);
+        newSet = itemTypeSetRepository.save(newSet);
+        
+        // Crea le permissions per ogni ItemTypeConfiguration copiata
+        for (ItemTypeConfiguration config : newConfigs) {
+            itemTypePermissionService.createPermissionsForItemTypeConfiguration(config);
+        }
+        
+        // Crea tutte le permissions per l'ItemTypeSet (WORKER, STATUS_OWNER, FIELD_EDITOR, ecc.)
+        itemTypeSetPermissionService.createPermissionsForItemTypeSet(newSet.getId(), tenant);
 
         // Associa il nuovo ItemTypeSet al progetto
         project.setItemTypeSet(newSet);
