@@ -126,7 +126,7 @@ class ItemTypeSetRoleServiceTest {
         // Given
         ItemTypeSetRole role = new ItemTypeSetRole();
         role.setId(1L);
-        role.setRoleType(ItemTypeSetRoleType.WORKER);
+        role.setRoleType(ItemTypeSetRoleType.WORKERS);
         role.setItemTypeSet(itemTypeSet);
         role.setTenant(tenant);
 
@@ -168,14 +168,14 @@ class ItemTypeSetRoleServiceTest {
         // Given
         ItemTypeSetRole role = new ItemTypeSetRole();
         role.setId(1L);
-        role.setRoleType(ItemTypeSetRoleType.WORKER);
+        role.setRoleType(ItemTypeSetRoleType.WORKERS);
         role.setName("Worker for Bug");
         role.setItemTypeSet(itemTypeSet);
         role.setTenant(tenant);
 
         ItemTypeSetRoleDTO roleDTO = ItemTypeSetRoleDTO.builder()
                 .id(1L)
-                .roleType(ItemTypeSetRoleType.WORKER)
+                .roleType(ItemTypeSetRoleType.WORKERS)
                 .name("Worker for Bug")
                 .itemTypeSetId(1L)
                 .tenantId(1L)
@@ -191,14 +191,14 @@ class ItemTypeSetRoleServiceTest {
         // Then
         assertNotNull(result);
         assertEquals(1, result.size());
-        assertEquals(ItemTypeSetRoleType.WORKER, result.get(0).getRoleType());
+        assertEquals(ItemTypeSetRoleType.WORKERS, result.get(0).getRoleType());
     }
 
     @Test
     void testCreateRole() {
         // Given
         ItemTypeSetRoleCreateDTO createDTO = ItemTypeSetRoleCreateDTO.builder()
-                .roleType(ItemTypeSetRoleType.WORKER)
+                .roleType(ItemTypeSetRoleType.WORKERS)
                 .name("Test Role")
                 .description("Test Description")
                 .itemTypeSetId(1L)
@@ -208,14 +208,14 @@ class ItemTypeSetRoleServiceTest {
 
         ItemTypeSetRole savedRole = new ItemTypeSetRole();
         savedRole.setId(1L);
-        savedRole.setRoleType(ItemTypeSetRoleType.WORKER);
+        savedRole.setRoleType(ItemTypeSetRoleType.WORKERS);
         savedRole.setName("Test Role");
         savedRole.setItemTypeSet(itemTypeSet);
         savedRole.setTenant(tenant);
 
         ItemTypeSetRoleDTO roleDTO = new ItemTypeSetRoleDTO();
         roleDTO.setId(1L);
-        roleDTO.setRoleType(ItemTypeSetRoleType.WORKER);
+        roleDTO.setRoleType(ItemTypeSetRoleType.WORKERS);
         roleDTO.setName("Test Role");
 
         when(itemTypeSetRepository.findById(1L)).thenReturn(Optional.of(itemTypeSet));
@@ -227,7 +227,7 @@ class ItemTypeSetRoleServiceTest {
 
         // Then
         assertNotNull(result);
-        assertEquals(ItemTypeSetRoleType.WORKER, result.getRoleType());
+        assertEquals(ItemTypeSetRoleType.WORKERS, result.getRoleType());
         assertEquals("Test Role", result.getName());
         verify(itemTypeSetRoleRepository).save(any(ItemTypeSetRole.class));
     }
@@ -237,25 +237,25 @@ class ItemTypeSetRoleServiceTest {
         // Given
         ItemTypeSetRole role = new ItemTypeSetRole();
         role.setId(1L);
-        role.setRoleType(ItemTypeSetRoleType.WORKER);
+        role.setRoleType(ItemTypeSetRoleType.WORKERS);
         role.setItemTypeSet(itemTypeSet);
         role.setTenant(tenant);
 
         ItemTypeSetRoleDTO roleDTO = new ItemTypeSetRoleDTO();
         roleDTO.setId(1L);
-        roleDTO.setRoleType(ItemTypeSetRoleType.WORKER);
+        roleDTO.setRoleType(ItemTypeSetRoleType.WORKERS);
 
         List<ItemTypeSetRole> roles = Arrays.asList(role);
-        when(itemTypeSetRoleRepository.findRolesByItemTypeSetAndType(1L, ItemTypeSetRoleType.WORKER, 1L)).thenReturn(roles);
+        when(itemTypeSetRoleRepository.findRolesByItemTypeSetAndType(1L, ItemTypeSetRoleType.WORKERS, 1L)).thenReturn(roles);
         when(itemTypeSetRoleMapper.toDTO(role)).thenReturn(roleDTO);
 
         // When
-        List<ItemTypeSetRoleDTO> result = itemTypeSetRoleService.getRolesByType(1L, ItemTypeSetRoleType.WORKER, tenant);
+        List<ItemTypeSetRoleDTO> result = itemTypeSetRoleService.getRolesByType(1L, ItemTypeSetRoleType.WORKERS, tenant);
 
         // Then
         assertNotNull(result);
         assertEquals(1, result.size());
-        assertEquals(ItemTypeSetRoleType.WORKER, result.get(0).getRoleType());
+        assertEquals(ItemTypeSetRoleType.WORKERS, result.get(0).getRoleType());
     }
 
     @Test

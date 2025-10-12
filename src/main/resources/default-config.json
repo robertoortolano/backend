@@ -130,7 +130,7 @@
       "description": "Proprietari degli item di questo tipo per stato specifico"
     },
     {
-      "name": "FieldEditors",
+      "name": "FieldOwner",
       "description": "Utenti che possono modificare i campi specifici"
     },
     {

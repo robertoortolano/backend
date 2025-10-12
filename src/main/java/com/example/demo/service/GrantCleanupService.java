@@ -95,11 +95,11 @@ public class GrantCleanupService {
         }
         
         try {
-            entityManager.createNativeQuery("DELETE FROM fieldeditorpermission_grant WHERE grant_id = :grantId")
+            entityManager.createNativeQuery("DELETE FROM fieldownerpermission_grant WHERE grant_id = :grantId")
                 .setParameter("grantId", grantId).executeUpdate();
-            System.out.println("DEBUG: Deleted from fieldeditorpermission_grant");
+            System.out.println("DEBUG: Deleted from fieldownerpermission_grant");
         } catch (Exception e) {
-            System.out.println("WARN: Could not delete from fieldeditorpermission_grant: " + e.getMessage());
+            System.out.println("WARN: Could not delete from fieldownerpermission_grant: " + e.getMessage());
         }
         
         try {

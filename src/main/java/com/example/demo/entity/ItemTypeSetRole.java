@@ -75,7 +75,7 @@ public class ItemTypeSetRole {
     
     public boolean isForFieldConfiguration() {
         return "FieldConfiguration".equals(relatedEntityType) || 
-               (ItemTypeSetRoleType.FIELD_EDITOR.equals(roleType) && "FieldConfiguration".equals(relatedEntityType));
+               (ItemTypeSetRoleType.FIELD_OWNERS.equals(roleType) && "FieldConfiguration".equals(relatedEntityType));
     }
     
     public boolean isForWorkflow() {
@@ -91,7 +91,7 @@ public class ItemTypeSetRole {
     }
     
     public boolean isForFieldConfigurationWorkflowStatusPair() {
-        return (ItemTypeSetRoleType.EDITOR.equals(roleType) || ItemTypeSetRoleType.VIEWER.equals(roleType)) 
+        return (ItemTypeSetRoleType.EDITORS.equals(roleType) || ItemTypeSetRoleType.VIEWERS.equals(roleType))
                && "ItemTypeConfiguration".equals(relatedEntityType);
     }
     

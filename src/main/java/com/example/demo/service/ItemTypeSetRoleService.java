@@ -53,7 +53,7 @@ public class ItemTypeSetRoleService {
         createOwnerRoles(itemTypeSet, tenant);
         
         // 3. Creare ruoli FIELD_EDITOR per ogni FieldConfiguration
-        createFieldEditorRoles(itemTypeSet, tenant);
+        createFieldOwnerRoles(itemTypeSet, tenant);
         
         // 4. Creare ruoli CREATOR per ogni Workflow
         createCreatorRoles(itemTypeSet, tenant);
@@ -71,7 +71,7 @@ public class ItemTypeSetRoleService {
         for (ItemTypeConfiguration config : configurations) {
             if (config.getItemType() != null) {
                 ItemTypeSetRole role = ItemTypeSetRole.builder()
-                        .roleType(ItemTypeSetRoleType.WORKER)
+                        .roleType(ItemTypeSetRoleType.WORKERS)
                         .name("Worker for " + config.getItemType().getName())
                         .description("Worker role for ItemType: " + config.getItemType().getName())
                         .itemTypeSet(itemTypeSet)
@@ -93,7 +93,7 @@ public class ItemTypeSetRoleService {
                 Set<WorkflowStatus> statuses = config.getWorkflow().getStatuses();
                 for (WorkflowStatus status : statuses) {
                     ItemTypeSetRole role = ItemTypeSetRole.builder()
-                            .roleType(ItemTypeSetRoleType.OWNER)
+                            .roleType(ItemTypeSetRoleType.OWNERS)
                             .name("Owner for " + status.getStatus().getName() + " in " + config.getWorkflow().getName())
                             .description("Owner role for WorkflowStatus: " + status.getStatus().getName())
                             .itemTypeSet(itemTypeSet)
@@ -108,7 +108,7 @@ public class ItemTypeSetRoleService {
         }
     }
     
-    private void createFieldEditorRoles(ItemTypeSet itemTypeSet, Tenant tenant) {
+    private void createFieldOwnerRoles(ItemTypeSet itemTypeSet, Tenant tenant) {
         Set<ItemTypeConfiguration> configurations = itemTypeSet.getItemTypeConfigurations();
         
         for (ItemTypeConfiguration config : configurations) {
@@ -118,17 +118,17 @@ public class ItemTypeSetRoleService {
                     FieldConfiguration fieldConfig = entry.getFieldConfiguration();
                     
                     // Ruolo FIELD_EDITOR
-                    ItemTypeSetRole fieldEditorRole = ItemTypeSetRole.builder()
-                            .roleType(ItemTypeSetRoleType.FIELD_EDITOR)
-                            .name("Field Editor for " + fieldConfig.getName())
-                            .description("Field Editor role for FieldConfiguration: " + fieldConfig.getName())
+                    ItemTypeSetRole fieldOwnerRole = ItemTypeSetRole.builder()
+                            .roleType(ItemTypeSetRoleType.FIELD_OWNERS)
+                            .name("Field Owner for " + fieldConfig.getName())
+                            .description("Field Owner role for FieldConfiguration: " + fieldConfig.getName())
                             .itemTypeSet(itemTypeSet)
                             .relatedEntityType("FieldConfiguration")
                             .relatedEntityId(fieldConfig.getId())
                             .tenant(tenant)
                             .build();
                     
-                    itemTypeSetRoleRepository.save(fieldEditorRole);
+                    itemTypeSetRoleRepository.save(fieldOwnerRole);
                 }
             }
         }
@@ -149,7 +149,7 @@ public class ItemTypeSetRoleService {
                     for (WorkflowStatus status : statuses) {
                         // Ruolo EDITOR per la coppia
                         ItemTypeSetRole editorRole = ItemTypeSetRole.builder()
-                                .roleType(ItemTypeSetRoleType.EDITOR)
+                                .roleType(ItemTypeSetRoleType.EDITORS)
                                 .name("Editor for " + fieldConfig.getName() + " in " + status.getStatus().getName())
                                 .description("Editor role for FieldConfiguration " + fieldConfig.getName() + " in WorkflowStatus " + status.getStatus().getName())
                                 .itemTypeSet(itemTypeSet)
@@ -162,7 +162,7 @@ public class ItemTypeSetRoleService {
                         
                         // Ruolo VIEWER per la coppia
                         ItemTypeSetRole viewerRole = ItemTypeSetRole.builder()
-                                .roleType(ItemTypeSetRoleType.VIEWER)
+                                .roleType(ItemTypeSetRoleType.VIEWERS)
                                 .name("Viewer for " + fieldConfig.getName() + " in " + status.getStatus().getName())
                                 .description("Viewer role for FieldConfiguration " + fieldConfig.getName() + " in WorkflowStatus " + status.getStatus().getName())
                                 .itemTypeSet(itemTypeSet)
@@ -187,7 +187,7 @@ public class ItemTypeSetRoleService {
         for (ItemTypeConfiguration config : configurations) {
             if (config.getWorkflow() != null) {
                 ItemTypeSetRole role = ItemTypeSetRole.builder()
-                        .roleType(ItemTypeSetRoleType.CREATOR)
+                        .roleType(ItemTypeSetRoleType.CREATORS)
                         .name("Creator for " + config.getWorkflow().getName())
                         .description("Creator role for Workflow: " + config.getWorkflow().getName())
                         .itemTypeSet(itemTypeSet)
@@ -209,7 +209,7 @@ public class ItemTypeSetRoleService {
                 Set<Transition> transitions = config.getWorkflow().getTransitions();
                 for (Transition transition : transitions) {
                     ItemTypeSetRole role = ItemTypeSetRole.builder()
-                            .roleType(ItemTypeSetRoleType.EXECUTOR)
+                            .roleType(ItemTypeSetRoleType.EXECUTORS)
                             .name("Executor for " + transition.getName())
                             .description("Executor role for Transition: " + transition.getName())
                             .itemTypeSet(itemTypeSet)

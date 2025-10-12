@@ -15,7 +15,7 @@ public class ItemTypePermissionService {
 
     private final WorkerPermissionRepository workerPermissionRepository;
     private final StatusOwnerPermissionRepository statusOwnerPermissionRepository;
-    private final FieldEditorPermissionRepository fieldEditorPermissionRepository;
+    private final FieldOwnerPermissionRepository fieldOwnerPermissionRepository;
     private final CreatorPermissionRepository creatorPermissionRepository;
     private final ExecutorPermissionRepository executorPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
@@ -36,8 +36,8 @@ public class ItemTypePermissionService {
         // 2. StatusOwner - uno per ogni WorkflowStatus
         createStatusOwnerPermissions(config);
 
-        // 3. FieldEditors - uno per ogni FieldConfiguration
-        createFieldEditorPermissions(config);
+        // 3. FieldOwners - uno per ogni FieldConfiguration
+        createFieldOwnerPermissions(config);
 
         // 4. Creators - uno per ItemType
         createCreatorPermission(config);
@@ -89,7 +89,7 @@ public class ItemTypePermissionService {
         }
     }
 
-    private void createFieldEditorPermissions(ItemTypeConfiguration itemTypeConfiguration) {
+    private void createFieldOwnerPermissions(ItemTypeConfiguration itemTypeConfiguration) {
         // Crea una permission per ogni FieldConfiguration del FieldSet
         if (itemTypeConfiguration.getFieldSet() == null || itemTypeConfiguration.getFieldSet().getFieldSetEntries().isEmpty()) {
             return;
@@ -98,16 +98,16 @@ public class ItemTypePermissionService {
         for (FieldSetEntry entry : itemTypeConfiguration.getFieldSet().getFieldSetEntries()) {
             FieldConfiguration fieldConfig = entry.getFieldConfiguration();
             
-            if (!fieldEditorPermissionRepository.existsByItemTypeConfigurationIdAndFieldConfigurationId(
+            if (!fieldOwnerPermissionRepository.existsByItemTypeConfigurationIdAndFieldConfigurationId(
                     itemTypeConfiguration.getId(), fieldConfig.getId())) {
-                
-                FieldEditorPermission permission = new FieldEditorPermission();
+
+                FieldOwnerPermission permission = new FieldOwnerPermission();
                 permission.setItemTypeConfiguration(itemTypeConfiguration);
                 permission.setFieldConfiguration(fieldConfig);
                 permission.setAssignedRoles(new HashSet<>());
                 permission.setAssignedGrants(new HashSet<>());
                 
-                fieldEditorPermissionRepository.save(permission);
+                fieldOwnerPermissionRepository.save(permission);
             }
         }
     }

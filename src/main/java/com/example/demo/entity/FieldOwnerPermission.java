@@ -14,7 +14,7 @@ import java.util.Set;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class FieldEditorPermission {
+public class FieldOwnerPermission {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -30,8 +30,8 @@ public class FieldEditorPermission {
     // Relazioni con ruoli personalizzati
     @ManyToMany
     @JoinTable(
-            name = "fieldeditorpermission_role",
-            joinColumns = @JoinColumn(name = "fieldeditorpermission_id"),
+            name = "fieldownerpermission_role",
+            joinColumns = @JoinColumn(name = "fieldownerpermission_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<Role> assignedRoles = new HashSet<>();
@@ -39,8 +39,8 @@ public class FieldEditorPermission {
     // Relazioni con grants (utenti/gruppi)
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
-            name = "fieldeditorpermission_grant",
-            joinColumns = @JoinColumn(name = "fieldeditorpermission_id"),
+            name = "fieldownerpermission_grant",
+            joinColumns = @JoinColumn(name = "fieldownerpermission_id"),
             inverseJoinColumns = @JoinColumn(name = "grant_id")
     )
     private Set<Grant> assignedGrants = new HashSet<>();

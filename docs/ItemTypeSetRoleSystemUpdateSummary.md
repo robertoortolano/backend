@@ -57,7 +57,7 @@ VIEWER          // Per ogni coppia (FieldConfiguration, WorkflowStatus) in ogni 
 
 **Modifiche principali**:
 - Aggiornato `createRolesForItemTypeSet()` per chiamare i nuovi metodi
-- Sostituito `createEditorAndViewerRoles()` con `createFieldEditorRoles()`
+- Sostituito `createEditorAndViewerRoles()` con `createFieldOwnerRoles()`
 - Aggiunto `createEditorAndViewerRolesForPairs()` per le coppie
 - Aggiunto metodo `createRole()` per creazione manuale
 

@@ -17,7 +17,7 @@ public class ItemTypeSetPermissionService {
     private final ItemTypeSetRepository itemTypeSetRepository;
     private final WorkerPermissionRepository workerPermissionRepository;
     private final StatusOwnerPermissionRepository statusOwnerPermissionRepository;
-    private final FieldEditorPermissionRepository fieldEditorPermissionRepository;
+    private final FieldOwnerPermissionRepository fieldOwnerPermissionRepository;
     private final CreatorPermissionRepository creatorPermissionRepository;
     private final ExecutorPermissionRepository executorPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
@@ -80,16 +80,16 @@ public class ItemTypeSetPermissionService {
                 }
             }
             
-            // Crea grant per FieldEditor permissions
-            List<FieldEditorPermission> fieldEditorPermissions = fieldEditorPermissionRepository
+            // Crea grant per FieldOwner permissions
+            List<FieldOwnerPermission> fieldOwnerPermissions = fieldOwnerPermissionRepository
                 .findAllByItemTypeConfiguration(config);
-            
-            for (FieldEditorPermission perm : fieldEditorPermissions) {
+
+            for (FieldOwnerPermission perm : fieldOwnerPermissions) {
                 if (perm.getAssignedGrants().isEmpty()) {
                     Grant defaultGrant = new Grant();
                     defaultGrant = grantRepository.save(defaultGrant);
                     perm.getAssignedGrants().add(defaultGrant);
-                    fieldEditorPermissionRepository.save(perm);
+                    fieldOwnerPermissionRepository.save(perm);
                 }
             }
             
@@ -154,7 +154,7 @@ public class ItemTypeSetPermissionService {
             ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdWithAllRelations(itemTypeSetId, tenant)
                     .orElseThrow(() -> new RuntimeException("ItemTypeSet not found"));
             
-            Map<String, List<Map<String, Object>>> result = new HashMap<>();
+            Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
         
         // Worker permissions
         List<Map<String, Object>> workers = new ArrayList<>();
@@ -252,7 +252,7 @@ public class ItemTypeSetPermissionService {
                 workers.add(worker);
             }
         }
-        result.put("WORKER", workers);
+        result.put("WORKERS", workers);
         
         // StatusOwner permissions
         List<Map<String, Object>> statusOwners = new ArrayList<>();
@@ -263,7 +263,7 @@ public class ItemTypeSetPermissionService {
             for (StatusOwnerPermission perm : permissions) {
                 Map<String, Object> statusOwner = new HashMap<>();
                 statusOwner.put("id", perm.getId());
-                statusOwner.put("name", "StatusOwner");
+                statusOwner.put("name", "StatusOwners");
                 Map<String, Object> workflowStatusMap = new HashMap<>();
                 workflowStatusMap.put("id", perm.getWorkflowStatus().getId());
                 workflowStatusMap.put("name", perm.getWorkflowStatus().getStatus().getName());
@@ -368,117 +368,117 @@ public class ItemTypeSetPermissionService {
                 statusOwners.add(statusOwner);
             }
         }
-        result.put("STATUS_OWNER", statusOwners);
+        result.put("STATUSOWNERS", statusOwners);
         
-        // FieldEditor permissions
-        List<Map<String, Object>> fieldEditors = new ArrayList<>();
+        // FieldOwner permissions
+        List<Map<String, Object>> fieldOwners = new ArrayList<>();
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<FieldEditorPermission> permissions = fieldEditorPermissionRepository
+            List<FieldOwnerPermission> permissions = fieldOwnerPermissionRepository
                 .findAllByItemTypeConfiguration(config);
             
-            for (FieldEditorPermission perm : permissions) {
-                Map<String, Object> fieldEditor = new HashMap<>();
-                fieldEditor.put("id", perm.getId());
-                fieldEditor.put("name", "FieldEditors");
+            for (FieldOwnerPermission perm : permissions) {
+                Map<String, Object> fieldOwner = new HashMap<>();
+                fieldOwner.put("id", perm.getId());
+                fieldOwner.put("name", "FieldOwners");
                 Map<String, Object> fieldConfigMap = new HashMap<>();
                 fieldConfigMap.put("id", perm.getFieldConfiguration().getId());
                 fieldConfigMap.put("name", perm.getFieldConfiguration().getField() != null ? 
                     perm.getFieldConfiguration().getField().getName() : perm.getFieldConfiguration().getName());
                 fieldConfigMap.put("fieldType", perm.getFieldConfiguration().getFieldType());
-                fieldEditor.put("fieldConfiguration", fieldConfigMap);
+                fieldOwner.put("fieldConfiguration", fieldConfigMap);
                 
                 Map<String, Object> itemTypeMap3 = new HashMap<>();
                 itemTypeMap3.put("id", config.getItemType().getId());
                 itemTypeMap3.put("name", config.getItemType().getName());
-                fieldEditor.put("itemType", itemTypeMap3);
-                        fieldEditor.put("assignedRolesCount", perm.getAssignedRoles().size());
-                        fieldEditor.put("assignedGrantsCount", perm.getAssignedGrants().size());
+                fieldOwner.put("itemType", itemTypeMap3);
+                fieldOwner.put("assignedRolesCount", perm.getAssignedRoles().size());
+                fieldOwner.put("assignedGrantsCount", perm.getAssignedGrants().size());
                         
-                        // Calcola hasAssignments
-                        boolean hasAssignmentsField = !perm.getAssignedRoles().isEmpty();
-                        if (!hasAssignmentsField) {
-                            for (Grant grant : perm.getAssignedGrants()) {
-                                if (!grant.getUsers().isEmpty() || !grant.getGroups().isEmpty() || 
-                                    !grant.getNegatedUsers().isEmpty() || !grant.getNegatedGroups().isEmpty()) {
-                                    hasAssignmentsField = true;
-                                    break;
-                                }
-                            }
+                // Calcola hasAssignments
+                boolean hasAssignmentsField = !perm.getAssignedRoles().isEmpty();
+                if (!hasAssignmentsField) {
+                    for (Grant grant : perm.getAssignedGrants()) {
+                        if (!grant.getUsers().isEmpty() || !grant.getGroups().isEmpty() ||
+                            !grant.getNegatedUsers().isEmpty() || !grant.getNegatedGroups().isEmpty()) {
+                            hasAssignmentsField = true;
+                            break;
                         }
-                        fieldEditor.put("hasAssignments", hasAssignmentsField);
-                        
-                        // Aggiungi i dati delle assegnazioni esistenti
-                        List<Map<String, Object>> assignedRoles = new ArrayList<>();
-                        for (Role role : perm.getAssignedRoles()) {
-                            Map<String, Object> roleMap = new HashMap<>();
-                            roleMap.put("id", role.getId());
-                            roleMap.put("name", role.getName());
-                            roleMap.put("description", role.getDescription());
-                            assignedRoles.add(roleMap);
-                        }
-                        fieldEditor.put("assignedRoles", assignedRoles);
-                        
-                        List<Map<String, Object>> assignedGrants = new ArrayList<>();
-                        for (Grant grant : perm.getAssignedGrants()) {
-                            Map<String, Object> grantMap = new HashMap<>();
-                            grantMap.put("id", grant.getId());
-                            // TODO: Aggiungere dettagli della grant se necessario
-                            assignedGrants.add(grantMap);
-                        }
-                        fieldEditor.put("assignedGrants", assignedGrants);
-                        
-                        // Aggiungi utenti e gruppi assegnati dalle grants
-                        List<Map<String, Object>> assignedUsers = new ArrayList<>();
-                        List<Map<String, Object>> assignedGroups = new ArrayList<>();
-                        List<Map<String, Object>> deniedUsers = new ArrayList<>();
-                        List<Map<String, Object>> deniedGroups = new ArrayList<>();
-                        
-                        for (Grant grant : perm.getAssignedGrants()) {
-                            // Utenti assegnati
-                            for (User user : grant.getUsers()) {
-                                Map<String, Object> userMap = new HashMap<>();
-                                userMap.put("id", user.getId());
-                                userMap.put("username", user.getUsername());
-                                userMap.put("fullName", user.getFullName());
-                                assignedUsers.add(userMap);
-                            }
-                            
-                            // Gruppi assegnati
-                            for (Group group : grant.getGroups()) {
-                                Map<String, Object> groupMap = new HashMap<>();
-                                groupMap.put("id", group.getId());
-                                groupMap.put("name", group.getName());
-                                groupMap.put("description", group.getDescription());
-                                assignedGroups.add(groupMap);
-                            }
-                            
-                            // Utenti negati
-                            for (User user : grant.getNegatedUsers()) {
-                                Map<String, Object> userMap = new HashMap<>();
-                                userMap.put("id", user.getId());
-                                userMap.put("username", user.getUsername());
-                                userMap.put("fullName", user.getFullName());
-                                deniedUsers.add(userMap);
-                            }
-                            
-                            // Gruppi negati
-                            for (Group group : grant.getNegatedGroups()) {
-                                Map<String, Object> groupMap = new HashMap<>();
-                                groupMap.put("id", group.getId());
-                                groupMap.put("name", group.getName());
-                                groupMap.put("description", group.getDescription());
-                                deniedGroups.add(groupMap);
-                            }
-                        }
-                        
-                        fieldEditor.put("assignedUsers", assignedUsers);
-                        fieldEditor.put("assignedGroups", assignedGroups);
-                        fieldEditor.put("deniedUsers", deniedUsers);
-                        fieldEditor.put("deniedGroups", deniedGroups);
-                fieldEditors.add(fieldEditor);
+                    }
+                }
+                fieldOwner.put("hasAssignments", hasAssignmentsField);
+
+                // Aggiungi i dati delle assegnazioni esistenti
+                List<Map<String, Object>> assignedRoles = new ArrayList<>();
+                for (Role role : perm.getAssignedRoles()) {
+                    Map<String, Object> roleMap = new HashMap<>();
+                    roleMap.put("id", role.getId());
+                    roleMap.put("name", role.getName());
+                    roleMap.put("description", role.getDescription());
+                    assignedRoles.add(roleMap);
+                }
+                fieldOwner.put("assignedRoles", assignedRoles);
+
+                List<Map<String, Object>> assignedGrants = new ArrayList<>();
+                for (Grant grant : perm.getAssignedGrants()) {
+                    Map<String, Object> grantMap = new HashMap<>();
+                    grantMap.put("id", grant.getId());
+                    // TODO: Aggiungere dettagli della grant se necessario
+                    assignedGrants.add(grantMap);
+                }
+                fieldOwner.put("assignedGrants", assignedGrants);
+
+                // Aggiungi utenti e gruppi assegnati dalle grants
+                List<Map<String, Object>> assignedUsers = new ArrayList<>();
+                List<Map<String, Object>> assignedGroups = new ArrayList<>();
+                List<Map<String, Object>> deniedUsers = new ArrayList<>();
+                List<Map<String, Object>> deniedGroups = new ArrayList<>();
+
+                for (Grant grant : perm.getAssignedGrants()) {
+                    // Utenti assegnati
+                    for (User user : grant.getUsers()) {
+                        Map<String, Object> userMap = new HashMap<>();
+                        userMap.put("id", user.getId());
+                        userMap.put("username", user.getUsername());
+                        userMap.put("fullName", user.getFullName());
+                        assignedUsers.add(userMap);
+                    }
+
+                    // Gruppi assegnati
+                    for (Group group : grant.getGroups()) {
+                        Map<String, Object> groupMap = new HashMap<>();
+                        groupMap.put("id", group.getId());
+                        groupMap.put("name", group.getName());
+                        groupMap.put("description", group.getDescription());
+                        assignedGroups.add(groupMap);
+                    }
+
+                    // Utenti negati
+                    for (User user : grant.getNegatedUsers()) {
+                        Map<String, Object> userMap = new HashMap<>();
+                        userMap.put("id", user.getId());
+                        userMap.put("username", user.getUsername());
+                        userMap.put("fullName", user.getFullName());
+                        deniedUsers.add(userMap);
+                    }
+
+                    // Gruppi negati
+                    for (Group group : grant.getNegatedGroups()) {
+                        Map<String, Object> groupMap = new HashMap<>();
+                        groupMap.put("id", group.getId());
+                        groupMap.put("name", group.getName());
+                        groupMap.put("description", group.getDescription());
+                        deniedGroups.add(groupMap);
+                    }
+                }
+
+                fieldOwner.put("assignedUsers", assignedUsers);
+                fieldOwner.put("assignedGroups", assignedGroups);
+                fieldOwner.put("deniedUsers", deniedUsers);
+                fieldOwner.put("deniedGroups", deniedGroups);
+                fieldOwners.add(fieldOwner);
             }
         }
-        result.put("FIELD_EDITOR", fieldEditors);
+        result.put("FIELDOWNERS", fieldOwners);
         
         // Creator permissions
         List<Map<String, Object>> creators = new ArrayList<>();
@@ -586,7 +586,7 @@ public class ItemTypeSetPermissionService {
                 creators.add(creator);
             }
         }
-        result.put("CREATOR", creators);
+        result.put("CREATORS", creators);
         
         // Executor permissions
         List<Map<String, Object>> executors = new ArrayList<>();
@@ -717,7 +717,7 @@ public class ItemTypeSetPermissionService {
                 executors.add(executor);
             }
         }
-        result.put("EXECUTOR", executors);
+        result.put("EXECUTORS", executors);
         
         // Editor permissions
         List<Map<String, Object>> editors = new ArrayList<>();
@@ -831,7 +831,7 @@ public class ItemTypeSetPermissionService {
                 editors.add(editor);
             }
         }
-        result.put("EDITOR", editors);
+        result.put("EDITORS", editors);
         
         // Viewer permissions
         List<Map<String, Object>> viewers = new ArrayList<>();
@@ -945,7 +945,7 @@ public class ItemTypeSetPermissionService {
                 viewers.add(viewer);
             }
         }
-        result.put("VIEWER", viewers);
+        result.put("VIEWERS", viewers);
         
         return result;
         } catch (Exception e) {
@@ -963,7 +963,7 @@ public class ItemTypeSetPermissionService {
         // Trova la permission per ID e TIPO
         WorkerPermission workerPermission = null;
         StatusOwnerPermission statusOwnerPermission = null;
-        FieldEditorPermission fieldEditorPermission = null;
+        FieldOwnerPermission fieldOwnerPermission = null;
         CreatorPermission creatorPermission = null;
         ExecutorPermission executorPermission = null;
         FieldStatusPermission fieldStatusPermission = null;
@@ -974,6 +974,7 @@ public class ItemTypeSetPermissionService {
         
         // Cerca solo nella tabella specifica in base al tipo
         switch (permissionType) {
+            case "WORKERS":
             case "WORKER":
                 workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
                 if (workerPermission != null) {
@@ -984,6 +985,8 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
+            case "STATUSOWNERS":
+            case "STATUS_OWNERS":
             case "STATUS_OWNER":
                 statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
                 if (statusOwnerPermission != null) {
@@ -994,16 +997,19 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
+            case "FIELDOWNERS":
+            case "FIELD_OWNERS":
             case "FIELD_EDITOR":
-                fieldEditorPermission = fieldEditorPermissionRepository.findById(permissionId).orElse(null);
-                if (fieldEditorPermission != null) {
-                    fieldEditorPermission.getAssignedRoles().add(role);
-                    fieldEditorPermissionRepository.save(fieldEditorPermission);
+                fieldOwnerPermission = fieldOwnerPermissionRepository.findById(permissionId).orElse(null);
+                if (fieldOwnerPermission != null) {
+                    fieldOwnerPermission.getAssignedRoles().add(role);
+                    fieldOwnerPermissionRepository.save(fieldOwnerPermission);
                     entityManager.flush();
                     entityManager.clear();
                     return;
                 }
                 break;
+            case "CREATORS":
             case "CREATOR":
                 creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
                 if (creatorPermission != null) {
@@ -1014,6 +1020,7 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
+            case "EXECUTORS":
             case "EXECUTOR":
                 executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
                 if (executorPermission != null) {
@@ -1024,7 +1031,9 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
+            case "EDITORS":
             case "EDITOR":
+            case "VIEWERS":
             case "VIEWER":
                 fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
                 if (fieldStatusPermission != null) {
@@ -1056,7 +1065,7 @@ public class ItemTypeSetPermissionService {
         // Trova la permission per ID e TIPO
         WorkerPermission workerPermission = null;
         StatusOwnerPermission statusOwnerPermission = null;
-        FieldEditorPermission fieldEditorPermission = null;
+        FieldOwnerPermission fieldOwnerPermission = null;
         CreatorPermission creatorPermission = null;
         ExecutorPermission executorPermission = null;
         FieldStatusPermission fieldStatusPermission = null;
@@ -1065,7 +1074,7 @@ public class ItemTypeSetPermissionService {
             // Fallback: cerca in tutte le tabelle (vecchio comportamento)
             workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
             statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
-            fieldEditorPermission = fieldEditorPermissionRepository.findById(permissionId).orElse(null);
+            fieldOwnerPermission = fieldOwnerPermissionRepository.findById(permissionId).orElse(null);
             creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
             executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
             fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
@@ -1073,7 +1082,7 @@ public class ItemTypeSetPermissionService {
             int foundCount = 0;
             if (workerPermission != null) foundCount++;
             if (statusOwnerPermission != null) foundCount++;
-            if (fieldEditorPermission != null) foundCount++;
+            if (fieldOwnerPermission != null) foundCount++;
             if (creatorPermission != null) foundCount++;
             if (executorPermission != null) foundCount++;
             if (fieldStatusPermission != null) foundCount++;
@@ -1087,22 +1096,31 @@ public class ItemTypeSetPermissionService {
         } else {
             // Cerca solo nella tabella specifica in base al tipo
             switch (permissionType) {
+                case "WORKERS":
                 case "WORKER":
                     workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
                     break;
+                case "STATUSOWNERS":
+                case "STATUS_OWNERS":
                 case "STATUS_OWNER":
                     statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
                     break;
+                case "FIELDOWNERS":
+                case "FIELD_OWNERS":
                 case "FIELD_EDITOR":
-                    fieldEditorPermission = fieldEditorPermissionRepository.findById(permissionId).orElse(null);
+                    fieldOwnerPermission = fieldOwnerPermissionRepository.findById(permissionId).orElse(null);
                     break;
+                case "CREATORS":
                 case "CREATOR":
                     creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
                     break;
+                case "EXECUTORS":
                 case "EXECUTOR":
                     executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
                     break;
+                case "EDITORS":
                 case "EDITOR":
+                case "VIEWERS":
                 case "VIEWER":
                     fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
                     break;
@@ -1110,7 +1128,7 @@ public class ItemTypeSetPermissionService {
                     throw new RuntimeException("Unknown permission type: " + permissionType);
             }
             
-            if (workerPermission == null && statusOwnerPermission == null && fieldEditorPermission == null && 
+            if (workerPermission == null && statusOwnerPermission == null && fieldOwnerPermission == null &&
                 creatorPermission == null && executorPermission == null && fieldStatusPermission == null) {
                 throw new RuntimeException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
             }
@@ -1124,8 +1142,8 @@ public class ItemTypeSetPermissionService {
             grant = workerPermission.getAssignedGrants().iterator().next();
         } else if (statusOwnerPermission != null && !statusOwnerPermission.getAssignedGrants().isEmpty()) {
             grant = statusOwnerPermission.getAssignedGrants().iterator().next();
-        } else if (fieldEditorPermission != null && !fieldEditorPermission.getAssignedGrants().isEmpty()) {
-            grant = fieldEditorPermission.getAssignedGrants().iterator().next();
+        } else if (fieldOwnerPermission != null && !fieldOwnerPermission.getAssignedGrants().isEmpty()) {
+            grant = fieldOwnerPermission.getAssignedGrants().iterator().next();
         } else if (creatorPermission != null && !creatorPermission.getAssignedGrants().isEmpty()) {
             grant = creatorPermission.getAssignedGrants().iterator().next();
         } else if (executorPermission != null && !executorPermission.getAssignedGrants().isEmpty()) {
@@ -1222,11 +1240,11 @@ public class ItemTypeSetPermissionService {
             }
             statusOwnerPermissionRepository.save(statusOwnerPermission);
             entityManager.flush();
-        } else if (fieldEditorPermission != null) {
-            if (!fieldEditorPermission.getAssignedGrants().contains(grant)) {
-                fieldEditorPermission.getAssignedGrants().add(grant);
+        } else if (fieldOwnerPermission != null) {
+            if (!fieldOwnerPermission.getAssignedGrants().contains(grant)) {
+                fieldOwnerPermission.getAssignedGrants().add(grant);
             }
-            fieldEditorPermissionRepository.save(fieldEditorPermission);
+            fieldOwnerPermissionRepository.save(fieldOwnerPermission);
             entityManager.flush();
         } else if (creatorPermission != null) {
             if (!creatorPermission.getAssignedGrants().contains(grant)) {
@@ -1259,6 +1277,7 @@ public class ItemTypeSetPermissionService {
         
         // Cerca solo nella tabella specifica in base al tipo
         switch (permissionType) {
+            case "WORKERS":
             case "WORKER":
                 WorkerPermission workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
                 if (workerPermission != null) {
@@ -1269,6 +1288,8 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
+            case "STATUSOWNERS":
+            case "STATUS_OWNERS":
             case "STATUS_OWNER":
                 StatusOwnerPermission statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
                 if (statusOwnerPermission != null) {
@@ -1279,16 +1300,19 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
+            case "FIELDOWNERS":
+            case "FIELD_OWNERS":
             case "FIELD_EDITOR":
-                FieldEditorPermission fieldEditorPermission = fieldEditorPermissionRepository.findById(permissionId).orElse(null);
-                if (fieldEditorPermission != null) {
-                    fieldEditorPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
-                    fieldEditorPermissionRepository.save(fieldEditorPermission);
+                FieldOwnerPermission fieldOwnerPermission = fieldOwnerPermissionRepository.findById(permissionId).orElse(null);
+                if (fieldOwnerPermission != null) {
+                    fieldOwnerPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
+                    fieldOwnerPermissionRepository.save(fieldOwnerPermission);
                     entityManager.flush();
                     entityManager.clear();
                     return;
                 }
                 break;
+            case "CREATORS":
             case "CREATOR":
                 CreatorPermission creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
                 if (creatorPermission != null) {
@@ -1299,6 +1323,7 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
+            case "EXECUTORS":
             case "EXECUTOR":
                 ExecutorPermission executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
                 if (executorPermission != null) {
@@ -1309,7 +1334,9 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
+            case "EDITORS":
             case "EDITOR":
+            case "VIEWERS":
             case "VIEWER":
                 FieldStatusPermission fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
                 if (fieldStatusPermission != null) {
