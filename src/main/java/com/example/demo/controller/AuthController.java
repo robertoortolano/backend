@@ -127,6 +127,11 @@ public class AuthController {
     }
     */
 
+    /**
+     * @deprecated Usa TenantUserManagementController invece.
+     * Endpoint mantenuto per backward compatibility.
+     */
+    @Deprecated
     @PostMapping("/assign-user")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
     public ResponseEntity<ApiResponse> assignUserToTenant(
@@ -134,7 +139,7 @@ public class AuthController {
             @CurrentTenant Tenant tenant,
             @CurrentUser User user
             ) {
-        tenantService.assignUserToTenant(request, tenant, user);
+        tenantService.assignUserToTenant(request.username(), tenant, user);
         return ResponseEntity.ok(new ApiResponse("Utente assegnato alla tenant", HttpStatus.OK.value()));
     }
 

@@ -1,12 +1,18 @@
 package com.example.demo.entity;
 
-import com.example.demo.enums.ScopeType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Rappresenta un ruolo custom creato dall'admin per essere assegnato alle Permission.
+ * Esempi: "Developer", "QA", "Manager", "Viewer", etc.
+ * 
+ * NON confondere con UserRole che gestisce i ruoli di sistema (ADMIN/USER) 
+ * per l'autenticazione e l'accesso a tenant/project.
+ */
 @Setter
 @Getter
 @Entity
@@ -22,10 +28,6 @@ public class Role {
 
     @Column(columnDefinition = "TEXT")
     private String description;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private ScopeType scope;
 
     private boolean defaultRole = false;
 

@@ -1,14 +1,13 @@
 package com.example.demo.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
 
 @Entity
 @Getter
@@ -21,8 +20,9 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Email(message = "Username must be a valid email address")
     @Column(unique = true, nullable = false)
-    private String username;
+    private String username; // Email address - il sistema accetta solo email come username
 
     @Column(nullable = false)
     private String password;
@@ -33,13 +33,8 @@ public class User {
     @Transient
     private Long activeTenant;
 
-    @ManyToMany
-    @JoinTable(
-            name = "user_tenant",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "tenant_id")
-    )
-    private Set<Tenant> tenants = new HashSet<>();
+    // Relazione con Tenant ora gestita tramite UserRole
+    // (rimossa relazione ManyToMany diretta)
 
     // Getter espliciti per evitare problemi con Lombok durante la compilazione
     public String getFullName() {

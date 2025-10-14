@@ -1,7 +1,7 @@
 package com.example.demo.security;
 
-import com.example.demo.entity.GrantRoleAssignment;
 import com.example.demo.entity.User;
+import com.example.demo.entity.UserRole;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -19,17 +19,22 @@ public class CustomUserDetails implements UserDetails {
     private static final long serialVersionUID = 1L;
 
     private final transient User user;
-    private final transient List<GrantRoleAssignment> assignments;
+    private final transient List<UserRole> userRoles;
 
-    public CustomUserDetails(User user, List<GrantRoleAssignment> assignments) {
+    public CustomUserDetails(User user, List<UserRole> userRoles) {
         this.user = user;
-        this.assignments = assignments;
+        this.userRoles = userRoles;
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return assignments.stream()
-                .map(ga -> "ROLE_" + ga.getRole().getName())
+        return userRoles.stream()
+                .map(ur -> {
+                    // Genera authority nel formato ROLE_{SCOPE}_{ROLENAME}
+                    // Es: ROLE_TENANT_ADMIN, ROLE_TENANT_USER, ROLE_PROJECT_ADMIN
+                    String authority = "ROLE_" + ur.getScope().name() + "_" + ur.getRoleName();
+                    return authority;
+                })
                 .distinct()
                 .map(SimpleGrantedAuthority::new)
                 .toList();

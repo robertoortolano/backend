@@ -15,12 +15,20 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+/**
+ * Service per gestione Project.
+ * 
+ * TODO: I ruoli PROJECT-level (ADMIN a livello project) usano ancora il vecchio sistema
+ * Grant/GrantRoleAssignment. Dovrebbero essere migrati a UserRole come fatto per i ruoli TENANT-level.
+ * Per ora GrantRoleLookup ha metodi deprecati per mantenere la backward compatibility.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final UserRoleRepository userRoleRepository;
 
     private final GrantRepository grantRepository;
     private final GrantRoleAssignmentRepository grantRoleAssignmentRepository;
@@ -60,20 +68,18 @@ public class ProjectService {
         projectInitializers.forEach(init -> init.initialize(project, tenant));
         projectRepository.save(project);
 
-        Role projectRole = grantRoleLookup.getRoleByNameAndScope("ADMIN", ScopeType.PROJECT, tenant);
-
-        // Crea il Grant relativo al ruolo (tenant è implicito in role)
-        Grant newGrant = new Grant();
-        newGrant.setRole(projectRole);
-        newGrant.getUsers().add(user);
-        grantRepository.save(newGrant);
-
-        // Crea l'assegnazione tra grant, tenant e progetto
-        GrantRoleAssignment newGra = new GrantRoleAssignment();
-        newGra.setGrant(newGrant);
-        newGra.setTenant(tenant);
-        newGra.setProject(project);
-        grantRoleAssignmentRepository.save(newGra);
+        // TODO: I ruoli PROJECT-level dovrebbero usare UserRole invece di Grant/GrantRoleAssignment
+        // Per ora manteniamo il vecchio sistema per i progetti, ma va refactorato
+        
+        // Assegna ruolo ADMIN a livello PROJECT usando UserRole (nuovo sistema)
+        UserRole projectAdminRole = UserRole.builder()
+                .user(user)
+                .tenant(tenant)
+                .project(project)
+                .roleName("ADMIN")
+                .scope(ScopeType.PROJECT)
+                .build();
+        userRoleRepository.save(projectAdminRole);
 
         return dtoMapper.toProjectViewDto(project);
     }

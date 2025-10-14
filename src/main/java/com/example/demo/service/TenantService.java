@@ -1,6 +1,5 @@
 package com.example.demo.service;
 
-import com.example.demo.dto.AssignUserRequest;
 import com.example.demo.dto.TenantDTO;
 import com.example.demo.entity.*;
 import com.example.demo.enums.ScopeType;
@@ -23,9 +22,7 @@ public class TenantService {
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
     private final JwtTokenUtil jwtTokenUtil;
-    private final RoleRepository roleRepository;
-    private final GrantRepository grantRepository;
-    private final GrantRoleAssignmentRepository grantRoleAssignmentRepository;
+    private final UserRoleRepository userRoleRepository;
     private final List<TenantInitializer> tenantInitializers;
 
     public Tenant createTenant(Tenant tenant) {
@@ -37,7 +34,7 @@ public class TenantService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        return tenantRepository.findByUsersContaining(user).stream()
+        return userRoleRepository.findTenantsByUserId(user.getId()).stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
@@ -71,45 +68,31 @@ public class TenantService {
         
         // Save tenant first
         tenant = tenantRepository.save(tenant);
-        
-        // Add tenant to user (owning side of the relationship)
-        managedUser.getTenants().add(tenant);
-        userRepository.save(managedUser);
 
         // Initialize tenant with default data (Fields, Statuses, Workflows, etc.)
         for (TenantInitializer initializer : tenantInitializers) {
             initializer.initialize(tenant);
         }
 
-        // Create ADMIN role with TENANT scope for the creator
-        Role adminRole = new Role();
-        adminRole.setName("ADMIN");
-        adminRole.setDescription("Tenant Administrator");
-        adminRole.setScope(ScopeType.TENANT);
-        adminRole.setDefaultRole(true);
-        adminRole.setTenant(tenant);
-        adminRole = roleRepository.save(adminRole);
+        // Nota: I ruoli ADMIN e USER sono ora gestiti tramite UserRole (entity separata)
+        // Qui possiamo creare eventuali ruoli custom di default per le Permission
 
-        // Create Grant for the user
-        Grant adminGrant = new Grant();
-        adminGrant.setRole(adminRole);
-        adminGrant.setUsers(new HashSet<>(Set.of(managedUser)));
-        adminGrant = grantRepository.save(adminGrant);
+        // Assign ADMIN role to the creator via UserRole
+        UserRole adminUserRole = UserRole.builder()
+                .user(managedUser)
+                .tenant(tenant)
+                .roleName("ADMIN")
+                .scope(ScopeType.TENANT)
+                .project(null)
+                .build();
+        userRoleRepository.save(adminUserRole);
 
-        // Create GrantRoleAssignment to link Grant, Role and Tenant
-        GrantRoleAssignment assignment = new GrantRoleAssignment();
-        assignment.setGrant(adminGrant);
-        assignment.setRole(adminRole);
-        assignment.setTenant(tenant);
-        assignment.setProject(null); // Tenant-level, no project
-        assignment = grantRoleAssignmentRepository.save(assignment);
-
-        // Load the assignments for the token
-        List<GrantRoleAssignment> assignments = grantRoleAssignmentRepository.findAllByUserAndTenant(
+        // Load the user roles for the token
+        List<UserRole> userRoles = userRoleRepository.findByUserIdAndTenantId(
                 managedUser.getId(), tenant.getId());
 
         // Generate new token with tenantId and roles
-        CustomUserDetails userDetails = new CustomUserDetails(managedUser, assignments);
+        CustomUserDetails userDetails = new CustomUserDetails(managedUser, userRoles);
         return jwtTokenUtil.generateAccessTokenWithTenantId(userDetails, tenant.getId());
     }
 
@@ -120,8 +103,8 @@ public class TenantService {
             throw new RuntimeException("Tenant not found");
         }
 
-        // Verify user has access to this tenant (without loading collections)
-        if (!tenantRepository.existsByIdAndUserId(tenantId, user.getId())) {
+        // Verify user has access to this tenant via UserRole
+        if (!userRoleRepository.hasAccessToTenant(user.getId(), tenantId)) {
             throw new RuntimeException("You don't have access to this tenant");
         }
 
@@ -129,34 +112,46 @@ public class TenantService {
         User managedUser = userRepository.findById(user.getId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Load user's role assignments for this tenant
-        List<GrantRoleAssignment> assignments = grantRoleAssignmentRepository.findAllByUserAndTenant(
+        // Load user's roles for this tenant
+        List<UserRole> userRoles = userRoleRepository.findByUserIdAndTenantId(
                 managedUser.getId(), tenantId);
 
         // Generate new token with tenantId and roles
-        CustomUserDetails userDetails = new CustomUserDetails(managedUser, assignments);
+        CustomUserDetails userDetails = new CustomUserDetails(managedUser, userRoles);
         return jwtTokenUtil.generateAccessTokenWithTenantId(userDetails, tenantId);
     }
 
+    /**
+     * @deprecated Usa TenantUserManagementService.assignRole() invece.
+     * Mantenuto per backward compatibility con vecchi controller.
+     */
+    @Deprecated
     @Transactional
-    public void assignUserToTenant(AssignUserRequest request, Tenant tenant, User currentUser) {
-        // Check if current user has access to the tenant (without loading collections)
-        if (!tenantRepository.existsByIdAndUserId(tenant.getId(), currentUser.getId())) {
+    public void assignUserToTenant(String username, Tenant tenant, User currentUser) {
+        // Check if current user has access to the tenant
+        if (!userRoleRepository.hasAccessToTenant(currentUser.getId(), tenant.getId())) {
             throw new RuntimeException("You don't have access to this tenant");
         }
         
         // Find the user to assign
-        User userToAssign = userRepository.findByUsername(request.username())
+        User userToAssign = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Check if user is already assigned to this tenant (without loading collections)
-        if (tenantRepository.existsByIdAndUserId(tenant.getId(), userToAssign.getId())) {
-            return; // User already assigned
+        // Check if user already has USER role in this tenant
+        if (userRoleRepository.existsByUserIdAndTenantIdAndRoleName(
+                userToAssign.getId(), tenant.getId(), "USER")) {
+            return; // User already has access
         }
 
-        // Add tenant to user (owning side of the relationship)
-        userToAssign.getTenants().add(tenant);
-        userRepository.save(userToAssign);
+        // Assign USER role to the user
+        UserRole newUserRole = UserRole.builder()
+                .user(userToAssign)
+                .tenant(tenant)
+                .roleName("USER")
+                .scope(ScopeType.TENANT)
+                .project(null)
+                .build();
+        userRoleRepository.save(newUserRole);
     }
 
     private TenantDTO convertToDTO(Tenant tenant) {

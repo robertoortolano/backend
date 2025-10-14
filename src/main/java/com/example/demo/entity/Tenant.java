@@ -8,9 +8,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
 
 @Entity
 @Getter
@@ -39,8 +37,8 @@ public class Tenant {
     @JoinColumn(name = "license_id")
     private License license;
 
-    @ManyToMany(mappedBy = "tenants")
-    private Set<User> users = new HashSet<>();
+    // Relazione con User ora gestita tramite UserRole
+    // (rimossa relazione ManyToMany diretta)
 
     @Override
     public boolean equals(Object o) {

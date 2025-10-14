@@ -13,7 +13,11 @@ import java.util.Optional;
 @Repository
 public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAssignment, Long> {
 
-    // Verifica se l'utente ha un ruolo con scope GLOBAL su una tenant
+    /**
+     * @deprecated I ruoli TENANT-level (ADMIN/USER) sono ora gestiti da UserRoleRepository.
+     * Questa query è mantenuta per backward compatibility con Permission system.
+     */
+    @Deprecated
     @Query("""
         SELECT CASE WHEN COUNT(ga) > 0 THEN true ELSE false END
         FROM GrantRoleAssignment ga
@@ -22,13 +26,13 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
         WHERE u.id = :userId
           AND ga.tenant.id = :tenantId
           AND ga.role.name = :roleName
-          AND ga.role.scope = 'TENANT'
+          AND ga.project IS NULL
     """)
     boolean existsByUserAndTenantAndRoleGlobal(@Param("userId") Long userId,
                                                @Param("tenantId") Long tenantId,
                                                @Param("roleName") String roleName);
 
-    // Verifica se l'utente ha un ruolo con scope PROJECT su un progetto
+    // Verifica se l'utente ha un ruolo PROJECT-level su un progetto
     @Query("""
         SELECT CASE WHEN COUNT(ga) > 0 THEN true ELSE false END
         FROM GrantRoleAssignment ga
@@ -38,7 +42,7 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
           AND ga.tenant.id = :tenantId
           AND ga.project.id = :projectId
           AND ga.role.name = :roleName
-          AND ga.role.scope = 'PROJECT'
+          AND ga.project IS NOT NULL
     """)
     boolean existsByUserAndTenantAndProjectAndRoleProject(@Param("userId") Long userId,
                                                           @Param("tenantId") Long tenantId,
@@ -54,7 +58,7 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
       AND ga.tenant.id = :tenantId
       AND ga.project.id = :projectId
       AND ga.role.name IN :roleNames
-      AND ga.role.scope = 'PROJECT'
+      AND ga.project IS NOT NULL
 """)
     boolean existsByUserAndTenantAndProjectAndRoleProjectIn(@Param("userId") Long userId,
                                                             @Param("tenantId") Long tenantId,
@@ -105,7 +109,7 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
     // Restituisce una specifica assegnazione (grant + tenant + progetto)
     Optional<GrantRoleAssignment> findByGrantAndTenantAndProject(Grant grant, Tenant tenant, Project project);
 
-    // Restituisce i progetti dove un utente ha un certo ruolo con scope PROJECT
+    // Restituisce i progetti dove un utente ha un certo ruolo PROJECT-level
     @Query("""
         SELECT ga.project
         FROM GrantRoleAssignment ga
@@ -114,13 +118,13 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
         WHERE u.id = :userId
           AND ga.tenant.id = :tenantId
           AND ga.role.name = :roleName
-          AND ga.role.scope = 'PROJECT'
+          AND ga.project IS NOT NULL
     """)
     List<Project> findProjectsByUserTenantAndRoleProject(@Param("userId") Long userId,
                                                          @Param("tenantId") Long tenantId,
                                                          @Param("roleName") String roleName);
 
-    // Verifica se esiste almeno un GrantRoleAssignment per utente, tenant e ruolo con scope PROJECT
+    // Verifica se esiste almeno un GrantRoleAssignment PROJECT-level per utente e tenant
     @Query("""
         SELECT CASE WHEN COUNT(ga) > 0 THEN true ELSE false END
         FROM GrantRoleAssignment ga
@@ -129,13 +133,13 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
         WHERE u.id = :userId
           AND ga.tenant.id = :tenantId
           AND ga.role.name = :roleName
-          AND ga.role.scope = 'PROJECT'
+          AND ga.project IS NOT NULL
     """)
     boolean existsByUserAndTenantAndRoleProject(@Param("userId") Long userId,
                                                 @Param("tenantId") Long tenantId,
                                                 @Param("roleName") String roleName);
 
-    // Restituisce solo gli ID dei progetti dove l’utente ha un certo ruolo PROJECT
+    // Restituisce solo gli ID dei progetti dove l'utente ha un certo ruolo PROJECT-level
     @Query("""
         SELECT DISTINCT ga.project.id
         FROM GrantRoleAssignment ga
@@ -144,24 +148,10 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
         WHERE u.id = :userId
           AND ga.tenant.id = :tenantId
           AND ga.role.name = :roleName
-          AND ga.role.scope = 'PROJECT'
           AND ga.project IS NOT NULL
     """)
     List<Long> findProjectIdsByUserAndTenantAndRole(@Param("userId") Long userId,
                                                     @Param("tenantId") Long tenantId,
                                                     @Param("roleName") String roleName);
-
-    @Query("""
-    SELECT ga
-    FROM GrantRoleAssignment ga
-    WHERE ga.role.name = :roleName
-      AND ga.role.scope = :scope
-      AND ga.tenant = :tenant
-""")
-    Optional<GrantRoleAssignment> findFirstByStringAndScopeAndTenant(
-            @Param("roleName") String roleName,
-            @Param("scope") ScopeType scope,
-            @Param("tenant") Tenant tenant);
-
 
 }

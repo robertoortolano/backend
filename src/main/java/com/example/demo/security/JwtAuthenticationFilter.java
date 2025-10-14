@@ -69,6 +69,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // Carica i dettagli dell'utente solo se necessario
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                // IMPORTANTE: Estrai il tenantId dal token PRIMA di caricare l'utente
+                Long tenantId = jwtTokenUtil.extractTenantId(token);
+                
+                // Imposta il tenant nel contesto PRIMA di caricare UserDetails
+                if (tenantId != null) {
+                    log.debug("Impostato tenant ID: {}", tenantId);
+                    TenantContext.setCurrentTenantId(tenantId);
+                } else {
+                    log.debug("Nessun tenant ID trovato nel token");
+                    TenantContext.clear();
+                }
+                
+                // Ora carica i dettagli dell'utente (che userà il tenantId dal contesto)
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
                 
                 if (jwtTokenUtil.validateToken(token, userDetails)) {
@@ -85,16 +98,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContext context = SecurityContextHolder.createEmptyContext();
                     context.setAuthentication(authToken);
                     SecurityContextHolder.setContext(context);
-
-                    // Imposta il tenant dal token se presente
-                    Long tenantId = jwtTokenUtil.extractTenantId(token);
-                    if (tenantId != null) {
-                        log.debug("Impostato tenant ID: {}", tenantId);
-                        TenantContext.setCurrentTenantId(tenantId);
-                    } else {
-                        log.debug("Nessun tenant ID trovato nel token");
-                        TenantContext.clear();
-                    }
                 } else {
                     log.warn("Validazione del token fallita per l'utente: {}", username);
                     sendErrorResponse(response, HttpStatus.UNAUTHORIZED, "Token non valido");

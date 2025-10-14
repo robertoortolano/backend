@@ -1,10 +1,9 @@
 package com.example.demo.security;
 
 
-import com.example.demo.entity.GrantRoleAssignment;
-import com.example.demo.enums.ScopeType;
 import com.example.demo.entity.User;
-import com.example.demo.repository.GrantRoleAssignmentRepository;
+import com.example.demo.enums.ScopeType;
+import com.example.demo.repository.UserRoleRepository;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,7 +17,7 @@ import java.util.function.Function;
 @Component
 public class JwtTokenUtil {
 
-    private final GrantRoleAssignmentRepository grantRoleAssignmentRepository;
+    private final UserRoleRepository userRoleRepository;
 
     private static final String ROLES = "roles";
 
@@ -31,8 +30,8 @@ public class JwtTokenUtil {
     @Value("${jwt.refresh-token-expiration}")
     private long refreshTokenExpirationMs;
 
-    public JwtTokenUtil(GrantRoleAssignmentRepository grantRoleAssignmentRepository) {
-        this.grantRoleAssignmentRepository = grantRoleAssignmentRepository;
+    public JwtTokenUtil(UserRoleRepository userRoleRepository) {
+        this.userRoleRepository = userRoleRepository;
     }
 
 
@@ -58,13 +57,13 @@ public class JwtTokenUtil {
         claims.put("userId", user.getId());
         claims.put("tenantId", tenantId);
 
-        // 🔍 Ottieni i ruoli TENANT dell'utente per quella tenant
-        List<Map<String, String>> roles = grantRoleAssignmentRepository.findAllByUserAndTenant(user.getId(), tenantId).stream()
-                .map(GrantRoleAssignment::getRole)
-                .filter(role -> role.getScope() == ScopeType.TENANT)
-                .map(role -> Map.of("name", role.getName(), "scope", role.getScope().name()))
+        // Ottieni i ruoli TENANT dell'utente per quella tenant
+        List<Map<String, String>> roles = userRoleRepository
+                .findByUserIdAndTenantIdAndScope(user.getId(), tenantId, ScopeType.TENANT)
+                .stream()
+                .map(ur -> Map.of("name", ur.getRoleName(), "scope", ur.getScope().name()))
                 .toList();
-
+        
         claims.put(ROLES, roles);
 
         return buildToken(claims, userDetails.getUsername(), accessTokenExpirationMs);

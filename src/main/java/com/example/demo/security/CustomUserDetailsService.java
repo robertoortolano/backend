@@ -1,9 +1,10 @@
 package com.example.demo.security;
 
-import com.example.demo.entity.GrantRoleAssignment;
-import com.example.demo.repository.GrantRoleAssignmentRepository;
-import com.example.demo.repository.UserRepository;
 import com.example.demo.entity.User;
+import com.example.demo.entity.UserRole;
+import com.example.demo.repository.UserRepository;
+import com.example.demo.repository.UserRoleRepository;
+import com.example.demo.tenant.TenantContext;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -17,12 +18,12 @@ import java.util.List;
 public class CustomUserDetailsService implements UserDetailsService {
 
     private final UserRepository userRepository;
-    private final GrantRoleAssignmentRepository grantRoleAssignmentRepository;
+    private final UserRoleRepository userRoleRepository;
 
     public CustomUserDetailsService(UserRepository userRepository,
-                                    GrantRoleAssignmentRepository grantRoleAssignmentRepository) {
+                                    UserRoleRepository userRoleRepository) {
         this.userRepository = userRepository;
-        this.grantRoleAssignmentRepository = grantRoleAssignmentRepository;
+        this.userRoleRepository = userRoleRepository;
     }
 
     @Override
@@ -31,13 +32,17 @@ public class CustomUserDetailsService implements UserDetailsService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
-        List<GrantRoleAssignment> assignments = Collections.emptyList();
-        if (user.getActiveTenant() != null) {
-            assignments = grantRoleAssignmentRepository.findAllByUserAndTenant(
-                    user.getId(), user.getActiveTenant());
+        List<UserRole> userRoles = Collections.emptyList();
+        
+        // Usa TenantContext invece di user.getActiveTenant() (che è @Transient)
+        Long currentTenantId = TenantContext.getCurrentTenantId();
+        
+        if (currentTenantId != null) {
+            userRoles = userRoleRepository.findByUserIdAndTenantId(
+                    user.getId(), currentTenantId);
         }
 
-        return new CustomUserDetails(user, assignments);
+        return new CustomUserDetails(user, userRoles);
     }
 
 }

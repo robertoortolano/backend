@@ -13,13 +13,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class TenantSecurityService {
 
     private final UserRepository userRepository;
-    private final GrantRoleAssignmentRepository grantRoleAssignmentRepository;
+    private final UserRoleRepository userRoleRepository;
     private final ItemTypeRepository itemTypeRepository;
     private final ProjectRepository projectRepository;
 
 
     public boolean hasTenantRoleName(User user, Tenant tenant, String roleName) {
-        return grantRoleAssignmentRepository.existsByUserAndTenantAndRoleGlobal(user.getId(), tenant.getId(), roleName);
+        return userRoleRepository.existsByUserIdAndTenantIdAndRoleName(user.getId(), tenant.getId(), roleName);
     }
 
 
