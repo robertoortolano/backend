@@ -4,6 +4,7 @@ import com.example.demo.dto.LoginRequest;
 import com.example.demo.dto.LoginResponse;
 import com.example.demo.dto.RegisterRequest;
 import com.example.demo.entity.User;
+import com.example.demo.exception.ApiException;
 import com.example.demo.repository.TokenBlacklistRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.security.CustomUserDetails;
@@ -32,7 +33,7 @@ public class UserService {
     @Transactional
     public void registerUser(RegisterRequest request) {
         if (userRepository.findByUsername(request.username()).isPresent()) {
-            throw new RuntimeException("Username already exists");
+            throw new ApiException("Username already exists");
         }
 
         User user = new User();
@@ -65,7 +66,7 @@ public class UserService {
             System.err.println("=== Authentication error: " + e.getClass().getName());
             System.err.println("=== Error message: " + e.getMessage());
             e.printStackTrace();
-            throw new RuntimeException("Invalid credentials: " + e.getMessage(), e);
+            throw new ApiException("Invalid credentials: " + e.getMessage());
         }
     }
 
@@ -77,7 +78,7 @@ public class UserService {
             // Add token to blacklist logic here if needed
             // For now, just validate the token exists
             if (token.isEmpty()) {
-                throw new RuntimeException("Invalid token");
+                throw new ApiException("Invalid token");
             }
         }
     }
@@ -85,7 +86,7 @@ public class UserService {
     @Transactional
     public User createUser(String username, String password) {
         if (userRepository.findByUsername(username).isPresent()) {
-            throw new RuntimeException("Username already exists");
+            throw new ApiException("Username already exists");
         }
 
         User user = new User();
@@ -97,7 +98,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public User getUserById(Long id) {
         return userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ApiException("User not found"));
     }
 
     @Transactional

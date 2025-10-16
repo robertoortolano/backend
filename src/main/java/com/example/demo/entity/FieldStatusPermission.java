@@ -33,7 +33,7 @@ public class FieldStatusPermission {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private PermissionType permissionType; // EDITOR o VIEWER
+    private PermissionType permissionType; // EDITORS o VIEWERS
 
     // Relazioni con ruoli personalizzati
     @ManyToMany
@@ -54,8 +54,8 @@ public class FieldStatusPermission {
     private Set<Grant> assignedGrants = new HashSet<>();
 
     public enum PermissionType {
-        EDITOR,
-        VIEWER
+        EDITORS,
+        VIEWERS
     }
 }
 

@@ -168,13 +168,13 @@ public class ItemTypePermissionService {
                 // Editor permission
                 if (!fieldStatusPermissionRepository.existsByItemTypeConfigurationIdAndFieldConfigurationIdAndWorkflowStatusIdAndPermissionType(
                         itemTypeConfiguration.getId(), fieldConfig.getId(), workflowStatus.getId(), 
-                        FieldStatusPermission.PermissionType.EDITOR)) {
+                        FieldStatusPermission.PermissionType.EDITORS)) {
                     
                     FieldStatusPermission editorPerm = new FieldStatusPermission();
                     editorPerm.setItemTypeConfiguration(itemTypeConfiguration);
                     editorPerm.setFieldConfiguration(fieldConfig);
                     editorPerm.setWorkflowStatus(workflowStatus);
-                    editorPerm.setPermissionType(FieldStatusPermission.PermissionType.EDITOR);
+                    editorPerm.setPermissionType(FieldStatusPermission.PermissionType.EDITORS);
                     editorPerm.setAssignedRoles(new HashSet<>());
                     editorPerm.setAssignedGrants(new HashSet<>());
                     
@@ -184,13 +184,13 @@ public class ItemTypePermissionService {
                 // Viewer permission
                 if (!fieldStatusPermissionRepository.existsByItemTypeConfigurationIdAndFieldConfigurationIdAndWorkflowStatusIdAndPermissionType(
                         itemTypeConfiguration.getId(), fieldConfig.getId(), workflowStatus.getId(), 
-                        FieldStatusPermission.PermissionType.VIEWER)) {
+                        FieldStatusPermission.PermissionType.VIEWERS)) {
                     
                     FieldStatusPermission viewerPerm = new FieldStatusPermission();
                     viewerPerm.setItemTypeConfiguration(itemTypeConfiguration);
                     viewerPerm.setFieldConfiguration(fieldConfig);
                     viewerPerm.setWorkflowStatus(workflowStatus);
-                    viewerPerm.setPermissionType(FieldStatusPermission.PermissionType.VIEWER);
+                    viewerPerm.setPermissionType(FieldStatusPermission.PermissionType.VIEWERS);
                     viewerPerm.setAssignedRoles(new HashSet<>());
                     viewerPerm.setAssignedGrants(new HashSet<>());
                     

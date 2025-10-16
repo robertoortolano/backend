@@ -3,6 +3,7 @@ package com.example.demo.service;
 import com.example.demo.dto.TenantDTO;
 import com.example.demo.entity.*;
 import com.example.demo.enums.ScopeType;
+import com.example.demo.exception.ApiException;
 import com.example.demo.initializer.TenantInitializer;
 import com.example.demo.repository.*;
 import com.example.demo.security.CustomUserDetails;
@@ -32,7 +33,7 @@ public class TenantService {
     @Transactional(readOnly = true)
     public List<TenantDTO> getTenantsByUser(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ApiException("User not found"));
 
         return userRoleRepository.findTenantsByUserId(user.getId()).stream()
                 .map(this::convertToDTO)
@@ -43,17 +44,17 @@ public class TenantService {
     public String createTenantForCurrentUser(User user, String licenseKey, String subdomain) {
         // Validate license key (for now, just check if it's not empty)
         if (licenseKey == null || licenseKey.trim().isEmpty()) {
-            throw new RuntimeException("License key is required");
+            throw new ApiException("License key is required");
         }
 
         // Check if license key is already used
         if (tenantRepository.existsByLicenseKey(licenseKey)) {
-            throw new RuntimeException("License key is already in use");
+            throw new ApiException("License key is already in use");
         }
 
         // Check if subdomain already exists
         if (tenantRepository.findBySubdomain(subdomain).isPresent()) {
-            throw new RuntimeException("Subdomain already exists");
+            throw new ApiException("Subdomain already exists");
         }
 
         // Reload user to ensure it's managed by the current Hibernate session
@@ -100,12 +101,12 @@ public class TenantService {
     public String selectTenant(User user, Long tenantId) {
         // Verify tenant exists
         if (!tenantRepository.existsById(tenantId)) {
-            throw new RuntimeException("Tenant not found");
+            throw new ApiException("Tenant not found");
         }
 
         // Verify user has access to this tenant via UserRole
         if (!userRoleRepository.hasAccessToTenant(user.getId(), tenantId)) {
-            throw new RuntimeException("You don't have access to this tenant");
+            throw new ApiException("You don't have access to this tenant");
         }
 
         // Reload user to ensure it's managed by the current Hibernate session
@@ -130,7 +131,7 @@ public class TenantService {
     public void assignUserToTenant(String username, Tenant tenant, User currentUser) {
         // Check if current user has access to the tenant
         if (!userRoleRepository.hasAccessToTenant(currentUser.getId(), tenant.getId())) {
-            throw new RuntimeException("You don't have access to this tenant");
+            throw new ApiException("You don't have access to this tenant");
         }
         
         // Find the user to assign

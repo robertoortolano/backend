@@ -6,6 +6,7 @@ import com.example.demo.entity.Tenant;
 import com.example.demo.entity.User;
 import com.example.demo.entity.UserRole;
 import com.example.demo.enums.ScopeType;
+import com.example.demo.exception.ApiException;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,22 +30,22 @@ public class TenantUserManagementService {
     public void assignRole(String username, String roleName, Tenant tenant, User currentUser) {
         // Validazione roleName
         if (!roleName.equals("ADMIN") && !roleName.equals("USER")) {
-            throw new IllegalArgumentException("Role name must be ADMIN or USER");
+            throw new ApiException("Role name must be ADMIN or USER");
         }
 
         // Verifica che il current user sia ADMIN della tenant
         if (!userRoleRepository.existsByUserIdAndTenantIdAndRoleName(
                 currentUser.getId(), tenant.getId(), "ADMIN")) {
-            throw new SecurityException("Only ADMIN can assign roles to users");
+            throw new ApiException("Only ADMIN can assign roles to users");
         }
 
         // Trova l'utente da aggiungere (username è email)
         User userToGrant = userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("User with email '" + username + "' not found"));
+                .orElseThrow(() -> new ApiException("User with email '" + username + "' not found"));
 
         // Verifica se l'utente ha già accesso
         if (userRoleRepository.hasAccessToTenant(userToGrant.getId(), tenant.getId())) {
-            throw new IllegalStateException("User already has access to this tenant");
+            throw new ApiException("User already has access to this tenant");
         }
 
         // Crea UserRole con il ruolo specificato
@@ -73,39 +74,39 @@ public class TenantUserManagementService {
     public void updateUserRoles(Long userId, List<String> newRoleNames, Tenant tenant, User currentUser) {
         // Validazione
         if (newRoleNames == null || newRoleNames.isEmpty()) {
-            throw new IllegalArgumentException("At least one role must be assigned");
+            throw new ApiException("At least one role must be assigned");
         }
 
         // Validazione: ADMIN e USER sono mutualmente esclusivi
         if (newRoleNames.contains("ADMIN") && newRoleNames.contains("USER")) {
-            throw new IllegalArgumentException("ADMIN and USER roles are mutually exclusive. A user can have only one of them.");
+            throw new ApiException("ADMIN and USER roles are mutually exclusive. A user can have only one of them.");
         }
 
         // Deve avere esattamente un ruolo (ADMIN o USER, non entrambi)
         if (newRoleNames.size() != 1) {
-            throw new IllegalArgumentException("A user must have exactly one role: either ADMIN or USER");
+            throw new ApiException("A user must have exactly one role: either ADMIN or USER");
         }
 
         // Valida che tutti i ruoli siano validi
         for (String roleName : newRoleNames) {
             if (!roleName.equals("ADMIN") && !roleName.equals("USER")) {
-                throw new IllegalArgumentException("Invalid role name: " + roleName + ". Must be ADMIN or USER");
+                throw new ApiException("Invalid role name: " + roleName + ". Must be ADMIN or USER");
             }
         }
 
         // Verifica che il current user sia ADMIN della tenant
         if (!userRoleRepository.existsByUserIdAndTenantIdAndRoleName(
                 currentUser.getId(), tenant.getId(), "ADMIN")) {
-            throw new SecurityException("Only ADMIN can change user roles");
+            throw new ApiException("Only ADMIN can change user roles");
         }
 
         // Trova l'utente
         User userToChange = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> new ApiException("User not found"));
 
         // Verifica che l'utente abbia accesso
         if (!userRoleRepository.hasAccessToTenant(userId, tenant.getId())) {
-            throw new IllegalStateException("User doesn't have access to this tenant");
+            throw new ApiException("User doesn't have access to this tenant");
         }
 
         // Ottieni i ruoli attuali
@@ -119,7 +120,7 @@ public class TenantUserManagementService {
         if (currentlyHasAdmin && !willHaveAdmin) {
             long adminCount = userRoleRepository.countByTenantIdAndRoleName(tenant.getId(), "ADMIN");
             if (adminCount <= 1) {
-                throw new IllegalStateException("Cannot remove ADMIN role from the last ADMIN of the tenant");
+                throw new ApiException("Cannot remove ADMIN role from the last ADMIN of the tenant");
             }
         }
 
@@ -155,16 +156,16 @@ public class TenantUserManagementService {
         // Verifica che il current user sia ADMIN della tenant
         if (!userRoleRepository.existsByUserIdAndTenantIdAndRoleName(
                 currentUser.getId(), tenant.getId(), "ADMIN")) {
-            throw new SecurityException("Only ADMIN can revoke access from users");
+            throw new ApiException("Only ADMIN can revoke access from users");
         }
 
         // Trova l'utente da rimuovere
         User userToRevoke = userRepository.findById(userIdToRevoke)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> new ApiException("User not found"));
 
         // Verifica che l'utente abbia accesso
         if (!userRoleRepository.hasAccessToTenant(userToRevoke.getId(), tenant.getId())) {
-            throw new IllegalStateException("User doesn't have access to this tenant");
+            throw new ApiException("User doesn't have access to this tenant");
         }
 
         // Verifica che l'utente da rimuovere non sia l'ultimo ADMIN
@@ -174,7 +175,7 @@ public class TenantUserManagementService {
         if (isAdmin) {
             long adminCount = userRoleRepository.countByTenantIdAndRoleName(tenant.getId(), "ADMIN");
             if (adminCount <= 1) {
-                throw new IllegalStateException("Cannot remove the last ADMIN of the tenant");
+                throw new ApiException("Cannot remove the last ADMIN of the tenant");
             }
         }
 
@@ -188,7 +189,7 @@ public class TenantUserManagementService {
     @Transactional(readOnly = true)
     public UserAccessStatusDto getUserAccessStatus(String username, Tenant tenant) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("User with username '" + username + "' not found"));
+                .orElseThrow(() -> new ApiException("User with username '" + username + "' not found"));
 
         boolean hasAccess = userRoleRepository.hasAccessToTenant(user.getId(), tenant.getId());
 

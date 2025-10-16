@@ -143,7 +143,7 @@ public class WorkflowService {
                 .orElseThrow(() -> new ApiException("Workflow not found: " + workflowId));
 
         if (!workflow.getTenant().equals(tenant)) {
-            throw new SecurityException("Workflow does not belong to tenant");
+            throw new ApiException("Workflow does not belong to tenant");
         }
 
         // --- Update base workflow ---
@@ -298,7 +298,7 @@ public class WorkflowService {
         if (dto.initialStatusId() != null) {
             WorkflowStatus initialWs = updatedStatusMap.get(dto.initialStatusId());
             if (initialWs == null)
-                throw new IllegalArgumentException("Invalid initialStatusId: " + dto.initialStatusId());
+                throw new ApiException("Invalid initialStatusId: " + dto.initialStatusId());
             workflow.setInitialStatus(initialWs.getStatus());
         }
 

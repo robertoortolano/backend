@@ -203,7 +203,7 @@ public class FieldSetService {
                 .anyMatch(e -> e.getFieldConfiguration().getId().equals(config.getId()));
 
         if (alreadyPresent) {
-            throw new IllegalStateException("Questa FieldConfiguration è già presente nel FieldSet");
+            throw new ApiException("Questa FieldConfiguration è già presente nel FieldSet");
         }
 
         FieldSetEntry entry = new FieldSetEntry();

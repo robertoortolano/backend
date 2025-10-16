@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
+import com.example.demo.exception.ApiException;
 import com.example.demo.repository.*;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -121,7 +122,7 @@ public class ItemTypeSetPermissionService {
             
             // Crea grant per FieldStatus permissions (Editor e Viewer)
             List<FieldStatusPermission> editorPermissions = fieldStatusPermissionRepository
-                .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.EDITOR);
+                .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.EDITORS);
             
             for (FieldStatusPermission perm : editorPermissions) {
                 if (perm.getAssignedGrants().isEmpty()) {
@@ -133,7 +134,7 @@ public class ItemTypeSetPermissionService {
             }
             
             List<FieldStatusPermission> viewerPermissions = fieldStatusPermissionRepository
-                .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.VIEWER);
+                .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.VIEWERS);
             
             for (FieldStatusPermission perm : viewerPermissions) {
                 if (perm.getAssignedGrants().isEmpty()) {
@@ -723,7 +724,7 @@ public class ItemTypeSetPermissionService {
         List<Map<String, Object>> editors = new ArrayList<>();
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
             List<FieldStatusPermission> permissions = fieldStatusPermissionRepository
-                .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.EDITOR);
+                .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.EDITORS);
             
             for (FieldStatusPermission perm : permissions) {
                 Map<String, Object> editor = new HashMap<>();
@@ -837,7 +838,7 @@ public class ItemTypeSetPermissionService {
         List<Map<String, Object>> viewers = new ArrayList<>();
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
             List<FieldStatusPermission> permissions = fieldStatusPermissionRepository
-                .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.VIEWER);
+                .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.VIEWERS);
             
             for (FieldStatusPermission perm : permissions) {
                 Map<String, Object> viewer = new HashMap<>();
@@ -950,7 +951,7 @@ public class ItemTypeSetPermissionService {
         return result;
         } catch (Exception e) {
             e.printStackTrace();
-            throw new RuntimeException("Error retrieving permissions: " + e.getMessage(), e);
+            throw new ApiException("Error retrieving permissions: " + e.getMessage(), e);
         }
     }
     
@@ -969,13 +970,12 @@ public class ItemTypeSetPermissionService {
         FieldStatusPermission fieldStatusPermission = null;
         
         if (permissionType == null) {
-            throw new RuntimeException("Permission type must be provided");
+            throw new ApiException("Permission type must be provided");
         }
         
         // Cerca solo nella tabella specifica in base al tipo
         switch (permissionType) {
             case "WORKERS":
-            case "WORKER":
                 workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
                 if (workerPermission != null) {
                     workerPermission.getAssignedRoles().add(role);
@@ -985,9 +985,7 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
-            case "STATUSOWNERS":
             case "STATUS_OWNERS":
-            case "STATUS_OWNER":
                 statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
                 if (statusOwnerPermission != null) {
                     statusOwnerPermission.getAssignedRoles().add(role);
@@ -997,9 +995,7 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
-            case "FIELDOWNERS":
             case "FIELD_OWNERS":
-            case "FIELD_EDITOR":
                 fieldOwnerPermission = fieldOwnerPermissionRepository.findById(permissionId).orElse(null);
                 if (fieldOwnerPermission != null) {
                     fieldOwnerPermission.getAssignedRoles().add(role);
@@ -1010,7 +1006,6 @@ public class ItemTypeSetPermissionService {
                 }
                 break;
             case "CREATORS":
-            case "CREATOR":
                 creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
                 if (creatorPermission != null) {
                     creatorPermission.getAssignedRoles().add(role);
@@ -1021,7 +1016,6 @@ public class ItemTypeSetPermissionService {
                 }
                 break;
             case "EXECUTORS":
-            case "EXECUTOR":
                 executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
                 if (executorPermission != null) {
                     executorPermission.getAssignedRoles().add(role);
@@ -1032,9 +1026,7 @@ public class ItemTypeSetPermissionService {
                 }
                 break;
             case "EDITORS":
-            case "EDITOR":
             case "VIEWERS":
-            case "VIEWER":
                 fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
                 if (fieldStatusPermission != null) {
                     fieldStatusPermission.getAssignedRoles().add(role);
@@ -1045,10 +1037,10 @@ public class ItemTypeSetPermissionService {
                 }
                 break;
             default:
-                throw new RuntimeException("Unknown permission type: " + permissionType);
+                throw new ApiException("Unknown permission type: " + permissionType);
         }
         
-        throw new RuntimeException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
+        throw new ApiException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
     }
     
     /**
@@ -1056,10 +1048,10 @@ public class ItemTypeSetPermissionService {
      */
     public void assignGrantToPermission(Long permissionId, String permissionType, Map<String, Object> grantData) {
         if (permissionId == null) {
-            throw new RuntimeException("Permission ID cannot be null");
+            throw new ApiException("Permission ID cannot be null");
         }
         if (grantData == null) {
-            throw new RuntimeException("Grant data cannot be null");
+            throw new ApiException("Grant data cannot be null");
         }
         
         // Trova la permission per ID e TIPO
@@ -1088,49 +1080,40 @@ public class ItemTypeSetPermissionService {
             if (fieldStatusPermission != null) foundCount++;
             
             if (foundCount > 1) {
-                throw new RuntimeException("Ambiguous permission ID: " + permissionId + " - found in " + foundCount + " tables. Please provide permissionType.");
+                throw new ApiException("Ambiguous permission ID: " + permissionId + " - found in " + foundCount + " tables. Please provide permissionType.");
             }
             if (foundCount == 0) {
-                throw new RuntimeException("Permission not found with ID: " + permissionId);
+                throw new ApiException("Permission not found with ID: " + permissionId);
             }
         } else {
             // Cerca solo nella tabella specifica in base al tipo
             switch (permissionType) {
                 case "WORKERS":
-                case "WORKER":
                     workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
                     break;
-                case "STATUSOWNERS":
                 case "STATUS_OWNERS":
-                case "STATUS_OWNER":
                     statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
                     break;
-                case "FIELDOWNERS":
                 case "FIELD_OWNERS":
-                case "FIELD_EDITOR":
                     fieldOwnerPermission = fieldOwnerPermissionRepository.findById(permissionId).orElse(null);
                     break;
                 case "CREATORS":
-                case "CREATOR":
                     creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
                     break;
                 case "EXECUTORS":
-                case "EXECUTOR":
                     executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
                     break;
                 case "EDITORS":
-                case "EDITOR":
                 case "VIEWERS":
-                case "VIEWER":
                     fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
                     break;
                 default:
-                    throw new RuntimeException("Unknown permission type: " + permissionType);
+                    throw new ApiException("Unknown permission type: " + permissionType);
             }
             
             if (workerPermission == null && statusOwnerPermission == null && fieldOwnerPermission == null &&
                 creatorPermission == null && executorPermission == null && fieldStatusPermission == null) {
-                throw new RuntimeException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
+                throw new ApiException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
             }
         }
         
@@ -1272,13 +1255,12 @@ public class ItemTypeSetPermissionService {
      */
     public void removeRoleFromPermission(Long permissionId, Long roleId, String permissionType) {
         if (permissionType == null) {
-            throw new RuntimeException("Permission type must be provided");
+            throw new ApiException("Permission type must be provided");
         }
         
         // Cerca solo nella tabella specifica in base al tipo
         switch (permissionType) {
             case "WORKERS":
-            case "WORKER":
                 WorkerPermission workerPermission = workerPermissionRepository.findById(permissionId).orElse(null);
                 if (workerPermission != null) {
                     workerPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
@@ -1288,9 +1270,7 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
-            case "STATUSOWNERS":
             case "STATUS_OWNERS":
-            case "STATUS_OWNER":
                 StatusOwnerPermission statusOwnerPermission = statusOwnerPermissionRepository.findById(permissionId).orElse(null);
                 if (statusOwnerPermission != null) {
                     statusOwnerPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
@@ -1300,9 +1280,7 @@ public class ItemTypeSetPermissionService {
                     return;
                 }
                 break;
-            case "FIELDOWNERS":
             case "FIELD_OWNERS":
-            case "FIELD_EDITOR":
                 FieldOwnerPermission fieldOwnerPermission = fieldOwnerPermissionRepository.findById(permissionId).orElse(null);
                 if (fieldOwnerPermission != null) {
                     fieldOwnerPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
@@ -1313,7 +1291,6 @@ public class ItemTypeSetPermissionService {
                 }
                 break;
             case "CREATORS":
-            case "CREATOR":
                 CreatorPermission creatorPermission = creatorPermissionRepository.findById(permissionId).orElse(null);
                 if (creatorPermission != null) {
                     creatorPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
@@ -1324,7 +1301,6 @@ public class ItemTypeSetPermissionService {
                 }
                 break;
             case "EXECUTORS":
-            case "EXECUTOR":
                 ExecutorPermission executorPermission = executorPermissionRepository.findById(permissionId).orElse(null);
                 if (executorPermission != null) {
                     executorPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
@@ -1335,9 +1311,7 @@ public class ItemTypeSetPermissionService {
                 }
                 break;
             case "EDITORS":
-            case "EDITOR":
             case "VIEWERS":
-            case "VIEWER":
                 FieldStatusPermission fieldStatusPermission = fieldStatusPermissionRepository.findById(permissionId).orElse(null);
                 if (fieldStatusPermission != null) {
                     fieldStatusPermission.getAssignedRoles().removeIf(role -> role.getId().equals(roleId));
@@ -1348,9 +1322,9 @@ public class ItemTypeSetPermissionService {
                 }
                 break;
             default:
-                throw new RuntimeException("Unknown permission type: " + permissionType);
+                throw new ApiException("Unknown permission type: " + permissionType);
         }
         
-        throw new RuntimeException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
+        throw new ApiException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
     }
 }

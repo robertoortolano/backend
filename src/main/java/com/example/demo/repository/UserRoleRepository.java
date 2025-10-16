@@ -78,6 +78,15 @@ public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
     List<User> findUsersByTenantIdAndRoleName(@Param("tenantId") Long tenantId, @Param("roleName") String roleName);
 
     /**
+     * Cerca utenti per nome/email in una tenant
+     */
+    @Query("SELECT DISTINCT ur.user FROM UserRole ur " +
+           "WHERE ur.tenant.id = :tenantId AND ur.scope = 'TENANT' " +
+           "AND (LOWER(ur.user.username) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+           "OR LOWER(ur.user.fullName) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+    List<User> searchUsersByTenantId(@Param("tenantId") Long tenantId, @Param("searchTerm") String searchTerm);
+
+    /**
      * Elimina tutti i UserRole TENANT-level di un utente in una tenant
      */
     @Modifying
@@ -143,5 +152,7 @@ public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
            "WHERE ur.user.id = :userId AND ur.project.id = :projectId AND ur.scope = 'PROJECT'")
     boolean hasAccessToProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
 }
+
+
 
 

@@ -1,10 +1,13 @@
 package com.example.demo.controller;
 
+import com.example.demo.entity.Tenant;
 import com.example.demo.entity.User;
-import com.example.demo.repository.TenantRepository;
-import com.example.demo.repository.UserRepository;
+import com.example.demo.repository.UserRoleRepository;
+import com.example.demo.security.CurrentTenant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 
 @RestController
@@ -12,11 +15,21 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class UserController {
 
-    private final UserRepository userRepository;
-    private final TenantRepository tenantRepository;
+    private final UserRoleRepository userRoleRepository;
 
-    @PostMapping
-    public User create(@RequestBody User user) {
-        return userRepository.save(user);
+    /**
+     * Cerca utenti per nome/email nella tenant corrente
+     */
+    @GetMapping("/search")
+    public List<User> searchUsers(
+            @RequestParam(required = false, defaultValue = "") String query,
+            @CurrentTenant Tenant tenant
+    ) {
+        if (query == null || query.trim().isEmpty()) {
+            // Se non c'è query, ritorna tutti gli utenti della tenant
+            return userRoleRepository.findUsersByTenantId(tenant.getId());
+        }
+        
+        return userRoleRepository.searchUsersByTenantId(tenant.getId(), query.trim());
     }
 }

@@ -93,7 +93,7 @@ public class ItemTypeSetRoleService {
                 Set<WorkflowStatus> statuses = config.getWorkflow().getStatuses();
                 for (WorkflowStatus status : statuses) {
                     ItemTypeSetRole role = ItemTypeSetRole.builder()
-                            .roleType(ItemTypeSetRoleType.OWNERS)
+                            .roleType(ItemTypeSetRoleType.STATUS_OWNERS)
                             .name("Owner for " + status.getStatus().getName() + " in " + config.getWorkflow().getName())
                             .description("Owner role for WorkflowStatus: " + status.getStatus().getName())
                             .itemTypeSet(itemTypeSet)
@@ -229,15 +229,15 @@ public class ItemTypeSetRoleService {
      */
     public ItemTypeSetRoleGrantDTO assignGrantToRole(ItemTypeSetRoleGrantCreateDTO createDTO, Tenant tenant) {
         ItemTypeSetRole role = itemTypeSetRoleRepository.findById(createDTO.getItemTypeSetRoleId())
-                .orElseThrow(() -> new RuntimeException("ItemTypeSetRole not found"));
+                .orElseThrow(() -> new ApiException("ItemTypeSetRole not found"));
         
         Grant grant = grantRepository.findById(createDTO.getGrantId())
-                .orElseThrow(() -> new RuntimeException("Grant not found"));
+                .orElseThrow(() -> new ApiException("Grant not found"));
         
         // Verifica che non esista già l'associazione
         if (itemTypeSetRoleGrantRepository.existsByItemTypeSetRoleIdAndGrantIdAndTenantId(
                 createDTO.getItemTypeSetRoleId(), createDTO.getGrantId(), tenant.getId())) {
-            throw new RuntimeException("Grant already assigned to this role");
+            throw new ApiException("Grant already assigned to this role");
         }
         
         ItemTypeSetRoleGrant roleGrant = ItemTypeSetRoleGrant.builder()

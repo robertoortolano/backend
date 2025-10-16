@@ -126,11 +126,11 @@
       "description": "Utenti che possono lavorare sugli item di questo tipo"
     },
     {
-      "name": "StatusOwner",
+      "name": "Status Owners",
       "description": "Proprietari degli item di questo tipo per stato specifico"
     },
     {
-      "name": "FieldOwner",
+      "name": "Field Owners",
       "description": "Utenti che possono modificare i campi specifici"
     },
     {

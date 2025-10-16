@@ -5,6 +5,7 @@ import com.example.demo.dto.RoleUpdateDto;
 import com.example.demo.dto.RoleViewDto;
 import com.example.demo.entity.Role;
 import com.example.demo.entity.Tenant;
+import com.example.demo.exception.ApiException;
 import com.example.demo.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ public class RoleService {
     public RoleViewDto createTenantRole(RoleCreateDto createDto, Tenant tenant) {
         // Verifica che non esista già un ruolo con lo stesso nome per questo tenant
         if (roleRepository.existsByNameAndTenant(createDto.name(), tenant)) {
-            throw new IllegalArgumentException("Un ruolo con il nome '" + createDto.name() + "' esiste già per questo tenant");
+            throw new ApiException("Un ruolo con il nome '" + createDto.name() + "' esiste già per questo tenant");
         }
 
         Role role = new Role();
@@ -47,22 +48,22 @@ public class RoleService {
      */
     public RoleViewDto updateTenantRole(Long roleId, RoleUpdateDto updateDto, Tenant tenant) {
         Role role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new IllegalArgumentException("Ruolo non trovato con ID: " + roleId));
+                .orElseThrow(() -> new ApiException("Ruolo non trovato con ID: " + roleId));
 
         // Verifica che il ruolo appartenga al tenant
         if (!role.getTenant().getId().equals(tenant.getId())) {
-            throw new IllegalArgumentException("Il ruolo non appartiene a questo tenant");
+            throw new ApiException("Il ruolo non appartiene a questo tenant");
         }
 
         // Verifica che non sia un ruolo di default (non modificabile dalla UI)
         if (role.isDefaultRole()) {
-            throw new IllegalArgumentException("I ruoli di default non possono essere modificati");
+            throw new ApiException("I ruoli di default non possono essere modificati");
         }
 
         // Verifica che non esista già un altro ruolo con lo stesso nome per questo tenant
         if (!role.getName().equals(updateDto.name()) && 
             roleRepository.existsByNameAndTenant(updateDto.name(), tenant)) {
-            throw new IllegalArgumentException("Un ruolo con il nome '" + updateDto.name() + "' esiste già per questo tenant");
+            throw new ApiException("Un ruolo con il nome '" + updateDto.name() + "' esiste già per questo tenant");
         }
 
         role.setName(updateDto.name());
@@ -78,16 +79,16 @@ public class RoleService {
      */
     public void deleteTenantRole(Long roleId, Tenant tenant) {
         Role role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new IllegalArgumentException("Ruolo non trovato con ID: " + roleId));
+                .orElseThrow(() -> new ApiException("Ruolo non trovato con ID: " + roleId));
 
         // Verifica che il ruolo appartenga al tenant
         if (!role.getTenant().getId().equals(tenant.getId())) {
-            throw new IllegalArgumentException("Il ruolo non appartiene a questo tenant");
+            throw new ApiException("Il ruolo non appartiene a questo tenant");
         }
 
         // Verifica che non sia un ruolo di default
         if (role.isDefaultRole()) {
-            throw new IllegalArgumentException("Non è possibile eliminare un ruolo di default");
+            throw new ApiException("Non è possibile eliminare un ruolo di default");
         }
 
         roleRepository.delete(role);
@@ -113,11 +114,11 @@ public class RoleService {
     @Transactional(readOnly = true)
     public RoleViewDto getTenantRoleById(Long roleId, Tenant tenant) {
         Role role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new IllegalArgumentException("Ruolo non trovato con ID: " + roleId));
+                .orElseThrow(() -> new ApiException("Ruolo non trovato con ID: " + roleId));
 
         // Verifica che il ruolo appartenga al tenant
         if (!role.getTenant().getId().equals(tenant.getId())) {
-            throw new IllegalArgumentException("Il ruolo non appartiene a questo tenant");
+            throw new ApiException("Il ruolo non appartiene a questo tenant");
         }
 
         return toViewDto(role);
