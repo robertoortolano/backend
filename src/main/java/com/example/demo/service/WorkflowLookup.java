@@ -19,7 +19,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WorkflowLookup {
     private final ItemTypeConfigurationLookup itemTypeConfigurationLookup;
-    private final WorkflowMetaMapper workflowMetaMapper;
     private final DtoMapperFacade dtoMapper;
     private final WorkflowNodeRepository workflowNodeRepository;
     private final WorkflowEdgeRepository workflowEdgeRepository;
@@ -34,8 +33,8 @@ public class WorkflowLookup {
         WorkflowViewDto workflowViewDto = dtoMapper.toWorkflowViewDto(getByIdEntity(tenant, workflowId));
         List<WorkflowNode> workflowNodes = workflowNodeRepository.findByWorkflowIdAndTenant(workflowViewDto.getId(), tenant);
         List<WorkflowEdge> workflowEdges = workflowEdgeRepository.findByWorkflowIdAndTenant(workflowViewDto.getId(), tenant);
-        workflowViewDto.setWorkflowNodes(workflowMetaMapper.toNodeDtos(workflowNodes));
-        workflowViewDto.setWorkflowEdges(workflowMetaMapper.toEdgeDtos(workflowEdges));
+        workflowViewDto.setWorkflowNodes(dtoMapper.toWorkflowNodeDtos(workflowNodes));
+        workflowViewDto.setWorkflowEdges(dtoMapper.toWorkflowEdgeDtos(workflowEdges));
         return workflowViewDto;
     }
 

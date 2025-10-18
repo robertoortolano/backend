@@ -7,6 +7,7 @@ import com.example.demo.entity.User;
 import com.example.demo.entity.UserRole;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.exception.ApiException;
+import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class TenantUserManagementService {
 
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
+    private final DtoMapperFacade dtoMapper;
 
     /**
      * Assegna un ruolo (ADMIN o USER) a un utente in una tenant
@@ -220,17 +222,27 @@ public class TenantUserManagementService {
 
         return users.stream()
                 .map(user -> {
+                    // Ottieni ruoli tenant
                     List<String> roles = userRoleRepository.findTenantRolesByUserAndTenant(user.getId(), tenant.getId())
                             .stream()
                             .map(UserRole::getRoleName)
                             .distinct()
                             .collect(Collectors.toList());
 
+                    // Ottieni progetti per cui l'utente è PROJECT_ADMIN
+                    List<com.example.demo.dto.ProjectSummaryDto> projectAdminOf = 
+                            userRoleRepository.findProjectsByUserIdAndTenantIdAndRoleName(
+                                    user.getId(), tenant.getId(), "ADMIN")
+                            .stream()
+                            .map(dtoMapper::toProjectSummaryDto)
+                            .collect(Collectors.toList());
+
                     return new TenantUserDto(
                             user.getId(),
                             user.getUsername(),
                             user.getFullName(),
-                            roles
+                            roles,
+                            projectAdminOf
                     );
                 })
                 .collect(Collectors.toList());

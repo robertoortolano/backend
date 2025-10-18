@@ -27,7 +27,6 @@ public class WorkflowService {
     private final StatusLookup statusLookup;
     private final WorkflowLookup workflowLookup;
     private final DtoMapperFacade dtoMapper;
-    private final WorkflowMetaMapper workflowMetaMapper;
 
     @Transactional
     public WorkflowViewDto createGlobal(WorkflowCreateDto dto, Tenant tenant) {
@@ -60,7 +59,7 @@ public class WorkflowService {
         // WORKFLOW NODES
         // ========================
         for (WorkflowNodeDto nodeDto : dto.workflowNodes()) {
-            WorkflowNode node = workflowMetaMapper.toEntity(nodeDto);
+            WorkflowNode node = dtoMapper.toWorkflowNodeEntity(nodeDto);
             node.setWorkflow(workflow);
             node.setTenant(tenant);
 
@@ -108,7 +107,7 @@ public class WorkflowService {
         // ========================
         Map<String, Integer> edgeCounter = new HashMap<>();
         for (WorkflowEdgeDto edgeDto : dto.workflowEdges()) {
-            WorkflowEdge edge = workflowMetaMapper.toEntity(edgeDto);
+            WorkflowEdge edge = dtoMapper.toWorkflowEdgeEntity(edgeDto);
             edge.setWorkflow(workflow);
             edge.setTenant(tenant);
 
@@ -363,7 +362,7 @@ public class WorkflowService {
             Map<Long, WorkflowStatus> statusMap
     ) {
         for (WorkflowNodeDto nodeDto : nodeDtos) {
-            WorkflowNode node = workflowMetaMapper.toEntity(nodeDto);
+            WorkflowNode node = dtoMapper.toWorkflowNodeEntity(nodeDto);
             //node.setWorkflow(workflow);
             node.setTenant(tenant);
 
@@ -416,7 +415,7 @@ public class WorkflowService {
     ) {
         Map<String, Integer> edgeCounter = new HashMap<>();
         for (WorkflowEdgeDto edgeDto : edgeDtos) {
-            WorkflowEdge edge = workflowMetaMapper.toEntity(edgeDto);
+            WorkflowEdge edge = dtoMapper.toWorkflowEdgeEntity(edgeDto);
             edge.setWorkflow(workflow);
             edge.setTenant(tenant);
 

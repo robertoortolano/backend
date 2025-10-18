@@ -6,6 +6,7 @@ import com.example.demo.dto.RoleViewDto;
 import com.example.demo.entity.Role;
 import com.example.demo.entity.Tenant;
 import com.example.demo.exception.ApiException;
+import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 public class RoleService {
 
     private final RoleRepository roleRepository;
+    private final DtoMapperFacade dtoMapper;
 
     /**
      * Crea un nuovo ruolo custom per il tenant specificato.
@@ -39,7 +41,7 @@ public class RoleService {
         role.setTenant(tenant);
 
         Role savedRole = roleRepository.save(role);
-        return toViewDto(savedRole);
+        return dtoMapper.toRoleViewDto(savedRole);
     }
 
     /**
@@ -70,7 +72,7 @@ public class RoleService {
         role.setDescription(updateDto.description());
 
         Role savedRole = roleRepository.save(role);
-        return toViewDto(savedRole);
+        return dtoMapper.toRoleViewDto(savedRole);
     }
 
     /**
@@ -101,10 +103,10 @@ public class RoleService {
     @Transactional(readOnly = true)
     public List<RoleViewDto> getAllTenantRoles(Tenant tenant) {
         List<Role> roles = roleRepository.findByTenantId(tenant.getId());
-        return roles.stream()
+        List<Role> customRoles = roles.stream()
                 .filter(role -> !role.isDefaultRole()) // Solo ruoli custom (non di default)
-                .map(this::toViewDto)
                 .collect(Collectors.toList());
+        return dtoMapper.toRoleViewDtos(customRoles);
     }
 
     /**
@@ -121,19 +123,6 @@ public class RoleService {
             throw new ApiException("Il ruolo non appartiene a questo tenant");
         }
 
-        return toViewDto(role);
-    }
-
-    /**
-     * Converte un'entità Role in RoleViewDto.
-     * Nota: Role non ha più campo scope (i Role custom sono sempre TENANT implicitamente).
-     */
-    private RoleViewDto toViewDto(Role role) {
-        return new RoleViewDto(
-                role.getId(),
-                role.getName(),
-                role.getDescription(),
-                role.isDefaultRole()
-        );
+        return dtoMapper.toRoleViewDto(role);
     }
 }

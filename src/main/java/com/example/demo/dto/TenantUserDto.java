@@ -9,7 +9,8 @@ public record TenantUserDto(
         Long id,
         String username,
         String fullName,
-        List<String> roles  // Lista dei nomi dei ruoli (es: ["ADMIN"], ["USER"])
+        List<String> roles,  // Lista dei nomi dei ruoli (es: ["ADMIN"], ["USER"])
+        List<ProjectSummaryDto> projectAdminOf  // Lista dei progetti per cui l'utente è PROJECT_ADMIN
 ) {}
 
 

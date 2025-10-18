@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/projectsAssociation")
+@RequestMapping("/api/projects")
 @RequiredArgsConstructor
 public class ProjectController {
 
@@ -78,20 +78,119 @@ public class ProjectController {
         return ResponseEntity.ok(updated);
     }
 
-/*
-
-    @PatchMapping("/{projectId}/item-type-set/{setId}")
-    @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_ADMIN')")
-    public ResponseEntity<?> assignItemTypeSet(
+    @PostMapping("/{projectId}/users/{userId}/assign-admin")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    public ResponseEntity<ApiResponse> assignProjectAdmin(
             @PathVariable Long projectId,
-            @PathVariable Long setId,
-            @CurrentUser User user) {
-
-        projectService.assignItemTypeSet(projectId, setId, user);
-        return ResponseEntity.ok().build();
+            @PathVariable Long userId,
+            @CurrentTenant Tenant tenant,
+            @CurrentUser User currentUser
+    ) {
+        projectService.assignProjectAdmin(projectId, userId, tenant);
+        return ResponseEntity.ok(new ApiResponse("Project admin assigned successfully", 200));
     }
 
- */
+    @DeleteMapping("/{projectId}/users/{userId}/revoke-admin")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    public ResponseEntity<ApiResponse> revokeProjectAdmin(
+            @PathVariable Long projectId,
+            @PathVariable Long userId,
+            @CurrentTenant Tenant tenant
+    ) {
+        projectService.revokeProjectAdmin(projectId, userId, tenant);
+        return ResponseEntity.ok(new ApiResponse("Project admin revoked successfully", 200));
+    }
 
+    @GetMapping("/user/{userId}/admin-of")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    public ResponseEntity<List<ProjectViewDto>> getProjectsWhereUserIsAdmin(
+            @PathVariable Long userId,
+            @CurrentTenant Tenant tenant
+    ) {
+        return ResponseEntity.ok(projectService.getProjectsWhereUserIsAdmin(userId, tenant));
+    }
 
+    @GetMapping("/{projectId}/members")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'ADMIN')")
+    public ResponseEntity<List<ProjectMemberDto>> getProjectMembers(
+            @PathVariable Long projectId,
+            @CurrentTenant Tenant tenant
+    ) {
+        return ResponseEntity.ok(projectService.getProjectMembers(projectId, tenant));
+    }
+
+    @PostMapping("/{projectId}/members")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'ADMIN')")
+    public ResponseEntity<ApiResponse> addProjectMember(
+            @PathVariable Long projectId,
+            @Valid @RequestBody AddProjectMemberRequest request,
+            @CurrentTenant Tenant tenant
+    ) {
+        projectService.addProjectMember(projectId, request.userId(), request.roleName(), tenant);
+        return ResponseEntity.ok(new ApiResponse("Member added successfully", 200));
+    }
+
+    @PutMapping("/{projectId}/members/{userId}/role")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'ADMIN')")
+    public ResponseEntity<ApiResponse> updateProjectMemberRole(
+            @PathVariable Long projectId,
+            @PathVariable Long userId,
+            @Valid @RequestBody UpdateProjectMemberRoleRequest request,
+            @CurrentTenant Tenant tenant
+    ) {
+        projectService.updateProjectMemberRole(projectId, userId, request.roleName(), tenant);
+        return ResponseEntity.ok(new ApiResponse("Role updated successfully", 200));
+    }
+
+    @DeleteMapping("/{projectId}/members/{userId}")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'ADMIN')")
+    public ResponseEntity<ApiResponse> removeProjectMember(
+            @PathVariable Long projectId,
+            @PathVariable Long userId,
+            @CurrentTenant Tenant tenant
+    ) {
+        projectService.removeProjectMember(projectId, userId, tenant);
+        return ResponseEntity.ok(new ApiResponse("Member removed successfully", 200));
+    }
+
+    @PostMapping("/{projectId}/favorite")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse> addProjectToFavorites(
+            @PathVariable Long projectId,
+            @CurrentUser User user,
+            @CurrentTenant Tenant tenant
+    ) {
+        projectService.addProjectToFavorites(projectId, user, tenant);
+        return ResponseEntity.ok(new ApiResponse("Project added to favorites", 200));
+    }
+
+    @DeleteMapping("/{projectId}/favorite")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse> removeProjectFromFavorites(
+            @PathVariable Long projectId,
+            @CurrentUser User user,
+            @CurrentTenant Tenant tenant
+    ) {
+        projectService.removeProjectFromFavorites(projectId, user, tenant);
+        return ResponseEntity.ok(new ApiResponse("Project removed from favorites", 200));
+    }
+
+    @GetMapping("/favorites")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<ProjectViewDto>> getFavoriteProjects(
+            @CurrentUser User user,
+            @CurrentTenant Tenant tenant
+    ) {
+        return ResponseEntity.ok(projectService.getFavoriteProjects(user, tenant));
+    }
+
+    @GetMapping("/{projectId}/is-favorite")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Boolean> isProjectFavorite(
+            @PathVariable Long projectId,
+            @CurrentUser User user,
+            @CurrentTenant Tenant tenant
+    ) {
+        return ResponseEntity.ok(projectService.isProjectFavorite(projectId, user, tenant));
+    }
 }

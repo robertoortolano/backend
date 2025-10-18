@@ -4,6 +4,11 @@ import com.example.demo.dto.*;
 import com.example.demo.entity.*;
 import com.example.demo.enums.FieldType;
 import com.example.demo.enums.ScopeType;
+import com.example.demo.metadata.WorkflowMetaMapper;
+import com.example.demo.metadata.WorkflowNodeDto;
+import com.example.demo.metadata.WorkflowEdgeDto;
+import com.example.demo.metadata.WorkflowNode;
+import com.example.demo.metadata.WorkflowEdge;
 import com.example.demo.repository.FieldRepository;
 import lombok.RequiredArgsConstructor;
 import org.mapstruct.MappingTarget;
@@ -36,6 +41,10 @@ public class DtoMapperFacade {
     private final GroupMapper groupMapper;
     private final ItemTypeSetRoleMapper itemTypeSetRoleMapper;
     private final ItemTypeSetRoleGrantMapper itemTypeSetRoleGrantMapper;
+    private final TenantMapper tenantMapper;
+    private final RoleMapper roleMapper;
+    private final ProjectMemberMapper projectMemberMapper;
+    private final WorkflowMetaMapper workflowMetaMapper;
 
     // ---------------------
     // Project
@@ -314,6 +323,62 @@ public class DtoMapperFacade {
 
     public ItemTypeSetRoleGrant toItemTypeSetRoleGrant(ItemTypeSetRoleGrantDTO dto) {
         return itemTypeSetRoleGrantMapper.toEntity(dto);
+    }
+
+    // ---------------------
+    // Tenant
+    // ---------------------
+    public TenantDTO toTenantDto(Tenant tenant) {
+        return tenantMapper.toDto(tenant);
+    }
+
+    public List<TenantDTO> toTenantDtos(List<Tenant> tenants) {
+        return tenantMapper.toDtoList(tenants);
+    }
+
+    // ---------------------
+    // Role
+    // ---------------------
+    public RoleViewDto toRoleViewDto(Role role) {
+        return roleMapper.toViewDto(role);
+    }
+
+    public List<RoleViewDto> toRoleViewDtos(List<Role> roles) {
+        return roleMapper.toViewDtoList(roles);
+    }
+
+    // ---------------------
+    // ProjectMember
+    // ---------------------
+    public ProjectMemberDto toProjectMemberDto(User user) {
+        return projectMemberMapper.toProjectMemberDto(user);
+    }
+
+    // ---------------------
+    // Workflow Metadata (Nodes & Edges)
+    // ---------------------
+    public WorkflowNodeDto toWorkflowNodeDto(WorkflowNode entity) {
+        return workflowMetaMapper.toDto(entity);
+    }
+
+    public List<WorkflowNodeDto> toWorkflowNodeDtos(List<WorkflowNode> entities) {
+        return workflowMetaMapper.toNodeDtos(entities);
+    }
+
+    public WorkflowNode toWorkflowNodeEntity(WorkflowNodeDto dto) {
+        return workflowMetaMapper.toEntity(dto);
+    }
+
+    public WorkflowEdgeDto toWorkflowEdgeDto(WorkflowEdge entity) {
+        return workflowMetaMapper.toDto(entity);
+    }
+
+    public List<WorkflowEdgeDto> toWorkflowEdgeDtos(List<WorkflowEdge> entities) {
+        return workflowMetaMapper.toEdgeDtos(entities);
+    }
+
+    public WorkflowEdge toWorkflowEdgeEntity(WorkflowEdgeDto dto) {
+        return workflowMetaMapper.toEntity(dto);
     }
 
 }

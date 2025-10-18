@@ -314,7 +314,6 @@ public class ItemTypeSetPermissionService {
                         for (Grant grant : perm.getAssignedGrants()) {
                             Map<String, Object> grantMap = new HashMap<>();
                             grantMap.put("id", grant.getId());
-                            // TODO: Aggiungere dettagli della grant se necessario
                             assignedGrants.add(grantMap);
                         }
                         statusOwner.put("assignedGrants", assignedGrants);
@@ -533,7 +532,6 @@ public class ItemTypeSetPermissionService {
                         for (Grant grant : perm.getAssignedGrants()) {
                             Map<String, Object> grantMap = new HashMap<>();
                             grantMap.put("id", grant.getId());
-                            // TODO: Aggiungere dettagli della grant se necessario
                             assignedGrants.add(grantMap);
                         }
                         creator.put("assignedGrants", assignedGrants);
@@ -664,7 +662,6 @@ public class ItemTypeSetPermissionService {
                         for (Grant grant : perm.getAssignedGrants()) {
                             Map<String, Object> grantMap = new HashMap<>();
                             grantMap.put("id", grant.getId());
-                            // TODO: Aggiungere dettagli della grant se necessario
                             assignedGrants.add(grantMap);
                         }
                         executor.put("assignedGrants", assignedGrants);
@@ -778,7 +775,6 @@ public class ItemTypeSetPermissionService {
                         for (Grant grant : perm.getAssignedGrants()) {
                             Map<String, Object> grantMap = new HashMap<>();
                             grantMap.put("id", grant.getId());
-                            // TODO: Aggiungere dettagli della grant se necessario
                             assignedGrants.add(grantMap);
                         }
                         editor.put("assignedGrants", assignedGrants);
@@ -892,7 +888,6 @@ public class ItemTypeSetPermissionService {
                         for (Grant grant : perm.getAssignedGrants()) {
                             Map<String, Object> grantMap = new HashMap<>();
                             grantMap.put("id", grant.getId());
-                            // TODO: Aggiungere dettagli della grant se necessario
                             assignedGrants.add(grantMap);
                         }
                         viewer.put("assignedGrants", assignedGrants);

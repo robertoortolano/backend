@@ -5,6 +5,7 @@ import com.example.demo.entity.*;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.exception.ApiException;
 import com.example.demo.initializer.TenantInitializer;
+import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.repository.*;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.security.JwtTokenUtil;
@@ -13,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +24,7 @@ public class TenantService {
     private final UserRepository userRepository;
     private final JwtTokenUtil jwtTokenUtil;
     private final UserRoleRepository userRoleRepository;
+    private final DtoMapperFacade dtoMapper;
     private final List<TenantInitializer> tenantInitializers;
 
     public Tenant createTenant(Tenant tenant) {
@@ -35,9 +36,7 @@ public class TenantService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ApiException("User not found"));
 
-        return userRoleRepository.findTenantsByUserId(user.getId()).stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
+        return dtoMapper.toTenantDtos(userRoleRepository.findTenantsByUserId(user.getId()));
     }
 
     @Transactional
@@ -155,12 +154,4 @@ public class TenantService {
         userRoleRepository.save(newUserRole);
     }
 
-    private TenantDTO convertToDTO(Tenant tenant) {
-        TenantDTO dto = new TenantDTO();
-        dto.setId(tenant.getId());
-        dto.setName(tenant.getName());
-        dto.setSubdomain(tenant.getSubdomain());
-        dto.setCreatedAt(tenant.getCreatedAt());
-        return dto;
-    }
 }

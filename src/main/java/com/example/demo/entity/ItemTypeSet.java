@@ -37,7 +37,12 @@ public class ItemTypeSet {
     private Set<Project> projectsAssociation = new HashSet<>();
 
     @Builder.Default
-    @OneToMany
+    @ManyToMany
+    @JoinTable(
+        name = "itemtypeset_itemtypeconfiguration",
+        joinColumns = @JoinColumn(name = "itemtypeset_id"),
+        inverseJoinColumns = @JoinColumn(name = "itemtypeconfiguration_id")
+    )
     private Set<ItemTypeConfiguration> itemTypeConfigurations = new HashSet<>();
 
     @ManyToOne(fetch = FetchType.LAZY)

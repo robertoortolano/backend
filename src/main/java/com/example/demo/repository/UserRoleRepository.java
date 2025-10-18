@@ -128,11 +128,29 @@ public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
                                                     @Param("roleName") String roleName);
 
     /**
+     * Alias per trovare progetti per userId, tenantId e roleName
+     */
+    @Query("SELECT DISTINCT ur.project FROM UserRole ur " +
+           "WHERE ur.user.id = :userId AND ur.tenant.id = :tenantId AND ur.roleName = :roleName AND ur.scope = 'PROJECT'")
+    List<Project> findProjectsByUserIdAndTenantIdAndRoleName(@Param("userId") Long userId, 
+                                                               @Param("tenantId") Long tenantId, 
+                                                               @Param("roleName") String roleName);
+
+    /**
      * Elimina tutti i UserRole PROJECT-level di un utente in un progetto
      */
     @Modifying
     @Query("DELETE FROM UserRole ur WHERE ur.user.id = :userId AND ur.project.id = :projectId AND ur.scope = 'PROJECT'")
     void deleteByUserIdAndProjectId(@Param("userId") Long userId, @Param("projectId") Long projectId);
+
+    /**
+     * Elimina un UserRole PROJECT-level specifico di un utente in un progetto
+     */
+    @Modifying
+    @Query("DELETE FROM UserRole ur WHERE ur.user.id = :userId AND ur.project.id = :projectId AND ur.roleName = :roleName AND ur.scope = 'PROJECT'")
+    void deleteByUserIdAndProjectIdAndRoleName(@Param("userId") Long userId, 
+                                                @Param("projectId") Long projectId, 
+                                                @Param("roleName") String roleName);
 
     // ========================================
     // QUERY GENERICHE
@@ -151,6 +169,29 @@ public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
     @Query("SELECT CASE WHEN COUNT(ur) > 0 THEN true ELSE false END FROM UserRole ur " +
            "WHERE ur.user.id = :userId AND ur.project.id = :projectId AND ur.scope = 'PROJECT'")
     boolean hasAccessToProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
+
+    /**
+     * Trova tutti i UserRole per un progetto con uno specifico scope
+     */
+    @Query("SELECT ur FROM UserRole ur WHERE ur.project.id = :projectId AND ur.scope = :scope")
+    List<UserRole> findByProjectIdAndScope(@Param("projectId") Long projectId, @Param("scope") ScopeType scope);
+
+    /**
+     * Trova UserRole specifici per user, project e scope
+     */
+    @Query("SELECT ur FROM UserRole ur WHERE ur.user.id = :userId AND ur.project.id = :projectId AND ur.scope = :scope")
+    List<UserRole> findByUserIdAndProjectIdAndScope(@Param("userId") Long userId, 
+                                                      @Param("projectId") Long projectId, 
+                                                      @Param("scope") ScopeType scope);
+
+    /**
+     * Verifica se un utente ha un ruolo in un progetto con uno specifico scope
+     */
+    @Query("SELECT CASE WHEN COUNT(ur) > 0 THEN true ELSE false END FROM UserRole ur " +
+           "WHERE ur.user.id = :userId AND ur.project.id = :projectId AND ur.scope = :scope")
+    boolean existsByUserIdAndProjectIdAndScope(@Param("userId") Long userId, 
+                                                 @Param("projectId") Long projectId, 
+                                                 @Param("scope") ScopeType scope);
 }
 
 
