@@ -5,3 +5,7 @@ target/
 /.aider.tags.cache.v4/cache.db
 /.aider.tags.cache.v4/cache.db-wal
 /.aider.tags.cache.v4/cache.db-shm
+
+# Local configuration files (sensitive data)
+src/main/resources/application-local.properties
+.env

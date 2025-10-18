@@ -13,6 +13,7 @@ import com.example.demo.dto.RoleViewDto;
 import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.service.RoleService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/itemtypeset-permissions")
 @RequiredArgsConstructor
@@ -102,7 +104,7 @@ public class ItemTypeSetPermissionController {
             itemTypeSetPermissionService.assignGrantToPermission(permissionId, permissionType, grantData);
             return ResponseEntity.ok("Grant assigned successfully to permission");
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error assigning grant to permission", e);
             String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             return ResponseEntity.internalServerError()
                     .body("Error assigning grant: " + errorMsg);

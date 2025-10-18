@@ -12,6 +12,7 @@ import com.example.demo.security.CustomUserDetailsService;
 import com.example.demo.security.JwtTokenUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -19,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -63,9 +65,7 @@ public class UserService {
 
             return new LoginResponse(accessToken, refreshToken, "Login successful", null, true);
         } catch (Exception e) {
-            System.err.println("=== Authentication error: " + e.getClass().getName());
-            System.err.println("=== Error message: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Authentication error: {} - {}", e.getClass().getName(), e.getMessage(), e);
             throw new ApiException("Invalid credentials: " + e.getMessage());
         }
     }

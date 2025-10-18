@@ -10,6 +10,7 @@ import com.example.demo.security.JwtTokenUtil;
 import com.example.demo.service.*;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,6 +18,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
+@Slf4j
 @CrossOrigin(origins = "http://localhost:5173")
 @RestController
 @RequestMapping("/api/auth")
@@ -98,8 +100,7 @@ public class AuthController {
                     "token", newToken
             ));
         } catch (Exception e) {
-            System.err.println("Error selecting tenant: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error selecting tenant: {}", e.getMessage(), e);
             return ResponseEntity.status(500).body(Map.of(
                     MESSAGE, "Error: " + e.getMessage()
             ));

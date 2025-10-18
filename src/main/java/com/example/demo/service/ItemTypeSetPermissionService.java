@@ -5,11 +5,13 @@ import com.example.demo.exception.ApiException;
 import com.example.demo.repository.*;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
+@Slf4j
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -369,7 +371,7 @@ public class ItemTypeSetPermissionService {
                 statusOwners.add(statusOwner);
             }
         }
-        result.put("STATUSOWNERS", statusOwners);
+        result.put("STATUS_OWNERS", statusOwners);
         
         // FieldOwner permissions
         List<Map<String, Object>> fieldOwners = new ArrayList<>();
@@ -479,7 +481,7 @@ public class ItemTypeSetPermissionService {
                 fieldOwners.add(fieldOwner);
             }
         }
-        result.put("FIELDOWNERS", fieldOwners);
+        result.put("FIELD_OWNERS", fieldOwners);
         
         // Creator permissions
         List<Map<String, Object>> creators = new ArrayList<>();
@@ -950,7 +952,7 @@ public class ItemTypeSetPermissionService {
         
         return result;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error retrieving permissions", e);
             throw new ApiException("Error retrieving permissions: " + e.getMessage(), e);
         }
     }
