@@ -19,11 +19,10 @@ public class FieldConfigurationController {
 
     private final FieldConfigurationService fieldConfigurationService;
 
-    /*
-    @PostMapping("/{projectId}")
+    @PostMapping("/project/{projectId}")
     @PreAuthorize("@securityService.canCreateFieldConfiguration(principal, #tenant, #projectId)")
     public ResponseEntity<FieldConfigurationViewDto> createProject(
-            @RequestBody FieldConfigurationCreateDto createDto,
+            @Valid @RequestBody FieldConfigurationCreateDto createDto,
             @PathVariable Long projectId,
             @CurrentTenant Tenant tenant
     ) {
@@ -31,7 +30,15 @@ public class FieldConfigurationController {
         return ResponseEntity.ok(created);
     }
 
-     */
+    @GetMapping("/project/{projectId}")
+    @PreAuthorize("@securityService.canCreateFieldConfiguration(principal, #tenant, #projectId)")
+    public ResponseEntity<List<FieldConfigurationViewDto>> getAllProjectFieldConfigurations(
+            @PathVariable Long projectId,
+            @CurrentTenant Tenant tenant
+    ) {
+        List<FieldConfigurationViewDto> configurations = fieldConfigurationService.getAllProjectFieldConfigurations(tenant, projectId);
+        return ResponseEntity.ok(configurations);
+    }
 
     @PostMapping
     @PreAuthorize("@securityService.canCreateFieldConfiguration(principal, #tenant, null)")

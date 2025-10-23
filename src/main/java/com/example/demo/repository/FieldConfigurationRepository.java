@@ -17,6 +17,7 @@ public interface FieldConfigurationRepository extends JpaRepository<FieldConfigu
     boolean existsByFieldIdAndTenant(Long fieldId, Tenant tenant);
 
     List<FieldConfiguration> findByFieldIdAndProjectIsNotNullAndTenant(Long fieldId, Tenant tenant);
+    List<FieldConfiguration> findByTenantAndProjectIdAndScope(Tenant tenant, Long projectId, ScopeType scopeType);
 
     Optional<FieldConfiguration> findByIdAndTenant(Long id, Tenant tenant);
 

@@ -3,7 +3,6 @@ package com.example.demo.dto;
 import com.example.demo.enums.ItemTypeSetRoleType;
 import lombok.*;
 
-import java.util.Set;
 
 @Getter
 @Setter
@@ -38,7 +37,4 @@ public class ItemTypeSetRoleDTO {
     private Long roleTemplateId;
     private String roleTemplateName;
     private String assignmentType; // "GRANT", "ROLE", "GRANTS", "NONE"
-    
-    @Builder.Default
-    private Set<ItemTypeSetRoleGrantDTO> grants = Set.of();
 }

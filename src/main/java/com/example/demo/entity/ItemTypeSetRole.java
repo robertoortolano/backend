@@ -4,8 +4,6 @@ import com.example.demo.enums.ItemTypeSetRoleType;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.util.HashSet;
-import java.util.Set;
 
 @Entity
 @Getter
@@ -60,9 +58,6 @@ public class ItemTypeSetRole {
     @JoinColumn(name = "role_template_id")
     private Role roleTemplate;     // Assegnazione via Role template
     
-    @Builder.Default
-    @OneToMany(mappedBy = "itemTypeSetRole", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<ItemTypeSetRoleGrant> grants = new HashSet<>();
     
     // Metodi di utilità per identificare l'entità correlata
     public boolean isForItemType() {
@@ -105,7 +100,7 @@ public class ItemTypeSetRole {
     }
     
     public boolean hasAnyAssignment() {
-        return hasDirectGrant() || hasRoleTemplate() || (grants != null && !grants.isEmpty());
+        return hasDirectGrant() || hasRoleTemplate();
     }
     
     public String getAssignmentType() {
@@ -113,8 +108,6 @@ public class ItemTypeSetRole {
             return "GRANT";
         } else if (hasRoleTemplate()) {
             return "ROLE";
-        } else if (grants != null && !grants.isEmpty()) {
-            return "GRANTS";
         }
         return "NONE";
     }

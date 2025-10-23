@@ -2,8 +2,6 @@ package com.example.demo.service;
 
 import com.example.demo.dto.ItemTypeSetRoleDTO;
 import com.example.demo.dto.ItemTypeSetRoleCreateDTO;
-import com.example.demo.dto.ItemTypeSetRoleGrantCreateDTO;
-import com.example.demo.dto.ItemTypeSetRoleGrantDTO;
 import com.example.demo.entity.*;
 import com.example.demo.enums.ItemTypeSetRoleType;
 import com.example.demo.exception.ApiException;
@@ -14,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -22,9 +19,6 @@ public class ItemTypeSetRoleService {
     
     @Autowired
     private ItemTypeSetRoleRepository itemTypeSetRoleRepository;
-    
-    @Autowired
-    private ItemTypeSetRoleGrantRepository itemTypeSetRoleGrantRepository;
     
     @Autowired
     private ItemTypeSetRepository itemTypeSetRepository;
@@ -224,51 +218,7 @@ public class ItemTypeSetRoleService {
         }
     }
     
-    /**
-     * Assegna un grant a un ruolo specifico
-     */
-    public ItemTypeSetRoleGrantDTO assignGrantToRole(ItemTypeSetRoleGrantCreateDTO createDTO, Tenant tenant) {
-        ItemTypeSetRole role = itemTypeSetRoleRepository.findById(createDTO.getItemTypeSetRoleId())
-                .orElseThrow(() -> new ApiException("ItemTypeSetRole not found"));
-        
-        Grant grant = grantRepository.findById(createDTO.getGrantId())
-                .orElseThrow(() -> new ApiException("Grant not found"));
-        
-        // Verifica che non esista già l'associazione
-        if (itemTypeSetRoleGrantRepository.existsByItemTypeSetRoleIdAndGrantIdAndTenantId(
-                createDTO.getItemTypeSetRoleId(), createDTO.getGrantId(), tenant.getId())) {
-            throw new ApiException("Grant already assigned to this role");
-        }
-        
-        ItemTypeSetRoleGrant roleGrant = ItemTypeSetRoleGrant.builder()
-                .itemTypeSetRole(role)
-                .grant(grant)
-                .tenant(tenant)
-                .build();
-        
-        ItemTypeSetRoleGrant savedRoleGrant = itemTypeSetRoleGrantRepository.save(roleGrant);
-        
-        // Converti usando il mapper corretto
-        ItemTypeSetRoleGrantDTO result = ItemTypeSetRoleGrantDTO.builder()
-                .id(savedRoleGrant.getId())
-                .itemTypeSetRoleId(savedRoleGrant.getItemTypeSetRole().getId())
-                .grantId(savedRoleGrant.getGrant().getId())
-                .tenantId(savedRoleGrant.getTenant().getId())
-                .grantedUserIds(savedRoleGrant.getGrantedUsers().stream().map(User::getId).collect(Collectors.toSet()))
-                .grantedGroupIds(savedRoleGrant.getGrantedGroups().stream().map(Group::getId).collect(Collectors.toSet()))
-                .negatedUserIds(savedRoleGrant.getNegatedUsers().stream().map(User::getId).collect(Collectors.toSet()))
-                .negatedGroupIds(savedRoleGrant.getNegatedGroups().stream().map(Group::getId).collect(Collectors.toSet()))
-                .build();
-        
-        return result;
-    }
     
-    /**
-     * Rimuove un grant da un ruolo specifico
-     */
-    public void removeGrantFromRole(Long roleId, Long grantId, Tenant tenant) {
-        itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleIdAndGrantIdAndTenantId(roleId, grantId, tenant.getId());
-    }
     
     /**
      * Ottiene tutti i ruoli per un ItemTypeSet
@@ -311,8 +261,6 @@ public class ItemTypeSetRoleService {
         role.setGrant(grant);
         role.setRoleTemplate(null);
         
-        // Rimuovi tutti i grants associati tramite ItemTypeSetRoleGrant
-        itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleId(roleId);
         
         ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
         return dtoMapper.toItemTypeSetRoleDTO(savedRole);
@@ -340,8 +288,6 @@ public class ItemTypeSetRoleService {
         role.setRoleTemplate(roleTemplate);
         role.setGrant(null);
         
-        // Rimuovi tutti i grants associati tramite ItemTypeSetRoleGrant
-        itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleId(roleId);
         
         ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
         return dtoMapper.toItemTypeSetRoleDTO(savedRole);
@@ -362,8 +308,6 @@ public class ItemTypeSetRoleService {
         role.setGrant(null);
         role.setRoleTemplate(null);
         
-        // Rimuovi tutti i grants associati tramite ItemTypeSetRoleGrant
-        itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleId(roleId);
         
         itemTypeSetRoleRepository.save(role);
     }
@@ -372,14 +316,7 @@ public class ItemTypeSetRoleService {
      * Elimina tutti i ruoli per un ItemTypeSet
      */
     public void deleteAllRolesForItemTypeSet(Long itemTypeSetId, Tenant tenant) {
-        List<ItemTypeSetRole> roles = itemTypeSetRoleRepository.findByItemTypeSetIdAndTenantId(itemTypeSetId, tenant.getId());
-        
-        // Elimina prima tutti i grants associati
-        for (ItemTypeSetRole role : roles) {
-            itemTypeSetRoleGrantRepository.deleteByItemTypeSetRoleId(role.getId());
-        }
-        
-        // Poi elimina tutti i ruoli
+        // Elimina tutti i ruoli
         itemTypeSetRoleRepository.deleteByItemTypeSetIdAndTenantId(itemTypeSetId, tenant.getId());
     }
     

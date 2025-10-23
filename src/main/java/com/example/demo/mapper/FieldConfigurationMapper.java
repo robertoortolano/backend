@@ -34,10 +34,7 @@ public abstract class FieldConfigurationMapper {
     @Mapping(target = "fieldType", expression = "java(fieldTypeRegistry.getDescriptor(entity.getFieldType()))")
     public abstract FieldConfigurationDto toDto(FieldConfiguration entity);
 
-    public List<FieldConfigurationDto> toDtos(List<FieldConfiguration> entities) {
-        if (entities == null) return Collections.emptyList();
-        return entities.stream().map(this::toDto).toList();
-    }
+    abstract List<FieldConfigurationDto> toDtos(List<FieldConfiguration> entities);
 
 
     @Mapping(target = "id", source = "entity.id")
@@ -51,10 +48,7 @@ public abstract class FieldConfigurationMapper {
     @Mapping(target = "usedInFieldSets", expression = "java(mapUsedFieldSets(entity))")
     public abstract FieldConfigurationViewDto toViewDto(FieldConfiguration entity);
 
-    public List<FieldConfigurationViewDto> toViewDtos(List<FieldConfiguration> entities) {
-        if (entities == null) return Collections.emptyList();
-        return entities.stream().map(this::toViewDto).toList();
-    }
+    abstract List<FieldConfigurationViewDto> toViewDtos(List<FieldConfiguration> entities);
 
     protected List<SimpleFieldSetDto> mapUsedFieldSets(FieldConfiguration entity) {
         return fieldSetEntryRepository.findByFieldConfigurationId(entity.getId()).stream()

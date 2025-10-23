@@ -53,10 +53,41 @@ public class FieldConfigurationService {
         return dtoMapper.toFieldConfigurationViewDto(fieldConfiguration);
     }
 
+    public FieldConfigurationViewDto createProjectFieldConfiguration(FieldConfigurationCreateDto dto, Tenant tenant, Long projectId) {
+        Field field = fieldLookup.getById(dto.fieldId(), tenant);
+
+        FieldType fieldType = dto.fieldType();
+
+        FieldConfiguration entity = new FieldConfiguration();
+        entity.setName(dto.name());
+        entity.setDescription(dto.description());
+        entity.setField(field);
+        entity.setAlias(dto.alias());
+        entity.setTenant(tenant);
+        entity.setFieldType(fieldType);
+        entity.setScope(ScopeType.PROJECT);
+        entity.setDefaultFieldConfiguration(false);
+        entity.setOptions(dtoMapper.toFieldOptionEntitySetFromCreate(dto.options()));
+        
+        // Imposta il progetto
+        Project project = new Project();
+        project.setId(projectId);
+        entity.setProject(project);
+
+        FieldConfiguration fieldConfiguration = fieldConfigurationRepository.save(entity);
+        return dtoMapper.toFieldConfigurationViewDto(fieldConfiguration);
+    }
+
     @Transactional(readOnly = true)
     public List<FieldConfigurationViewDto> getAllGlobalFieldConfigurations(Tenant tenant) {
 
         List<FieldConfiguration> configurations = fieldConfigurationRepository.findByTenantAndScope(tenant, ScopeType.TENANT);
+        return dtoMapper.toFieldConfigurationViewDtos(configurations);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FieldConfigurationViewDto> getAllProjectFieldConfigurations(Tenant tenant, Long projectId) {
+        List<FieldConfiguration> configurations = fieldConfigurationRepository.findByTenantAndProjectIdAndScope(tenant, projectId, ScopeType.PROJECT);
         return dtoMapper.toFieldConfigurationViewDtos(configurations);
     }
 

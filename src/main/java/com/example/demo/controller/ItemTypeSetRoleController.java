@@ -2,8 +2,6 @@ package com.example.demo.controller;
 
 import com.example.demo.dto.ItemTypeSetRoleDTO;
 import com.example.demo.dto.ItemTypeSetRoleCreateDTO;
-import com.example.demo.dto.ItemTypeSetRoleGrantCreateDTO;
-import com.example.demo.dto.ItemTypeSetRoleGrantDTO;
 import com.example.demo.entity.Tenant;
 import com.example.demo.enums.ItemTypeSetRoleType;
 import com.example.demo.security.CurrentTenant;
@@ -90,40 +88,7 @@ public class ItemTypeSetRoleController {
         }
     }
     
-    /**
-     * Assegna un grant a un ruolo specifico
-     */
-    @PostMapping("/assign-grant")
-    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
-    public ResponseEntity<ItemTypeSetRoleGrantDTO> assignGrantToRole(
-            @RequestBody ItemTypeSetRoleGrantCreateDTO createDTO,
-            @CurrentTenant Tenant tenant) {
-        try {
-            ItemTypeSetRoleGrantDTO result = itemTypeSetRoleService.assignGrantToRole(createDTO, tenant);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(null);
-        }
-    }
     
-    /**
-     * Rimuove un grant da un ruolo specifico
-     */
-    @DeleteMapping("/remove-grant")
-    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
-    public ResponseEntity<String> removeGrantFromRole(
-            @RequestParam Long roleId,
-            @RequestParam Long grantId,
-            @CurrentTenant Tenant tenant) {
-        try {
-            itemTypeSetRoleService.removeGrantFromRole(roleId, grantId, tenant);
-            return ResponseEntity.ok("Grant removed successfully from role");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error removing grant: " + e.getMessage());
-        }
-    }
     
     /**
      * Assegna un Grant diretto a un ruolo specifico

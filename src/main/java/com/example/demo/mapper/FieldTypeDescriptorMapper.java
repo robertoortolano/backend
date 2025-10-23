@@ -4,16 +4,14 @@ import com.example.demo.dto.FieldTypeDescriptorDto;
 import com.example.demo.enums.FieldType;
 import com.example.demo.fieldtype.FieldTypeDescriptor;
 import com.example.demo.fieldtype.FieldTypeRegistry;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.springframework.beans.factory.annotation.Autowired;
 
-@Component
-public class FieldTypeDescriptorMapper {
+@Mapper(componentModel = "spring")
+public abstract class FieldTypeDescriptorMapper {
 
-    private final FieldTypeRegistry registry;
-
-    public FieldTypeDescriptorMapper(FieldTypeRegistry registry) {
-        this.registry = registry;
-    }
+    @Autowired
+    protected FieldTypeRegistry registry;
 
     public FieldTypeDescriptorDto toDto(FieldType fieldType) {
         FieldTypeDescriptor desc = registry.getDescriptor(fieldType);

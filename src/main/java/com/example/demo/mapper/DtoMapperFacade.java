@@ -40,7 +40,6 @@ public class DtoMapperFacade {
     private final GroupSimpleMapper groupSimpleMapper;
     private final GroupMapper groupMapper;
     private final ItemTypeSetRoleMapper itemTypeSetRoleMapper;
-    private final ItemTypeSetRoleGrantMapper itemTypeSetRoleGrantMapper;
     private final TenantMapper tenantMapper;
     private final RoleMapper roleMapper;
     private final ProjectMemberMapper projectMemberMapper;
@@ -306,24 +305,6 @@ public class DtoMapperFacade {
         itemTypeSetRoleMapper.updateEntity(dto, entity);
     }
 
-    // ---------------------
-    // ItemTypeSetRoleGrant
-    // ---------------------
-    public ItemTypeSetRoleGrantDTO toItemTypeSetRoleGrantDTO(ItemTypeSetRoleGrant grant) {
-        return itemTypeSetRoleGrantMapper.toDTO(grant);
-    }
-
-    public List<ItemTypeSetRoleGrantDTO> toItemTypeSetRoleGrantDTOs(List<ItemTypeSetRoleGrant> grants) {
-        return itemTypeSetRoleGrantMapper.toDTOList(grants);
-    }
-
-    public Set<ItemTypeSetRoleGrantDTO> toItemTypeSetRoleGrantDTOSet(Set<ItemTypeSetRoleGrant> grants) {
-        return itemTypeSetRoleGrantMapper.toDTOSet(grants);
-    }
-
-    public ItemTypeSetRoleGrant toItemTypeSetRoleGrant(ItemTypeSetRoleGrantDTO dto) {
-        return itemTypeSetRoleGrantMapper.toEntity(dto);
-    }
 
     // ---------------------
     // Tenant

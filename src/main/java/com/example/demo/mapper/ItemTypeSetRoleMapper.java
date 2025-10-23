@@ -8,7 +8,7 @@ import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring", uses = {ItemTypeSetRoleGrantMapper.class})
+@Mapper(componentModel = "spring")
 public interface ItemTypeSetRoleMapper {
     
     @Mapping(target = "itemTypeSetId", source = "itemTypeSet.id")
@@ -17,7 +17,6 @@ public interface ItemTypeSetRoleMapper {
     @Mapping(target = "grantName", ignore = true)
     @Mapping(target = "roleTemplateId", source = "roleTemplate.id")
     @Mapping(target = "roleTemplateName", source = "roleTemplate.name")
-    @Mapping(target = "grants", source = "grants")
     ItemTypeSetRoleDTO toDTO(ItemTypeSetRole entity);
     
     List<ItemTypeSetRoleDTO> toDTOList(List<ItemTypeSetRole> entities);
@@ -26,7 +25,6 @@ public interface ItemTypeSetRoleMapper {
     @Mapping(target = "tenant", ignore = true)
     @Mapping(target = "grant", ignore = true)
     @Mapping(target = "roleTemplate", ignore = true)
-    @Mapping(target = "grants", ignore = true)
     ItemTypeSetRole toEntity(ItemTypeSetRoleDTO dto);
     
     @Mapping(target = "id", ignore = true)
@@ -34,6 +32,5 @@ public interface ItemTypeSetRoleMapper {
     @Mapping(target = "tenant", ignore = true)
     @Mapping(target = "grant", ignore = true)
     @Mapping(target = "roleTemplate", ignore = true)
-    @Mapping(target = "grants", ignore = true)
     void updateEntity(ItemTypeSetRoleDTO dto, @MappingTarget ItemTypeSetRole entity);
 }
