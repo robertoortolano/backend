@@ -42,3 +42,4 @@ public interface UserFavoriteProjectRepository extends JpaRepository<UserFavorit
     void deleteByUserIdAndProjectIdAndTenantId(Long userId, Long projectId, Long tenantId);
 }
 
+

@@ -36,13 +36,5 @@ public class ItemTypePermission {
     )
     private Set<Role> assignedRoles = new HashSet<>();
 
-    // Relazioni con grants (utenti/gruppi)
-    @ManyToMany
-    @JoinTable(
-            name = "itemtypepermission_grant",
-            joinColumns = @JoinColumn(name = "itemtypepermission_id"),
-            inverseJoinColumns = @JoinColumn(name = "grant_id")
-    )
-    private Set<Grant> assignedGrants = new HashSet<>();
 }
 

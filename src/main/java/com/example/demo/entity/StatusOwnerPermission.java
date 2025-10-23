@@ -36,13 +36,5 @@ public class StatusOwnerPermission {
     )
     private Set<Role> assignedRoles = new HashSet<>();
 
-    // Relazioni con grants (utenti/gruppi)
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-            name = "statusownerpermission_grant",
-            joinColumns = @JoinColumn(name = "statusownerpermission_id"),
-            inverseJoinColumns = @JoinColumn(name = "grant_id")
-    )
-    private Set<Grant> assignedGrants = new HashSet<>();
 }
 

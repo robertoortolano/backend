@@ -58,7 +58,6 @@ public class ItemTypePermissionService {
         WorkerPermission workerPermission = new WorkerPermission();
         workerPermission.setItemTypeConfiguration(itemTypeConfiguration);
         workerPermission.setAssignedRoles(new HashSet<>());
-        workerPermission.setAssignedGrants(new HashSet<>());
         
         workerPermissionRepository.save(workerPermission);
     }
@@ -82,7 +81,6 @@ public class ItemTypePermissionService {
                 permission.setItemTypeConfiguration(itemTypeConfiguration);
                 permission.setWorkflowStatus(workflowStatus);
                 permission.setAssignedRoles(new HashSet<>());
-                permission.setAssignedGrants(new HashSet<>());
                 
                 statusOwnerPermissionRepository.save(permission);
             }
@@ -105,7 +103,6 @@ public class ItemTypePermissionService {
                 permission.setItemTypeConfiguration(itemTypeConfiguration);
                 permission.setFieldConfiguration(fieldConfig);
                 permission.setAssignedRoles(new HashSet<>());
-                permission.setAssignedGrants(new HashSet<>());
                 
                 fieldOwnerPermissionRepository.save(permission);
             }
@@ -117,7 +114,6 @@ public class ItemTypePermissionService {
             CreatorPermission permission = new CreatorPermission();
             permission.setItemTypeConfiguration(itemTypeConfiguration);
             permission.setAssignedRoles(new HashSet<>());
-            permission.setAssignedGrants(new HashSet<>());
             
             creatorPermissionRepository.save(permission);
         }
@@ -140,7 +136,6 @@ public class ItemTypePermissionService {
                 permission.setItemTypeConfiguration(itemTypeConfiguration);
                 permission.setTransition(transition);
                 permission.setAssignedRoles(new HashSet<>());
-                permission.setAssignedGrants(new HashSet<>());
                 
                 executorPermissionRepository.save(permission);
             }
@@ -176,7 +171,6 @@ public class ItemTypePermissionService {
                     editorPerm.setWorkflowStatus(workflowStatus);
                     editorPerm.setPermissionType(FieldStatusPermission.PermissionType.EDITORS);
                     editorPerm.setAssignedRoles(new HashSet<>());
-                    editorPerm.setAssignedGrants(new HashSet<>());
                     
                     fieldStatusPermissionRepository.save(editorPerm);
                 }
@@ -192,7 +186,6 @@ public class ItemTypePermissionService {
                     viewerPerm.setWorkflowStatus(workflowStatus);
                     viewerPerm.setPermissionType(FieldStatusPermission.PermissionType.VIEWERS);
                     viewerPerm.setAssignedRoles(new HashSet<>());
-                    viewerPerm.setAssignedGrants(new HashSet<>());
                     
                     fieldStatusPermissionRepository.save(viewerPerm);
                 }

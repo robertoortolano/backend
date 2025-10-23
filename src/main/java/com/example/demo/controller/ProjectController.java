@@ -193,4 +193,24 @@ public class ProjectController {
     ) {
         return ResponseEntity.ok(projectService.isProjectFavorite(projectId, user, tenant));
     }
+
+    @PutMapping("/{projectId}/item-type-set")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_ADMIN')")
+    public ResponseEntity<ApiResponse> assignItemTypeSet(
+            @PathVariable Long projectId,
+            @RequestParam Long itemTypeSetId,
+            @CurrentTenant Tenant tenant,
+            @CurrentUser User user
+    ) {
+        projectService.assignItemTypeSet(tenant, projectId, itemTypeSetId, user);
+        return ResponseEntity.ok(new ApiResponse("ItemTypeSet assigned successfully", 200));
+    }
+
+    @GetMapping("/available-item-type-sets")
+    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    public ResponseEntity<List<ItemTypeSetViewDto>> getAvailableItemTypeSets(
+            @CurrentTenant Tenant tenant
+    ) {
+        return ResponseEntity.ok(itemTypeSetService.getAllGlobalItemTypeSets(tenant));
+    }
 }

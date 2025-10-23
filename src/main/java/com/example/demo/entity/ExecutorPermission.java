@@ -36,13 +36,5 @@ public class ExecutorPermission {
     )
     private Set<Role> assignedRoles = new HashSet<>();
 
-    // Relazioni con grants (utenti/gruppi)
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-            name = "executorpermission_grant",
-            joinColumns = @JoinColumn(name = "executorpermission_id"),
-            inverseJoinColumns = @JoinColumn(name = "grant_id")
-    )
-    private Set<Grant> assignedGrants = new HashSet<>();
 }
 

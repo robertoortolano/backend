@@ -14,3 +14,4 @@ public interface TenantMapper {
     List<TenantDTO> toDtoList(List<Tenant> tenants);
 }
 
+

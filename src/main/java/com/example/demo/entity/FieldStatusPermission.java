@@ -44,14 +44,6 @@ public class FieldStatusPermission {
     )
     private Set<Role> assignedRoles = new HashSet<>();
 
-    // Relazioni con grants (utenti/gruppi)
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-            name = "fieldstatuspermission_grant",
-            joinColumns = @JoinColumn(name = "fieldstatuspermission_id"),
-            inverseJoinColumns = @JoinColumn(name = "grant_id")
-    )
-    private Set<Grant> assignedGrants = new HashSet<>();
 
     public enum PermissionType {
         EDITORS,
