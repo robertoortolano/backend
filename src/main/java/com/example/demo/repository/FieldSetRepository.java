@@ -26,6 +26,13 @@ public interface FieldSetRepository extends JpaRepository<FieldSet, Long> {
     })
     List<FieldSet> findByTenantAndScope(Tenant tenant, ScopeType scope);
 
+    @EntityGraph(attributePaths = {
+            "fieldSetEntries",
+            "fieldSetEntries.fieldConfiguration",
+            "fieldSetEntries.fieldConfiguration.field"
+    })
+    List<FieldSet> findByTenantAndProjectIdAndScope(Tenant tenant, Long projectId, ScopeType scope);
+
     @Query("""
     SELECT DISTINCT fse.fieldSet
     FROM FieldSetEntry fse

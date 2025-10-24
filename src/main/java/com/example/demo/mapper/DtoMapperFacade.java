@@ -143,6 +143,10 @@ public class DtoMapperFacade {
         return fieldSetMapper.toViewDto(fieldSet);
     }
 
+    public List<FieldSetViewDto> toFieldSetViewDtos(List<FieldSet> fieldSets) {
+        return fieldSetMapper.toViewDtos(fieldSets);
+    }
+
     // ---------------------
     // Field Set Entry
     // ---------------------

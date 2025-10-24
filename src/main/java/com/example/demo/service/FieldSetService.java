@@ -23,6 +23,7 @@ public class FieldSetService {
 
     private final FieldSetRepository fieldSetRepository;
     private final FieldSetEntryRepository fieldSetEntryRepository;
+    private final ProjectRepository projectRepository;
 
     private final FieldConfigurationLookup fieldConfigurationLookup;
     private final ItemTypeConfigurationLookup itemTypeConfigurationLookup;
@@ -50,6 +51,7 @@ public class FieldSetService {
         fieldSet.setDescription(dto.description());
         fieldSet.setScope(scopeType);
         fieldSet.setTenant(tenant);
+        fieldSet.setProject(project);
         fieldSet.setDefaultFieldSet(false);
 
         List<FieldSetEntry> entries = new ArrayList<>();
@@ -229,11 +231,17 @@ public class FieldSetService {
         return fieldSetEntry.getFieldSet();
     }
 
-/*
     public FieldSetViewDto createProjectFieldSet(Tenant tenant, Long projectId, FieldSetCreateDto dto) {
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
-        return createFieldSet(dto, false, project);
+        FieldSet fieldSet = createFieldSet(dto, tenant, ScopeType.PROJECT, project);
+        return dtoMapper.toFieldSetViewDto(fieldSet);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FieldSetViewDto> getProjectFieldSets(Tenant tenant, Long projectId) {
+        List<FieldSet> fieldSets = fieldSetRepository.findByTenantAndProjectIdAndScope(tenant, projectId, ScopeType.PROJECT);
+        return dtoMapper.toFieldSetViewDtos(fieldSets);
     }
 
 
@@ -250,40 +258,4 @@ public class FieldSetService {
 
 
 
-    public FieldSet addConfigurationToFieldSet(Long fieldSetId, Long configurationId, int orderIndex) {
-        FieldSet fieldSet = fieldSetRepository.findById(fieldSetId)
-                .orElseThrow(() -> new ApiException(FIELDSET_NOT_FOUND));
-        FieldConfiguration configuration = fieldConfigurationRepository.findById(configurationId)
-                .orElseThrow(() -> new ApiException("FieldConfiguration non trovata"));
-
-        fieldSet.addConfiguration(configuration, orderIndex);
-        return fieldSetRepository.save(fieldSet);
-    }
-
-    public FieldSet removeConfigurationFromFieldSet(Long fieldSetId, Long configurationId) {
-        FieldSet fieldSet = fieldSetRepository.findById(fieldSetId)
-                .orElseThrow(() -> new ApiException(FIELDSET_NOT_FOUND));
-        FieldConfiguration configuration = fieldConfigurationRepository.findById(configurationId)
-                .orElseThrow(() -> new ApiException("FieldConfiguration non trovata"));
-
-        fieldSet.removeConfiguration(configuration);
-        return fieldSetRepository.save(fieldSet);
-    }
-
-    public FieldSet updateConfigurationsOrder(Long fieldSetId, List<Long> orderedConfigIds) {
-        FieldSet fieldSet = fieldSetRepository.findById(fieldSetId)
-                .orElseThrow(() -> new ApiException(FIELDSET_NOT_FOUND));
-
-        for (int i = 0; i < orderedConfigIds.size(); i++) {
-            final int orderIndex = i;
-            Long configId = orderedConfigIds.get(i);
-            fieldSet.getFieldSetConfigurations().stream()
-                    .filter(fsc -> fsc.getFieldConfiguration().getId().equals(configId))
-                    .findFirst()
-                    .ifPresent(fsc -> fsc.setOrderIndex(orderIndex));
-        }
-
-        return fieldSetRepository.save(fieldSet);
-    }
-    */
 }

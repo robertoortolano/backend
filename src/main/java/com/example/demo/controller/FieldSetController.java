@@ -99,6 +99,31 @@ public class FieldSetController {
         return ResponseEntity.noContent().build();
     }
 
+    // ========================
+    // PROJECT FIELD SETS
+    // ========================
+
+    // Get project field sets
+    @GetMapping("/project/{projectId}")
+    @PreAuthorize("@securityService.canCreateFieldSet(principal, #tenant, #projectId)")
+    public ResponseEntity<List<FieldSetViewDto>> getProjectFieldSets(
+            @PathVariable Long projectId,
+            @CurrentTenant Tenant tenant
+    ) {
+        return ResponseEntity.ok(fieldSetService.getProjectFieldSets(tenant, projectId));
+    }
+
+    // Create project field set
+    @PostMapping("/project/{projectId}")
+    @PreAuthorize("@securityService.canCreateFieldSet(principal, #tenant, #projectId)")
+    public ResponseEntity<FieldSetViewDto> createProjectFieldSet(
+            @PathVariable Long projectId,
+            @Valid @RequestBody FieldSetCreateDto dto,
+            @CurrentTenant Tenant tenant
+    ) {
+        FieldSetViewDto created = fieldSetService.createProjectFieldSet(tenant, projectId, dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
 
 }
 
