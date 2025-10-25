@@ -74,4 +74,14 @@ public class StatusController {
         return ResponseEntity.ok(dtos);
     }
 
+    @DeleteMapping("/{statusId}")
+    @PreAuthorize("@securityService.canEditStatus(principal, #tenant, #statusId)")
+    public ResponseEntity<Void> deleteStatus(
+            @PathVariable Long statusId,
+            @CurrentTenant Tenant tenant
+    ) {
+        statusService.deleteStatus(tenant, statusId);
+        return ResponseEntity.noContent().build();
+    }
+
 }

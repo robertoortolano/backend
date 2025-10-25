@@ -93,4 +93,15 @@ public class FieldConfigurationController {
         return ResponseEntity.ok(dto);
     }
 
+    @GetMapping("/project/{projectId}/{id}")
+    @PreAuthorize("@securityService.canCreateFieldConfiguration(principal, #tenant, #projectId)")
+    public ResponseEntity<FieldConfigurationViewDto> getProjectById(
+            @PathVariable Long projectId,
+            @PathVariable Long id,
+            @CurrentTenant Tenant tenant
+    ) {
+        var dto = fieldConfigurationService.getProjectFieldConfigurationById(tenant, projectId, id);
+        return ResponseEntity.ok(dto);
+    }
+
 }

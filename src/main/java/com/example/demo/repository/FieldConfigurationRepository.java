@@ -20,6 +20,7 @@ public interface FieldConfigurationRepository extends JpaRepository<FieldConfigu
     List<FieldConfiguration> findByTenantAndProjectIdAndScope(Tenant tenant, Long projectId, ScopeType scopeType);
 
     Optional<FieldConfiguration> findByIdAndTenant(Long id, Tenant tenant);
+    Optional<FieldConfiguration> findByIdAndTenantAndProjectIdAndScope(Long id, Tenant tenant, Long projectId, ScopeType scopeType);
 
     List<FieldConfiguration> findAllByIdInAndTenant(List<Long> configIds, Tenant tenant);
 

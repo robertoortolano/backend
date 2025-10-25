@@ -96,6 +96,13 @@ public class FieldConfigurationService {
         return dtoMapper.toFieldConfigurationViewDto(fieldConfigurationLookup.getById(id, tenant));
     }
 
+    @Transactional(readOnly = true)
+    public FieldConfigurationViewDto getProjectFieldConfigurationById(Tenant tenant, Long projectId, Long id) {
+        FieldConfiguration config = fieldConfigurationRepository.findByIdAndTenantAndProjectIdAndScope(id, tenant, projectId, ScopeType.PROJECT)
+                .orElseThrow(() -> new ApiException(FIELDCONFIGURATION_NOT_FOUND));
+        return dtoMapper.toFieldConfigurationViewDto(config);
+    }
+
     public FieldConfigurationViewDto updateConfiguration(Tenant tenant, Long id, FieldConfigurationUpdateDto dto) {
         FieldConfiguration config = fieldConfigurationRepository.findByIdAndTenant(id, tenant)
                 .orElseThrow(() -> new ApiException(FIELDCONFIGURATION_NOT_FOUND));

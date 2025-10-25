@@ -90,4 +90,21 @@ public class StatusService {
                 .toList();
     }
 
+    public void deleteStatus(Tenant tenant, Long statusId) {
+        Status status = statusRepository.findByIdAndTenant(statusId, tenant)
+                .orElseThrow(() -> new ApiException("Status not found"));
+
+        if (status.isDefaultStatus()) {
+            throw new ApiException("Default status cannot be deleted");
+        }
+
+        // Check if status is used in any workflow
+        List<Workflow> workflows = workflowStatusLookup.getDistinctWorkflowsByStatus(status, tenant);
+        if (!workflows.isEmpty()) {
+            throw new ApiException("Status is used in workflows and cannot be deleted");
+        }
+
+        statusRepository.delete(status);
+    }
+
 }
