@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -26,6 +28,13 @@ public class ItemTypeSetLookup {
     public ItemTypeSet getById(Tenant tenant, Long id) {
         return itemTypeSetRepository.findByIdAndTenant(id, tenant)
                 .orElseThrow(() -> new ApiException(ITEMTYPESET_NOT_FOUND));
+    }
+
+    /**
+     * Trova tutti gli ItemTypeSet che usano un FieldSet specifico
+     */
+    public List<ItemTypeSet> findByFieldSetId(Long fieldSetId, Tenant tenant) {
+        return itemTypeSetRepository.findByItemTypeConfigurationsFieldSetIdAndTenant(fieldSetId, tenant);
     }
 
 }

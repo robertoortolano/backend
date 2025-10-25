@@ -41,6 +41,6 @@ public class ItemTypeConfigurationService {
 
     @Transactional(readOnly = true)
     public boolean isItemTypeConfigurationInAnyFieldSet(Long fieldSetId, Tenant tenant) {
-        return !itemTypeConfigurationRepository.existsByFieldSetIdAndFieldSetTenantId(fieldSetId, tenant.getId());
+        return itemTypeConfigurationRepository.existsByFieldSetIdAndFieldSetTenantId(fieldSetId, tenant.getId());
     }
 }

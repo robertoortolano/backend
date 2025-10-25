@@ -12,4 +12,12 @@ public interface FieldOwnerPermissionRepository extends JpaRepository<FieldOwner
     List<FieldOwnerPermission> findByItemTypeConfigurationId(Long itemTypeConfigurationId);
     List<FieldOwnerPermission> findAllByItemTypeConfiguration(ItemTypeConfiguration itemTypeConfiguration);
     boolean existsByItemTypeConfigurationIdAndFieldConfigurationId(Long itemTypeConfigurationId, Long fieldConfigurationId);
+    
+    /**
+     * Trova FieldOwnerPermission per ItemTypeConfiguration e FieldConfiguration
+     */
+    FieldOwnerPermission findByItemTypeConfigurationAndFieldConfigurationId(
+        ItemTypeConfiguration config, 
+        Long fieldConfigId
+    );
 }

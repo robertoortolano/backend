@@ -40,12 +40,20 @@ public interface ItemTypeConfigurationRepository extends JpaRepository<ItemTypeC
             @Param("tenantId") Long tenantId
     );
 
-    boolean existsByItemTypeIdAndProjectTenantId(Long itemTypeId, Long tenantId);
+    @Query("SELECT COUNT(itc) > 0 FROM ItemTypeConfiguration itc WHERE itc.itemType.id = :itemTypeId AND itc.tenant.id = :tenantId")
+    boolean existsByItemTypeIdAndProjectTenantId(@Param("itemTypeId") Long itemTypeId, @Param("tenantId") Long tenantId);
 
     ItemTypeConfiguration findByIdAndTenant(Long itemTypeId, Tenant tenant);
 
-    boolean existsByFieldSetIdAndFieldSetTenantId(Long fieldSetId, Long tenantId);
+    @Query("SELECT COUNT(itc) > 0 FROM ItemTypeConfiguration itc WHERE itc.fieldSet.id = :fieldSetId AND itc.tenant.id = :tenantId")
+    boolean existsByFieldSetIdAndFieldSetTenantId(@Param("fieldSetId") Long fieldSetId, @Param("tenantId") Long tenantId);
 
-    boolean existsByWorkflowIdAndWorkflowTenantId(Long workflowId, Long tenantId);
+    @Query("SELECT COUNT(itc) > 0 FROM ItemTypeConfiguration itc WHERE itc.workflow.id = :workflowId AND itc.tenant.id = :tenantId")
+    boolean existsByWorkflowIdAndWorkflowTenantId(@Param("workflowId") Long workflowId, @Param("tenantId") Long tenantId);
+
+    List<ItemTypeConfiguration> findByItemTypeIdAndTenant(Long itemTypeId, Tenant tenant);
+
+    @Query("SELECT itc FROM ItemTypeConfiguration itc WHERE itc.workflow.id = :workflowId AND itc.tenant.id = :tenantId")
+    List<ItemTypeConfiguration> findByWorkflowIdAndTenant(@Param("workflowId") Long workflowId, @Param("tenantId") Long tenantId);
 
 }

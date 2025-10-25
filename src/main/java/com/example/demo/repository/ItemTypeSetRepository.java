@@ -57,6 +57,34 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
 
     boolean existsByItemTypeConfigurations_IdAndTenant_Id(Long itemTypeConfigurationId, Long tenantId);
 
+    /**
+     * Trova tutti gli ItemTypeSet che usano un FieldSet specifico
+     */
+    @Query("""
+        SELECT DISTINCT its FROM ItemTypeSet its
+        JOIN its.itemTypeConfigurations itc
+        WHERE itc.fieldSet.id = :fieldSetId 
+        AND its.tenant = :tenant
+    """)
+    List<ItemTypeSet> findByItemTypeConfigurationsFieldSetIdAndTenant(
+        @Param("fieldSetId") Long fieldSetId, 
+        @Param("tenant") Tenant tenant
+    );
+
+    /**
+     * Trova tutti gli ItemTypeSet che usano un Workflow specifico
+     */
+    @Query("""
+        SELECT DISTINCT its FROM ItemTypeSet its
+        JOIN its.itemTypeConfigurations itc
+        WHERE itc.workflow.id = :workflowId 
+        AND its.tenant = :tenant
+    """)
+    List<ItemTypeSet> findByItemTypeConfigurationsWorkflowIdAndTenant(
+        @Param("workflowId") Long workflowId, 
+        @Param("tenant") Tenant tenant
+    );
+
     void deleteByIdAndTenant(Long id, Tenant tenant);
 
     @Query("""

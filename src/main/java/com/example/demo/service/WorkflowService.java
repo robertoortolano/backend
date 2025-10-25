@@ -24,9 +24,11 @@ public class WorkflowService {
     private final WorkflowNodeRepository workflowNodeRepository;
     private final TransitionRepository transitionRepository;
     private final WorkflowEdgeRepository workflowEdgeRepository;
+    private final ItemTypeSetRepository itemTypeSetRepository;
     private final StatusLookup statusLookup;
     private final WorkflowLookup workflowLookup;
     private final DtoMapperFacade dtoMapper;
+    private final ItemTypeConfigurationLookup itemTypeConfigurationLookup;
 
     @Transactional
     public WorkflowViewDto createGlobal(WorkflowCreateDto dto, Tenant tenant) {
@@ -319,6 +321,14 @@ public class WorkflowService {
             throw new ApiException("Workflow is used in an ItemType and cannot be deleted");
         }
         workflowRepository.delete(workflow);
+    }
+
+    @Transactional(readOnly = true)
+    public WorkflowDetailDto getWorkflowDetail(Long workflowId, Tenant tenant) {
+        Workflow workflow = workflowLookup.getByIdEntity(tenant, workflowId);
+        List<ItemTypeSet> itemTypeSets = itemTypeSetRepository.findByItemTypeConfigurationsWorkflowIdAndTenant(workflowId, tenant);
+        
+        return dtoMapper.toWorkflowDetailDto(workflow, itemTypeSets);
     }
 
     // --- Helpers comuni ---

@@ -1,8 +1,10 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.ItemTypeCreateDto;
+import com.example.demo.dto.ItemTypeDetailDto;
 import com.example.demo.dto.ItemTypeViewDto;
 import com.example.demo.entity.ItemType;
+import com.example.demo.entity.ItemTypeConfiguration;
 import com.example.demo.entity.Tenant;
 import com.example.demo.exception.ApiException;
 import com.example.demo.mapper.DtoMapperFacade;
@@ -23,6 +25,10 @@ public class ItemTypeService {
     private final ItemTypeLookup itemTypeLookup;
 
     private final DtoMapperFacade dtoMapper;
+    
+    private final ItemTypeConfigurationService itemTypeConfigurationService;
+    
+    private final ItemTypeConfigurationLookup itemTypeConfigurationLookup;
 
 
     @Transactional(readOnly = true)
@@ -91,8 +97,22 @@ public class ItemTypeService {
         if (itemType.isDefaultItemType()) {
             throw new ApiException("Default Item Type cannot be deleted");
         }
+        
+        if (itemTypeConfigurationService.isItemTypeInAnyItemTypeConfiguration(tenant, itemTypeId)) {
+            throw new ApiException("Item Type is used in an ItemTypeSet and cannot be deleted");
+        }
 
-            itemTypeRepository.deleteByIdAndTenant(itemTypeId, tenant);
+        itemTypeRepository.deleteByIdAndTenant(itemTypeId, tenant);
+    }
+
+    @Transactional(readOnly = true)
+    public ItemTypeDetailDto getItemTypeDetail(Long itemTypeId, Tenant tenant) {
+        ItemType itemType = itemTypeRepository.findByIdAndTenant(itemTypeId, tenant)
+                .orElseThrow(() -> new ApiException("Item Type not found"));
+
+        List<ItemTypeConfiguration> configs = itemTypeConfigurationLookup.getAllByItemType(itemTypeId, tenant);
+
+        return dtoMapper.toItemTypeDetailDto(itemType, configs);
     }
 
 

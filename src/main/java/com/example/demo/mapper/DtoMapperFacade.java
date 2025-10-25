@@ -88,6 +88,10 @@ public class DtoMapperFacade {
         itemTypeMapper.updateItemTypeFromDto(dto, entity);
     }
 
+    public ItemTypeDetailDto toItemTypeDetailDto(ItemType itemType, List<ItemTypeConfiguration> itemTypeConfigurations) {
+        return itemTypeMapper.toDetailDto(itemType, itemTypeConfigurations);
+    }
+
 
     // ---------------------
     // Status
@@ -227,6 +231,10 @@ public class DtoMapperFacade {
     }
     public List<WorkflowViewDto> toWorkflowViewDtos (List<Workflow> workflows) {
         return workflowMapper.toViewDtos(workflows);
+    }
+
+    public WorkflowDetailDto toWorkflowDetailDto(Workflow workflow, List<ItemTypeSet> usedInItemTypeSets) {
+        return workflowMapper.toDetailDto(workflow, usedInItemTypeSets);
     }
 
     // ---------------------

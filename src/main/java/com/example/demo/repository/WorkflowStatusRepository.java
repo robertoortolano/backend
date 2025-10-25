@@ -40,4 +40,9 @@ public interface WorkflowStatusRepository extends JpaRepository<WorkflowStatus, 
     """)
     List<WorkflowStatus> findAllByWorkflowId(@Param("workflowId") Long workflowId);
 
+    /**
+     * Trova tutti gli WorkflowStatus di un Workflow
+     */
+    List<WorkflowStatus> findByWorkflow(Workflow workflow);
+
 }

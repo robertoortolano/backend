@@ -87,13 +87,6 @@ public class SecurityServiceFacade {
         boolean hasTenantAdmin = tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN");
         boolean hasProjectAdmin = projectId != null && projectSecurityService.hasProjectRole(user, tenant, projectId, "ADMIN");
         
-        System.out.println("DEBUG canCreateFieldConfiguration:");
-        System.out.println("  User: " + user.getUsername());
-        System.out.println("  Tenant: " + tenant.getId());
-        System.out.println("  ProjectId: " + projectId);
-        System.out.println("  hasTenantAdmin: " + hasTenantAdmin);
-        System.out.println("  hasProjectAdmin: " + hasProjectAdmin);
-        
         return hasTenantAdmin || hasProjectAdmin;
     }
 

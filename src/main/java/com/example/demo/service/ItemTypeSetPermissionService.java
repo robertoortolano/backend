@@ -96,7 +96,7 @@ public class ItemTypeSetPermissionService {
             for (StatusOwnerPermission perm : permissions) {
                 Map<String, Object> statusOwner = new HashMap<>();
                 statusOwner.put("id", perm.getId());
-                statusOwner.put("name", "StatusOwners");
+                statusOwner.put("name", "Status Owners");
                 Map<String, Object> workflowStatusMap = new HashMap<>();
                 workflowStatusMap.put("id", perm.getWorkflowStatus().getId());
                 workflowStatusMap.put("name", perm.getWorkflowStatus().getStatus().getName());
@@ -142,7 +142,7 @@ public class ItemTypeSetPermissionService {
             for (FieldOwnerPermission perm : permissions) {
                 Map<String, Object> fieldOwner = new HashMap<>();
                 fieldOwner.put("id", perm.getId());
-                fieldOwner.put("name", "FieldOwners");
+                fieldOwner.put("name", "Field Owners");
                 Map<String, Object> fieldConfigMap = new HashMap<>();
                 fieldConfigMap.put("id", perm.getFieldConfiguration().getId());
                 fieldConfigMap.put("name", perm.getFieldConfiguration().getField() != null ? 

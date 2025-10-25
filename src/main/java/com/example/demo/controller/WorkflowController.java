@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.WorkflowCreateDto;
+import com.example.demo.dto.WorkflowDetailDto;
 import com.example.demo.dto.WorkflowViewDto;
 import com.example.demo.dto.WorkflowUpdateDto;
 import com.example.demo.entity.Tenant;
@@ -80,5 +81,15 @@ public class WorkflowController {
     ) {
         workflowService.delete(tenant, id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/details")
+    @PreAuthorize("@securityService.canCreateWorkflow(principal, #tenant, null)")
+    public ResponseEntity<WorkflowDetailDto> getWorkflowDetails(
+            @PathVariable Long id,
+            @CurrentTenant Tenant tenant
+    ) {
+        WorkflowDetailDto dto = workflowService.getWorkflowDetail(id, tenant);
+        return ResponseEntity.ok(dto);
     }
 }

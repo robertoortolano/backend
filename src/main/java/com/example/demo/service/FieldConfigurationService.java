@@ -146,6 +146,10 @@ public class FieldConfigurationService {
                 .orElseThrow(() -> new ApiException("FieldConfiguration not found with id: " + id));
 
         if (fieldConfiguration.isDefaultFieldConfiguration()) throw new ApiException("Default Field Configuration cannot be deleted");
+        
+        if (isFieldConfigurationInAnyFieldSet(id, tenant)) {
+            throw new ApiException("Field Configuration is used in a Field Set and cannot be deleted");
+        }
 
         fieldConfigurationRepository.deleteByIdAndTenant(id, tenant);
     }

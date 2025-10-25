@@ -1,7 +1,9 @@
 package com.example.demo.repository;
 
+import com.example.demo.entity.FieldConfiguration;
 import com.example.demo.entity.FieldStatusPermission;
 import com.example.demo.entity.ItemTypeConfiguration;
+import com.example.demo.entity.WorkflowStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -17,5 +19,15 @@ public interface FieldStatusPermissionRepository extends JpaRepository<FieldStat
             Long fieldConfigurationId, 
             Long workflowStatusId, 
             FieldStatusPermission.PermissionType permissionType
+    );
+    
+    /**
+     * Trova FieldStatusPermission per ItemTypeConfiguration, FieldConfiguration, WorkflowStatus e PermissionType
+     */
+    FieldStatusPermission findByItemTypeConfigurationAndFieldConfigurationAndWorkflowStatusAndPermissionType(
+        ItemTypeConfiguration config,
+        FieldConfiguration fieldConfig,
+        WorkflowStatus workflowStatus,
+        FieldStatusPermission.PermissionType permissionType
     );
 }

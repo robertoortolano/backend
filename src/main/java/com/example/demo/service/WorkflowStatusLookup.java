@@ -29,4 +29,11 @@ public class WorkflowStatusLookup {
         if (!workflowStatus.getStatus().getTenant().equals(tenant)) throw new ApiException("Illegal tenant");
         return workflowStatus;
     }
+
+    /**
+     * Trova tutti gli WorkflowStatus di un Workflow
+     */
+    public List<WorkflowStatus> findAllByWorkflow(Workflow workflow) {
+        return workflowStatusRepository.findByWorkflow(workflow);
+    }
 }

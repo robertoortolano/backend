@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.ItemTypeCreateDto;
+import com.example.demo.dto.ItemTypeDetailDto;
 import com.example.demo.dto.ItemTypeViewDto;
 import com.example.demo.entity.Tenant;
 import com.example.demo.security.CurrentTenant;
@@ -63,6 +64,16 @@ public class ItemTypeController {
             @CurrentTenant Tenant tenant
     ) {
         ItemTypeViewDto dto = itemTypeService.getById(tenant, itemTypeId);
+        return ResponseEntity.ok(dto);
+    }
+
+    @GetMapping("/{itemTypeId}/details")
+    @PreAuthorize("@securityService.canCreateItemType(principal, #tenant)")
+    public ResponseEntity<ItemTypeDetailDto> getItemTypeDetails(
+            @PathVariable Long itemTypeId,
+            @CurrentTenant Tenant tenant
+    ) {
+        ItemTypeDetailDto dto = itemTypeService.getItemTypeDetail(itemTypeId, tenant);
         return ResponseEntity.ok(dto);
     }
 
