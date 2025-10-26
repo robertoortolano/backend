@@ -10,3 +10,6 @@ public record ItemTypeDetailDto(
         List<ItemTypeConfigurationViewDto> itemTypeConfigurations
 ) {}
 
+
+
+

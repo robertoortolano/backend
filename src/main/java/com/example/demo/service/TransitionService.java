@@ -9,6 +9,7 @@ import com.example.demo.entity.WorkflowStatus;
 import com.example.demo.exception.ApiException;
 import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.repository.TransitionRepository;
+import com.example.demo.service.WorkflowService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ public class TransitionService {
 
     private final StatusLookup statusLookup;
     private final WorkflowStatusLookup workflowStatusLookup;
+    private final WorkflowService workflowService;
 
     private final DtoMapperFacade dtoMapper;
 
@@ -82,6 +84,10 @@ public class TransitionService {
             throw new ApiException("Illegal Tenant");
         }
 
+        // Prima rimuovi le ExecutorPermissions associate
+        workflowService.removeExecutorPermissionsForTransition(tenant, id);
+        
+        // Poi elimina la Transition
         transitionRepository.deleteById(id);
     }
 }

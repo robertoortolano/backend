@@ -410,17 +410,27 @@ public class FieldSetService {
                 .orElseThrow(() -> new ApiException(FIELDSET_NOT_FOUND + ": " + fieldSetId));
 
         // Trova tutti gli ItemTypeSet che usano questo FieldSet
-        List<ItemTypeSet> affectedItemTypeSets = findItemTypeSetsUsingFieldSet(fieldSetId, tenant);
+        List<ItemTypeSet> allItemTypeSetsUsingFieldSet = findItemTypeSetsUsingFieldSet(fieldSetId, tenant);
         
         // Analizza le permissions che verranno rimosse
         List<FieldSetRemovalImpactDto.PermissionImpact> fieldOwnerPermissions = 
-                analyzeFieldOwnerPermissionImpacts(affectedItemTypeSets, removedFieldConfigIds);
+                analyzeFieldOwnerPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldConfigIds);
         
         List<FieldSetRemovalImpactDto.PermissionImpact> fieldStatusPermissions = 
-                analyzeFieldStatusPermissionImpacts(affectedItemTypeSets, removedFieldConfigIds);
+                analyzeFieldStatusPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldConfigIds);
         
         List<FieldSetRemovalImpactDto.PermissionImpact> itemTypeSetRoles = 
-                analyzeItemTypeSetRoleImpacts(affectedItemTypeSets, removedFieldConfigIds);
+                analyzeItemTypeSetRoleImpacts(allItemTypeSetsUsingFieldSet, removedFieldConfigIds);
+        
+        // Calcola solo gli ItemTypeSet che hanno effettivamente impatti (permissions con ruoli assegnati)
+        Set<Long> itemTypeSetIdsWithImpact = new HashSet<>();
+        fieldOwnerPermissions.forEach(p -> itemTypeSetIdsWithImpact.add(p.getItemTypeSetId()));
+        fieldStatusPermissions.forEach(p -> itemTypeSetIdsWithImpact.add(p.getItemTypeSetId()));
+        itemTypeSetRoles.forEach(p -> itemTypeSetIdsWithImpact.add(p.getItemTypeSetId()));
+        
+        List<ItemTypeSet> affectedItemTypeSets = allItemTypeSetsUsingFieldSet.stream()
+                .filter(its -> itemTypeSetIdsWithImpact.contains(its.getId()))
+                .collect(Collectors.toList());
         
         // Calcola statistiche
         int totalGrantAssignments = fieldOwnerPermissions.stream()
@@ -444,7 +454,7 @@ public class FieldSetService {
                 .fieldOwnerPermissions(fieldOwnerPermissions)
                 .fieldStatusPermissions(fieldStatusPermissions)
                 .itemTypeSetRoles(itemTypeSetRoles)
-                .totalAffectedItemTypeSets(affectedItemTypeSets.size())
+                .totalAffectedItemTypeSets(affectedItemTypeSets.size()) // Solo quelli con impatti effettivi
                 .totalFieldOwnerPermissions(fieldOwnerPermissions.size())
                 .totalFieldStatusPermissions(fieldStatusPermissions.size())
                 .totalItemTypeSetRoles(itemTypeSetRoles.size())
@@ -519,18 +529,21 @@ public class FieldSetService {
                                         .collect(Collectors.toList())
                                 : new ArrayList<>();
                         
-                        impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
-                                .permissionId(permission.getId())
-                                .permissionType("FIELD_OWNERS")
-                                .itemTypeSetId(itemTypeSet.getId())
-                                .itemTypeSetName(itemTypeSet.getName())
-                                .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
-                                .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
-                                .fieldConfigurationId(fieldConfigId)
-                                .fieldConfigurationName(fieldConfig.getName())
-                                .assignedRoles(assignedRoles)
-                                .hasAssignments(!assignedRoles.isEmpty())
-                                .build());
+                        // Solo se ha ruoli assegnati
+                        if (!assignedRoles.isEmpty()) {
+                            impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
+                                    .permissionId(permission.getId())
+                                    .permissionType("FIELD_OWNERS")
+                                    .itemTypeSetId(itemTypeSet.getId())
+                                    .itemTypeSetName(itemTypeSet.getName())
+                                    .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
+                                    .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
+                                    .fieldConfigurationId(fieldConfigId)
+                                    .fieldConfigurationName(fieldConfig.getName())
+                                    .assignedRoles(assignedRoles)
+                                    .hasAssignments(true)
+                                    .build());
+                        }
                     }
                 }
             }
@@ -564,20 +577,23 @@ public class FieldSetService {
                                             .collect(Collectors.toList())
                                     : new ArrayList<>();
                             
-                            impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
-                                    .permissionId(editorsPermission.getId())
-                                    .permissionType("EDITORS")
-                                    .itemTypeSetId(itemTypeSet.getId())
-                                    .itemTypeSetName(itemTypeSet.getName())
-                                    .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
-                                    .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
-                                    .fieldConfigurationId(fieldConfigId)
-                                    .fieldConfigurationName(fieldConfig.getName())
-                                    .workflowStatusId(workflowStatus.getId())
-                                    .workflowStatusName(workflowStatus.getStatus().getName())
-                                    .assignedRoles(assignedRoles)
-                                    .hasAssignments(!assignedRoles.isEmpty())
-                                    .build());
+                            // Solo se ha ruoli assegnati
+                            if (!assignedRoles.isEmpty()) {
+                                impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
+                                        .permissionId(editorsPermission.getId())
+                                        .permissionType("EDITORS")
+                                        .itemTypeSetId(itemTypeSet.getId())
+                                        .itemTypeSetName(itemTypeSet.getName())
+                                        .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
+                                        .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
+                                        .fieldConfigurationId(fieldConfigId)
+                                        .fieldConfigurationName(fieldConfig.getName())
+                                        .workflowStatusId(workflowStatus.getId())
+                                        .workflowStatusName(workflowStatus.getStatus().getName())
+                                        .assignedRoles(assignedRoles)
+                                        .hasAssignments(true)
+                                        .build());
+                            }
                         }
                         
                         // Controlla VIEWERS permission
@@ -592,20 +608,23 @@ public class FieldSetService {
                                             .collect(Collectors.toList())
                                     : new ArrayList<>();
                             
-                            impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
-                                    .permissionId(viewersPermission.getId())
-                                    .permissionType("VIEWERS")
-                                    .itemTypeSetId(itemTypeSet.getId())
-                                    .itemTypeSetName(itemTypeSet.getName())
-                                    .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
-                                    .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
-                                    .fieldConfigurationId(fieldConfigId)
-                                    .fieldConfigurationName(fieldConfig.getName())
-                                    .workflowStatusId(workflowStatus.getId())
-                                    .workflowStatusName(workflowStatus.getStatus().getName())
-                                    .assignedRoles(assignedRoles)
-                                    .hasAssignments(!assignedRoles.isEmpty())
-                                    .build());
+                            // Solo se ha ruoli assegnati
+                            if (!assignedRoles.isEmpty()) {
+                                impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
+                                        .permissionId(viewersPermission.getId())
+                                        .permissionType("VIEWERS")
+                                        .itemTypeSetId(itemTypeSet.getId())
+                                        .itemTypeSetName(itemTypeSet.getName())
+                                        .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
+                                        .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
+                                        .fieldConfigurationId(fieldConfigId)
+                                        .fieldConfigurationName(fieldConfig.getName())
+                                        .workflowStatusId(workflowStatus.getId())
+                                        .workflowStatusName(workflowStatus.getStatus().getName())
+                                        .assignedRoles(assignedRoles)
+                                        .hasAssignments(true)
+                                        .build());
+                            }
                         }
                     }
                 }

@@ -287,7 +287,7 @@ public class SecurityServiceFacade {
                 );
     }
 
-    public boolean canEditItemWorkflow(Object principal, Tenant tenant, Long workflowId) {
+    public boolean canEditWorkflow(Object principal, Tenant tenant, Long workflowId) {
         User user = extractUser(principal);
 
         Workflow workflow = workflowLookup.getByIdEntity(tenant, workflowId);
