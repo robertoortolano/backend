@@ -36,7 +36,7 @@ public interface WorkflowMapper {
         return itemTypeSets.stream()
                 .map(itemTypeSet -> new ItemTypeConfigurationViewDto(
                         itemTypeSet.getId(), // Usiamo l'ID dell'ItemTypeSet
-                        new ItemTypeViewDto(itemTypeSet.getId(), itemTypeSet.getName(), itemTypeSet.isDefaultItemTypeSet()),
+                        new ItemTypeViewDto(itemTypeSet.getId(), itemTypeSet.getName(), null, itemTypeSet.isDefaultItemTypeSet()),
                         null, // category - non necessario per il popup
                         false, // defaultItemTypeConfiguration - non necessario per il popup
                         null, // scope - non necessario per il popup

@@ -12,4 +12,5 @@ public interface ExecutorPermissionRepository extends JpaRepository<ExecutorPerm
     List<ExecutorPermission> findByItemTypeConfigurationId(Long itemTypeConfigurationId);
     List<ExecutorPermission> findAllByItemTypeConfiguration(ItemTypeConfiguration itemTypeConfiguration);
     boolean existsByItemTypeConfigurationIdAndTransitionId(Long itemTypeConfigurationId, Long transitionId);
+    ExecutorPermission findByItemTypeConfigurationAndTransitionId(ItemTypeConfiguration itemTypeConfiguration, Long transitionId);
 }

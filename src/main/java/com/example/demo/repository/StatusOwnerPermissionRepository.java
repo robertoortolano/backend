@@ -12,4 +12,5 @@ public interface StatusOwnerPermissionRepository extends JpaRepository<StatusOwn
     List<StatusOwnerPermission> findByItemTypeConfigurationId(Long itemTypeConfigurationId);
     List<StatusOwnerPermission> findAllByItemTypeConfiguration(ItemTypeConfiguration itemTypeConfiguration);
     boolean existsByItemTypeConfigurationIdAndWorkflowStatusId(Long itemTypeConfigurationId, Long workflowStatusId);
+    StatusOwnerPermission findByItemTypeConfigurationAndWorkflowStatusId(ItemTypeConfiguration itemTypeConfiguration, Long workflowStatusId);
 }

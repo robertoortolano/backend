@@ -9,3 +9,4 @@ public record ItemTypeDetailDto(
         boolean defaultItemType,
         List<ItemTypeConfigurationViewDto> itemTypeConfigurations
 ) {}
+

@@ -37,4 +37,11 @@ public class ItemTypeSetLookup {
         return itemTypeSetRepository.findByItemTypeConfigurationsFieldSetIdAndTenant(fieldSetId, tenant);
     }
 
+    /**
+     * Trova tutti gli ItemTypeSet che usano un Workflow specifico
+     */
+    public List<ItemTypeSet> findByWorkflowId(Long workflowId, Tenant tenant) {
+        return itemTypeSetRepository.findByItemTypeConfigurationsWorkflowIdAndTenant(workflowId, tenant);
+    }
+
 }

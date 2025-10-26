@@ -20,6 +20,8 @@ public class ItemType {
 
     private String name;
 
+    private String description;
+
     @Builder.Default
     @Column(nullable = false)
     private boolean defaultItemType = false;

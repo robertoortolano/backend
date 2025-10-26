@@ -29,6 +29,10 @@ public class WorkflowService {
     private final WorkflowLookup workflowLookup;
     private final DtoMapperFacade dtoMapper;
     private final ItemTypeConfigurationLookup itemTypeConfigurationLookup;
+    private final ItemTypeSetLookup itemTypeSetLookup;
+    private final StatusOwnerPermissionRepository statusOwnerPermissionRepository;
+    private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
+    private final ExecutorPermissionRepository executorPermissionRepository;
 
     @Transactional
     public WorkflowViewDto createGlobal(WorkflowCreateDto dto, Tenant tenant) {
@@ -140,6 +144,8 @@ public class WorkflowService {
 
     @Transactional
     public WorkflowViewDto updateWorkflow(Long workflowId, WorkflowUpdateDto dto, Tenant tenant) {
+        System.out.println("DEBUG: updateWorkflow called for workflowId=" + workflowId);
+        
         Workflow workflow = workflowRepository.findById(workflowId)
                 .orElseThrow(() -> new ApiException("Workflow not found: " + workflowId));
 
@@ -153,8 +159,16 @@ public class WorkflowService {
         // ========================
         // WORKFLOW STATUSES
         // ========================
+        // Mappa per Status ID -> WorkflowStatus (per il processing)
         Map<Long, WorkflowStatus> existingStatusMap = workflow.getStatuses().stream()
                 .collect(Collectors.toMap(ws -> ws.getStatus().getId(), ws -> ws));
+
+        // Mappa per WorkflowStatus ID -> WorkflowStatus (per identificare i nuovi)
+        Map<Long, WorkflowStatus> existingWorkflowStatusMap = workflow.getStatuses().stream()
+                .collect(Collectors.toMap(ws -> ws.getId(), ws -> ws));
+
+        // Cattura gli ID dei WorkflowStatus esistenti per identificare i nuovi
+        Set<Long> existingStatusIds = existingWorkflowStatusMap.keySet();
 
         Map<Long, WorkflowStatus> updatedStatusMap = new HashMap<>();
 
@@ -178,6 +192,10 @@ public class WorkflowService {
         }
         workflow.getStatuses().clear();
         workflow.getStatuses().addAll(updatedStatusMap.values());
+
+        // Gestisce le permissions per i nuovi WorkflowStatus aggiunti (DOPO l'aggiornamento)
+        System.out.println("DEBUG: About to call handlePermissionsForNewWorkflowStatuses");
+        handlePermissionsForNewWorkflowStatuses(tenant, workflow, existingStatusIds);
 
         // ========================
         // WORKFLOW NODES
@@ -252,6 +270,9 @@ public class WorkflowService {
 
         workflow.getTransitions().clear();
         workflow.getTransitions().addAll(transitionMapById.values());
+
+        // Gestisce le permissions per le nuove Transition aggiunte
+        handlePermissionsForNewTransitions(tenant, workflow, existingTransitions.keySet());
 
         // ========================
         // WORKFLOW EDGES
@@ -460,6 +481,229 @@ public class WorkflowService {
         workflow.setScope(scope);
         workflow.setName(dto.name());
         return workflow;
+    }
+
+    /**
+     * Gestisce le permissions per i nuovi WorkflowStatus aggiunti al Workflow
+     */
+    private void handlePermissionsForNewWorkflowStatuses(
+            Tenant tenant, 
+            Workflow workflow, 
+            Set<Long> existingStatusIds
+    ) {
+        // Debug: log degli status esistenti
+        System.out.println("DEBUG: existingStatusIds = " + existingStatusIds);
+        
+        // Trova i nuovi WorkflowStatus aggiunti
+        Set<Long> newStatusIds = workflow.getStatuses().stream()
+                .map(ws -> ws.getId())
+                .filter(id -> !existingStatusIds.contains(id))
+                .collect(Collectors.toSet());
+        
+        // Debug: log dei nuovi status
+        System.out.println("DEBUG: newStatusIds = " + newStatusIds);
+        
+        if (newStatusIds.isEmpty()) {
+            return; // Nessun nuovo WorkflowStatus aggiunto
+        }
+        
+        // Se tutti gli status sono "nuovi", potrebbe essere un workflow nuovo
+        // In questo caso creiamo le permissions per tutti gli status
+        if (newStatusIds.size() == workflow.getStatuses().size()) {
+            System.out.println("DEBUG: All status are 'new', creating permissions for all status (new workflow)");
+        }
+        
+        // Trova tutti gli ItemTypeSet che usano questo Workflow
+        List<ItemTypeSet> affectedItemTypeSets = findItemTypeSetsUsingWorkflow(workflow.getId(), tenant);
+        
+        // Per ogni ItemTypeSet, crea le permissions per i nuovi WorkflowStatus
+        for (ItemTypeSet itemTypeSet : affectedItemTypeSets) {
+            for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+                if (config.getWorkflow().getId().equals(workflow.getId())) {
+                    // Crea le permissions per i nuovi WorkflowStatus
+                    createPermissionsForNewWorkflowStatuses(config, newStatusIds);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Trova tutti gli ItemTypeSet che usano un Workflow specifico
+     */
+    private List<ItemTypeSet> findItemTypeSetsUsingWorkflow(Long workflowId, Tenant tenant) {
+        return itemTypeSetLookup.findByWorkflowId(workflowId, tenant);
+    }
+    
+    /**
+     * Crea le permissions per i nuovi WorkflowStatus in un ItemTypeConfiguration
+     */
+    private void createPermissionsForNewWorkflowStatuses(
+            ItemTypeConfiguration config, 
+            Set<Long> newStatusIds
+    ) {
+        for (Long statusId : newStatusIds) {
+            // Crea STATUS_OWNERS permission per il nuovo WorkflowStatus
+            createStatusOwnerPermission(config, statusId);
+            
+            // Crea EDITORS/VIEWERS permissions per le coppie (FieldConfiguration, WorkflowStatus)
+            createFieldStatusPermissionsForNewStatus(config, statusId);
+        }
+    }
+    
+    /**
+     * Crea STATUS_OWNERS permission per un WorkflowStatus
+     */
+    private void createStatusOwnerPermission(ItemTypeConfiguration config, Long statusId) {
+        // Verifica se la permission esiste già
+        StatusOwnerPermission existingPermission = statusOwnerPermissionRepository
+                .findByItemTypeConfigurationAndWorkflowStatusId(config, statusId);
+        
+        if (existingPermission == null) {
+            // Crea nuova permission
+            WorkflowStatus workflowStatus = workflowStatusRepository.findById(statusId)
+                    .orElseThrow(() -> new ApiException("WorkflowStatus not found: " + statusId));
+            
+            StatusOwnerPermission permission = new StatusOwnerPermission();
+            permission.setItemTypeConfiguration(config);
+            permission.setWorkflowStatus(workflowStatus);
+            permission.setAssignedRoles(new HashSet<>());
+            
+            statusOwnerPermissionRepository.save(permission);
+        }
+    }
+    
+    /**
+     * Crea EDITORS/VIEWERS permissions per le coppie (FieldConfiguration, WorkflowStatus)
+     */
+    private void createFieldStatusPermissionsForNewStatus(ItemTypeConfiguration config, Long statusId) {
+        WorkflowStatus workflowStatus = workflowStatusRepository.findById(statusId)
+                .orElseThrow(() -> new ApiException("WorkflowStatus not found: " + statusId));
+        
+        // Trova tutte le FieldConfiguration del FieldSet associato
+        List<FieldConfiguration> fieldConfigurations = config.getFieldSet().getFieldSetEntries().stream()
+                .map(FieldSetEntry::getFieldConfiguration)
+                .toList();
+        
+        for (FieldConfiguration fieldConfig : fieldConfigurations) {
+            // Crea EDITORS permission
+            createFieldStatusPermission(config, fieldConfig, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
+            
+            // Crea VIEWERS permission
+            createFieldStatusPermission(config, fieldConfig, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
+        }
+    }
+    
+    /**
+     * Crea una FieldStatusPermission specifica
+     */
+    private void createFieldStatusPermission(
+            ItemTypeConfiguration config,
+            FieldConfiguration fieldConfig,
+            WorkflowStatus workflowStatus,
+            FieldStatusPermission.PermissionType permissionType
+    ) {
+        // Verifica se la permission esiste già
+        FieldStatusPermission existingPermission = fieldStatusPermissionRepository
+                .findByItemTypeConfigurationAndFieldConfigurationAndWorkflowStatusAndPermissionType(
+                        config, fieldConfig, workflowStatus, permissionType);
+        
+        if (existingPermission == null) {
+            // Crea nuova permission
+            FieldStatusPermission permission = new FieldStatusPermission();
+            permission.setItemTypeConfiguration(config);
+            permission.setFieldConfiguration(fieldConfig);
+            permission.setWorkflowStatus(workflowStatus);
+            permission.setPermissionType(permissionType);
+            permission.setAssignedRoles(new HashSet<>());
+            
+            fieldStatusPermissionRepository.save(permission);
+        }
+    }
+
+    /**
+     * Gestisce le permissions per le nuove Transition aggiunte al Workflow
+     */
+    private void handlePermissionsForNewTransitions(
+            Tenant tenant, 
+            Workflow workflow, 
+            Set<Long> existingTransitionIds
+    ) {
+        // Identifica le Transition esistenti per coppia (fromStatusId, toStatusId)
+        Set<String> existingTransitionKeys = existingTransitionIds.stream()
+                .map(id -> {
+                    Transition t = transitionRepository.findById(id).orElse(null);
+                    if (t != null && t.getFromStatus() != null && t.getToStatus() != null) {
+                        return t.getFromStatus().getStatus().getId() + "->" + t.getToStatus().getStatus().getId();
+                    }
+                    return null;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        
+        // Trova le nuove Transition aggiunte (per coppia di status)
+        Set<Long> newTransitionIds = workflow.getTransitions().stream()
+                .filter(t -> t.getId() != null)
+                .filter(t -> {
+                    if (t.getFromStatus() != null && t.getToStatus() != null) {
+                        String key = t.getFromStatus().getStatus().getId() + "->" + t.getToStatus().getStatus().getId();
+                        return !existingTransitionKeys.contains(key);
+                    }
+                    return false;
+                })
+                .map(Transition::getId)
+                .collect(Collectors.toSet());
+        
+        if (newTransitionIds.isEmpty()) {
+            return; // Nessuna nuova Transition aggiunta
+        }
+        
+        // Trova tutti gli ItemTypeSet che usano questo Workflow
+        List<ItemTypeSet> affectedItemTypeSets = findItemTypeSetsUsingWorkflow(workflow.getId(), tenant);
+        
+        // Per ogni ItemTypeSet, crea le permissions per le nuove Transition
+        for (ItemTypeSet itemTypeSet : affectedItemTypeSets) {
+            for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+                if (config.getWorkflow().getId().equals(workflow.getId())) {
+                    // Crea le permissions per le nuove Transition
+                    createPermissionsForNewTransitions(config, newTransitionIds);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Crea le permissions per le nuove Transition in un ItemTypeConfiguration
+     */
+    private void createPermissionsForNewTransitions(
+            ItemTypeConfiguration config, 
+            Set<Long> newTransitionIds
+    ) {
+        for (Long transitionId : newTransitionIds) {
+            // Crea EXECUTORS permission per la nuova Transition
+            createExecutorPermission(config, transitionId);
+        }
+    }
+    
+    /**
+     * Crea EXECUTORS permission per una Transition
+     */
+    private void createExecutorPermission(ItemTypeConfiguration config, Long transitionId) {
+        // Verifica se la permission esiste già
+        ExecutorPermission existingPermission = executorPermissionRepository
+                .findByItemTypeConfigurationAndTransitionId(config, transitionId);
+        
+        if (existingPermission == null) {
+            // Crea nuova permission
+            Transition transition = transitionRepository.findById(transitionId)
+                    .orElseThrow(() -> new ApiException("Transition not found: " + transitionId));
+            
+            ExecutorPermission permission = new ExecutorPermission();
+            permission.setItemTypeConfiguration(config);
+            permission.setTransition(transition);
+            permission.setAssignedRoles(new HashSet<>());
+            
+            executorPermissionRepository.save(permission);
+        }
     }
 }
 

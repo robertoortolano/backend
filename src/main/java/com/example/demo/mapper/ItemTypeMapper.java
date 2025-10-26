@@ -44,7 +44,7 @@ public interface ItemTypeMapper {
         return configs.stream()
                 .map(config -> new ItemTypeConfigurationViewDto(
                         config.getId(),
-                        new ItemTypeViewDto(config.getItemType().getId(), config.getItemType().getName(), config.getItemType().isDefaultItemType()),
+                        new ItemTypeViewDto(config.getItemType().getId(), config.getItemType().getName(), config.getItemType().getDescription(), config.getItemType().isDefaultItemType()),
                         null, // category - non necessario per il controllo di eliminazione
                         false, // defaultItemTypeConfiguration - non necessario per il controllo di eliminazione
                         null, // scope - non necessario per il controllo di eliminazione
