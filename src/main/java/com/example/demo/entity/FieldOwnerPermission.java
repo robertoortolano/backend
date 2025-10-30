@@ -24,8 +24,8 @@ public class FieldOwnerPermission {
     private ItemTypeConfiguration itemTypeConfiguration;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "fieldconfiguration_id", nullable = false)
-    private FieldConfiguration fieldConfiguration;
+    @JoinColumn(name = "field_id", nullable = false)
+    private Field field;
 
     // Relazioni con ruoli personalizzati
     @ManyToMany

@@ -3,6 +3,8 @@ package com.example.demo.repository;
 import com.example.demo.entity.FieldOwnerPermission;
 import com.example.demo.entity.ItemTypeConfiguration;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -11,13 +13,17 @@ import java.util.List;
 public interface FieldOwnerPermissionRepository extends JpaRepository<FieldOwnerPermission, Long> {
     List<FieldOwnerPermission> findByItemTypeConfigurationId(Long itemTypeConfigurationId);
     List<FieldOwnerPermission> findAllByItemTypeConfiguration(ItemTypeConfiguration itemTypeConfiguration);
-    boolean existsByItemTypeConfigurationIdAndFieldConfigurationId(Long itemTypeConfigurationId, Long fieldConfigurationId);
+    boolean existsByItemTypeConfigurationIdAndFieldId(Long itemTypeConfigurationId, Long fieldId);
     
     /**
-     * Trova FieldOwnerPermission per ItemTypeConfiguration e FieldConfiguration
+     * Trova FieldOwnerPermission per ItemTypeConfiguration e Field
+     * IMPORTANTE: Carica anche i ruoli associati (JOIN FETCH) per evitare problemi di lazy loading
      */
-    FieldOwnerPermission findByItemTypeConfigurationAndFieldConfigurationId(
-        ItemTypeConfiguration config, 
-        Long fieldConfigId
+    @Query("SELECT p FROM FieldOwnerPermission p " +
+           "LEFT JOIN FETCH p.assignedRoles " +
+           "WHERE p.itemTypeConfiguration = :config AND p.field.id = :fieldId")
+    FieldOwnerPermission findByItemTypeConfigurationAndFieldId(
+        @Param("config") ItemTypeConfiguration config, 
+        @Param("fieldId") Long fieldId
     );
 }

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +23,7 @@ public class ItemTypePermissionService {
     private final ItemTypeConfigurationRepository itemTypeConfigurationRepository;
     private final WorkflowStatusRepository workflowStatusRepository;
     private final TransitionRepository transitionRepository;
+    private final FieldLookup fieldLookup;
 
     /**
      * Crea automaticamente tutte le permissions per un ItemTypeConfiguration
@@ -88,20 +90,25 @@ public class ItemTypePermissionService {
     }
 
     private void createFieldOwnerPermissions(ItemTypeConfiguration itemTypeConfiguration) {
-        // Crea una permission per ogni FieldConfiguration del FieldSet
+        // Crea una permission per ogni Field del FieldSet (non FieldConfiguration!)
         if (itemTypeConfiguration.getFieldSet() == null || itemTypeConfiguration.getFieldSet().getFieldSetEntries().isEmpty()) {
             return;
         }
         
-        for (FieldSetEntry entry : itemTypeConfiguration.getFieldSet().getFieldSetEntries()) {
-            FieldConfiguration fieldConfig = entry.getFieldConfiguration();
-            
-            if (!fieldOwnerPermissionRepository.existsByItemTypeConfigurationIdAndFieldConfigurationId(
-                    itemTypeConfiguration.getId(), fieldConfig.getId())) {
+        // Raccogli i Field unici (per evitare duplicati se ci sono più FieldConfiguration per lo stesso Field)
+        Set<Long> fieldIds = itemTypeConfiguration.getFieldSet().getFieldSetEntries().stream()
+                .map(entry -> entry.getFieldConfiguration().getField().getId())
+                .collect(java.util.stream.Collectors.toSet());
+        
+        for (Long fieldId : fieldIds) {
+            if (!fieldOwnerPermissionRepository.existsByItemTypeConfigurationIdAndFieldId(
+                    itemTypeConfiguration.getId(), fieldId)) {
+                
+                Field field = fieldLookup.getById(fieldId, itemTypeConfiguration.getTenant());
 
                 FieldOwnerPermission permission = new FieldOwnerPermission();
                 permission.setItemTypeConfiguration(itemTypeConfiguration);
-                permission.setFieldConfiguration(fieldConfig);
+                permission.setField(field);
                 permission.setAssignedRoles(new HashSet<>());
                 
                 fieldOwnerPermissionRepository.save(permission);
@@ -143,7 +150,7 @@ public class ItemTypePermissionService {
     }
 
     private void createFieldStatusPermissions(ItemTypeConfiguration itemTypeConfiguration) {
-        // Crea una permission per ogni coppia (FieldConfiguration, WorkflowStatus)
+        // Crea una permission per ogni coppia (Field, WorkflowStatus) - non FieldConfiguration!
         if (itemTypeConfiguration.getFieldSet() == null || itemTypeConfiguration.getFieldSet().getFieldSetEntries().isEmpty()) {
             return;
         }
@@ -156,18 +163,23 @@ public class ItemTypePermissionService {
         var workflowStatuses = workflowStatusRepository.findAllByWorkflowId(
                 itemTypeConfiguration.getWorkflow().getId());
         
-        for (FieldSetEntry entry : itemTypeConfiguration.getFieldSet().getFieldSetEntries()) {
-            FieldConfiguration fieldConfig = entry.getFieldConfiguration();
+        // Raccogli i Field unici (per evitare duplicati se ci sono più FieldConfiguration per lo stesso Field)
+        Set<Long> fieldIds = itemTypeConfiguration.getFieldSet().getFieldSetEntries().stream()
+                .map(entry -> entry.getFieldConfiguration().getField().getId())
+                .collect(java.util.stream.Collectors.toSet());
+        
+        for (Long fieldId : fieldIds) {
+            Field field = fieldLookup.getById(fieldId, itemTypeConfiguration.getTenant());
             
             for (WorkflowStatus workflowStatus : workflowStatuses) {
                 // Editor permission
-                if (!fieldStatusPermissionRepository.existsByItemTypeConfigurationIdAndFieldConfigurationIdAndWorkflowStatusIdAndPermissionType(
-                        itemTypeConfiguration.getId(), fieldConfig.getId(), workflowStatus.getId(), 
+                if (!fieldStatusPermissionRepository.existsByItemTypeConfigurationIdAndFieldIdAndWorkflowStatusIdAndPermissionType(
+                        itemTypeConfiguration.getId(), fieldId, workflowStatus.getId(), 
                         FieldStatusPermission.PermissionType.EDITORS)) {
                     
                     FieldStatusPermission editorPerm = new FieldStatusPermission();
                     editorPerm.setItemTypeConfiguration(itemTypeConfiguration);
-                    editorPerm.setFieldConfiguration(fieldConfig);
+                    editorPerm.setField(field);
                     editorPerm.setWorkflowStatus(workflowStatus);
                     editorPerm.setPermissionType(FieldStatusPermission.PermissionType.EDITORS);
                     editorPerm.setAssignedRoles(new HashSet<>());
@@ -176,13 +188,13 @@ public class ItemTypePermissionService {
                 }
 
                 // Viewer permission
-                if (!fieldStatusPermissionRepository.existsByItemTypeConfigurationIdAndFieldConfigurationIdAndWorkflowStatusIdAndPermissionType(
-                        itemTypeConfiguration.getId(), fieldConfig.getId(), workflowStatus.getId(), 
+                if (!fieldStatusPermissionRepository.existsByItemTypeConfigurationIdAndFieldIdAndWorkflowStatusIdAndPermissionType(
+                        itemTypeConfiguration.getId(), fieldId, workflowStatus.getId(), 
                         FieldStatusPermission.PermissionType.VIEWERS)) {
                     
                     FieldStatusPermission viewerPerm = new FieldStatusPermission();
                     viewerPerm.setItemTypeConfiguration(itemTypeConfiguration);
-                    viewerPerm.setFieldConfiguration(fieldConfig);
+                    viewerPerm.setField(field);
                     viewerPerm.setWorkflowStatus(workflowStatus);
                     viewerPerm.setPermissionType(FieldStatusPermission.PermissionType.VIEWERS);
                     viewerPerm.setAssignedRoles(new HashSet<>());

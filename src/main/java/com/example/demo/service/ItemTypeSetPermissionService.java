@@ -144,10 +144,10 @@ public class ItemTypeSetPermissionService {
                 fieldOwner.put("id", perm.getId());
                 fieldOwner.put("name", "Field Owners");
                 Map<String, Object> fieldConfigMap = new HashMap<>();
-                fieldConfigMap.put("id", perm.getFieldConfiguration().getId());
-                fieldConfigMap.put("name", perm.getFieldConfiguration().getField() != null ? 
-                    perm.getFieldConfiguration().getField().getName() : perm.getFieldConfiguration().getName());
-                fieldConfigMap.put("fieldType", perm.getFieldConfiguration().getFieldType());
+                // IMPORTANTE: Le permission sono ora associate al Field, non alla FieldConfiguration
+                fieldConfigMap.put("id", perm.getField().getId());
+                fieldConfigMap.put("name", perm.getField().getName());
+                fieldConfigMap.put("fieldType", null); // Field non ha fieldType, potrebbe essere nella FieldConfiguration
                 fieldOwner.put("fieldConfiguration", fieldConfigMap);
                 
                 Map<String, Object> itemTypeMap3 = new HashMap<>();
@@ -292,9 +292,9 @@ public class ItemTypeSetPermissionService {
                 editor.put("id", perm.getId());
                 editor.put("name", "Editors");
                 Map<String, Object> fieldConfigMap2 = new HashMap<>();
-                fieldConfigMap2.put("id", perm.getFieldConfiguration().getId());
-                fieldConfigMap2.put("name", perm.getFieldConfiguration().getField() != null ? 
-                    perm.getFieldConfiguration().getField().getName() : perm.getFieldConfiguration().getName());
+                // IMPORTANTE: Le permission sono ora associate al Field, non alla FieldConfiguration
+                fieldConfigMap2.put("id", perm.getField().getId());
+                fieldConfigMap2.put("name", perm.getField().getName());
                 editor.put("fieldConfiguration", fieldConfigMap2);
                 
                 Map<String, Object> workflowStatusMap2 = new HashMap<>();
@@ -339,9 +339,9 @@ public class ItemTypeSetPermissionService {
                 viewer.put("id", perm.getId());
                 viewer.put("name", "Viewers");
                 Map<String, Object> fieldConfigMap3 = new HashMap<>();
-                fieldConfigMap3.put("id", perm.getFieldConfiguration().getId());
-                fieldConfigMap3.put("name", perm.getFieldConfiguration().getField() != null ? 
-                    perm.getFieldConfiguration().getField().getName() : perm.getFieldConfiguration().getName());
+                // IMPORTANTE: Le permission sono ora associate al Field, non alla FieldConfiguration
+                fieldConfigMap3.put("id", perm.getField().getId());
+                fieldConfigMap3.put("name", perm.getField().getName());
                 viewer.put("fieldConfiguration", fieldConfigMap3);
                 
                 Map<String, Object> workflowStatusMap3 = new HashMap<>();

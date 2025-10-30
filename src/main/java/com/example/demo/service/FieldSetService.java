@@ -30,6 +30,7 @@ public class FieldSetService {
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
 
     private final FieldConfigurationLookup fieldConfigurationLookup;
+    private final FieldLookup fieldLookup;
     private final ItemTypeConfigurationLookup itemTypeConfigurationLookup;
     private final FieldSetLookup fieldSetLookup;
     private final ItemTypeSetLookup itemTypeSetLookup;
@@ -127,9 +128,9 @@ public class FieldSetService {
 
         if (fieldSet.isDefaultFieldSet()) throw new ApiException("Default Field Set cannot be edited");
 
-        // Salva i FieldConfiguration esistenti per confronto
-        Set<Long> existingFieldConfigIds = fieldSet.getFieldSetEntries().stream()
-                .map(entry -> entry.getFieldConfiguration().getId())
+        // Salva i Field IDs esistenti per confronto (non FieldConfiguration!)
+        Set<Long> existingFieldIds = fieldSet.getFieldSetEntries().stream()
+                .map(entry -> entry.getFieldConfiguration().getField().getId())
                 .collect(Collectors.toSet());
 
         fieldSet.setName(dto.name());
@@ -140,20 +141,52 @@ public class FieldSetService {
 
         FieldSet saved = fieldSetRepository.save(fieldSet);
         
-        // ✅ NUOVO: Gestisci le permissions per le nuove FieldConfiguration
-        handlePermissionsForNewFieldConfigurations(tenant, fieldSet, existingFieldConfigIds);
-        
-        // ✅ NUOVO: Gestisci la rimozione delle permissions per le FieldConfiguration rimosse
-        Set<Long> removedFieldConfigIds = existingFieldConfigIds.stream()
-                .filter(existingId -> !fieldSet.getFieldSetEntries().stream()
-                        .anyMatch(entry -> entry.getFieldConfiguration().getId().equals(existingId)))
+        // ✅ IMPORTANTE: Calcola i Field IDs FINALI (dopo le modifiche) basandosi sulle FieldConfiguration del DTO
+        // Questo ci permette di identificare correttamente quali Field sono veramente nuovi
+        Set<Long> finalFieldIds = dto.entries().stream()
+                .map(entryDto -> {
+                    try {
+                        FieldConfiguration config = fieldConfigurationLookup.getById(entryDto.fieldConfigurationId(), tenant);
+                        return config.getField().getId();
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(fieldId -> fieldId != null)
                 .collect(Collectors.toSet());
         
-        if (!removedFieldConfigIds.isEmpty()) {
-            // Per ora, rimuoviamo automaticamente le permissions orfane
-            // In futuro, potremmo voler mostrare un report prima della rimozione
-            removeOrphanedPermissions(tenant, fieldSet.getId(), removedFieldConfigIds);
+        // ✅ Identifica i Field veramente nuovi (non presenti nel FieldSet originale)
+        // IMPORTANTE: Un Field è "nuovo" solo se NON era presente nel FieldSet originale
+        // Se cambi FieldConfiguration per lo stesso Field, il Field non è "nuovo", quindi non creare permission
+        Set<Long> trulyNewFieldIds = finalFieldIds.stream()
+                .filter(fieldId -> !existingFieldIds.contains(fieldId))
+                .collect(Collectors.toSet());
+        
+        // ✅ Identifica i Field completamente rimossi (non presenti nel FieldSet finale)
+        Set<Long> removedFieldIds = existingFieldIds.stream()
+                .filter(fieldId -> !finalFieldIds.contains(fieldId))
+                .collect(Collectors.toSet());
+        
+        // DEBUG: Log per capire cosa succede durante il salvataggio
+        System.out.println("=== FieldSet Update ===");
+        System.out.println("FieldSet ID: " + id);
+        System.out.println("Existing Field IDs: " + existingFieldIds);
+        System.out.println("Final Field IDs: " + finalFieldIds);
+        System.out.println("Truly New Field IDs: " + trulyNewFieldIds);
+        System.out.println("Removed Field IDs: " + removedFieldIds);
+        
+        // ✅ Gestisci le permissions solo per Field VERAMENTE nuovi (non per cambio FieldConfiguration)
+        if (!trulyNewFieldIds.isEmpty()) {
+            System.out.println("Creating permissions for new Fields: " + trulyNewFieldIds);
+            handlePermissionsForNewFields(tenant, saved, trulyNewFieldIds);
+        } else {
+            System.out.println("No new Fields - permissions will not be created or removed");
         }
+        
+        // ✅ IMPORTANTE: Non rimuovere le permission qui!
+        // La rimozione delle permissions viene gestita SOLO tramite il report di impatto
+        // quando l'utente conferma esplicitamente la rimozione di un Field completamente rimosso
+        // Se un Field rimane (anche con FieldConfiguration diversa), le permission devono rimanere intatte
         
         return dtoMapper.toFieldSetViewDto(saved);
     }
@@ -276,32 +309,27 @@ public class FieldSetService {
     }
 
     /**
-     * Gestisce le permissions per le nuove FieldConfiguration aggiunte al FieldSet
+     * Gestisce le permissions per i nuovi Field aggiunti al FieldSet
+     * IMPORTANTE: Le permission sono ora associate al Field, non alla FieldConfiguration
      */
-    private void handlePermissionsForNewFieldConfigurations(
+    private void handlePermissionsForNewFields(
             Tenant tenant, 
             FieldSet fieldSet, 
-            Set<Long> existingFieldConfigIds
+            Set<Long> newFieldIds
     ) {
-        // Trova le nuove FieldConfiguration aggiunte
-        Set<Long> newFieldConfigIds = fieldSet.getFieldSetEntries().stream()
-                .map(entry -> entry.getFieldConfiguration().getId())
-                .filter(id -> !existingFieldConfigIds.contains(id))
-                .collect(Collectors.toSet());
-        
-        if (newFieldConfigIds.isEmpty()) {
-            return; // Nessuna nuova FieldConfiguration aggiunta
+        if (newFieldIds.isEmpty()) {
+            return; // Nessun nuovo Field aggiunto
         }
         
         // Trova tutti gli ItemTypeSet che usano questo FieldSet
         List<ItemTypeSet> affectedItemTypeSets = findItemTypeSetsUsingFieldSet(fieldSet.getId(), tenant);
         
-        // Per ogni ItemTypeSet, crea le permissions per le nuove FieldConfiguration
+        // Per ogni ItemTypeSet, crea le permissions per i nuovi Field
         for (ItemTypeSet itemTypeSet : affectedItemTypeSets) {
             for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
                 if (config.getFieldSet().getId().equals(fieldSet.getId())) {
-                    // Crea le permissions per le nuove FieldConfiguration
-                    createPermissionsForNewFieldConfigurations(config, newFieldConfigIds);
+                    // Crea le permissions per i nuovi Field
+                    createPermissionsForNewFields(config, newFieldIds);
                 }
             }
         }
@@ -315,47 +343,52 @@ public class FieldSetService {
     }
     
     /**
-     * Crea le permissions per le nuove FieldConfiguration in un ItemTypeConfiguration
+     * Crea le permissions per i nuovi Field in un ItemTypeConfiguration
+     * IMPORTANTE: Le permission sono associate al Field, non alla FieldConfiguration
      */
-    private void createPermissionsForNewFieldConfigurations(
+    private void createPermissionsForNewFields(
             ItemTypeConfiguration config, 
-            Set<Long> newFieldConfigIds
+            Set<Long> newFieldIds
     ) {
-        for (Long fieldConfigId : newFieldConfigIds) {
-            // Crea FIELD_OWNERS permission per la nuova FieldConfiguration
-            createFieldOwnerPermission(config, fieldConfigId);
+        for (Long fieldId : newFieldIds) {
+            // Crea FIELD_OWNERS permission per il nuovo Field
+            createFieldOwnerPermission(config, fieldId);
             
-            // Crea EDITORS/VIEWERS permissions per le coppie (FieldConfiguration, WorkflowStatus)
-            createFieldStatusPermissions(config, fieldConfigId);
+            // Crea EDITORS/VIEWERS permissions per le coppie (Field, WorkflowStatus)
+            createFieldStatusPermissions(config, fieldId);
         }
     }
     
     /**
-     * Crea FIELD_OWNERS permission per una FieldConfiguration
+     * Crea FIELD_OWNERS permission per un Field
      */
-    private void createFieldOwnerPermission(ItemTypeConfiguration config, Long fieldConfigId) {
+    private void createFieldOwnerPermission(ItemTypeConfiguration config, Long fieldId) {
         // Verifica se la permission esiste già
         FieldOwnerPermission existingPermission = fieldOwnerPermissionRepository
-                .findByItemTypeConfigurationAndFieldConfigurationId(config, fieldConfigId);
+                .findByItemTypeConfigurationAndFieldId(config, fieldId);
         
         if (existingPermission == null) {
             // Crea nuova permission
-            FieldConfiguration fieldConfig = fieldConfigurationLookup.getById(fieldConfigId, config.getTenant());
+            Field field = fieldLookup.getById(fieldId, config.getTenant());
             
             FieldOwnerPermission permission = new FieldOwnerPermission();
             permission.setItemTypeConfiguration(config);
-            permission.setFieldConfiguration(fieldConfig);
+            permission.setField(field);
             permission.setAssignedRoles(new HashSet<>());
             
             fieldOwnerPermissionRepository.save(permission);
+            System.out.println("Created new FieldOwnerPermission for Field ID " + fieldId + " in ItemTypeConfiguration " + config.getId());
+        } else {
+            System.out.println("FieldOwnerPermission already exists for Field ID " + fieldId + " in ItemTypeConfiguration " + config.getId() + 
+                              " - preserving existing permission with " + (existingPermission.getAssignedRoles() != null ? existingPermission.getAssignedRoles().size() : 0) + " roles");
         }
     }
     
     /**
-     * Crea EDITORS/VIEWERS permissions per le coppie (FieldConfiguration, WorkflowStatus)
+     * Crea EDITORS/VIEWERS permissions per le coppie (Field, WorkflowStatus)
      */
-    private void createFieldStatusPermissions(ItemTypeConfiguration config, Long fieldConfigId) {
-        FieldConfiguration fieldConfig = fieldConfigurationLookup.getById(fieldConfigId, config.getTenant());
+    private void createFieldStatusPermissions(ItemTypeConfiguration config, Long fieldId) {
+        Field field = fieldLookup.getById(fieldId, config.getTenant());
         
         // Trova tutti gli WorkflowStatus del Workflow associato
         List<WorkflowStatus> workflowStatuses = workflowStatusLookup
@@ -363,10 +396,10 @@ public class FieldSetService {
         
         for (WorkflowStatus workflowStatus : workflowStatuses) {
             // Crea EDITORS permission
-            createFieldStatusPermission(config, fieldConfig, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
+            createFieldStatusPermission(config, field, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
             
             // Crea VIEWERS permission
-            createFieldStatusPermission(config, fieldConfig, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
+            createFieldStatusPermission(config, field, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
         }
     }
     
@@ -375,52 +408,136 @@ public class FieldSetService {
      */
     private void createFieldStatusPermission(
             ItemTypeConfiguration config,
-            FieldConfiguration fieldConfig,
+            Field field,
             WorkflowStatus workflowStatus,
             FieldStatusPermission.PermissionType permissionType
     ) {
         // Verifica se la permission esiste già
         FieldStatusPermission existingPermission = fieldStatusPermissionRepository
-                .findByItemTypeConfigurationAndFieldConfigurationAndWorkflowStatusAndPermissionType(
-                        config, fieldConfig, workflowStatus, permissionType);
+                .findByItemTypeConfigurationAndFieldAndWorkflowStatusAndPermissionType(
+                        config, field, workflowStatus, permissionType);
         
         if (existingPermission == null) {
             // Crea nuova permission
             FieldStatusPermission permission = new FieldStatusPermission();
             permission.setItemTypeConfiguration(config);
-            permission.setFieldConfiguration(fieldConfig);
+            permission.setField(field);
             permission.setWorkflowStatus(workflowStatus);
             permission.setPermissionType(permissionType);
             permission.setAssignedRoles(new HashSet<>());
             
             fieldStatusPermissionRepository.save(permission);
+            System.out.println("Created new FieldStatusPermission for Field ID " + field.getId() + 
+                              " Status " + workflowStatus.getId() + " Type " + permissionType + 
+                              " in ItemTypeConfiguration " + config.getId());
+        } else {
+            System.out.println("FieldStatusPermission already exists for Field ID " + field.getId() + 
+                              " Status " + workflowStatus.getId() + " Type " + permissionType + 
+                              " in ItemTypeConfiguration " + config.getId() + 
+                              " - preserving existing permission with " + (existingPermission.getAssignedRoles() != null ? existingPermission.getAssignedRoles().size() : 0) + " roles");
         }
     }
 
     /**
-     * Analizza gli impatti della rimozione di FieldConfiguration da un FieldSet
+     * Analizza gli impatti della rimozione di Field da un FieldSet
+     * IMPORTANTE: Le permission sono associate al Field, non alla FieldConfiguration.
+     * Solo i Field completamente rimossi (nessuna FieldConfiguration per quel Field rimane) avranno impatto.
+     * 
+     * @param addedFieldConfigIds Le nuove configurazioni che verranno aggiunte (per calcolare correttamente quali Field rimarranno)
      */
     @Transactional(readOnly = true)
     public FieldSetRemovalImpactDto analyzeFieldSetRemovalImpact(
             Tenant tenant, 
             Long fieldSetId, 
-            Set<Long> removedFieldConfigIds
+            Set<Long> removedFieldConfigIds,
+            Set<Long> addedFieldConfigIds
     ) {
         FieldSet fieldSet = fieldSetRepository.findByIdAndTenant(fieldSetId, tenant)
                 .orElseThrow(() -> new ApiException(FIELDSET_NOT_FOUND + ": " + fieldSetId));
 
+        // Converti removedFieldConfigIds in removedFieldIds
+        // IMPORTANTE: Solo i Field completamente rimossi (nessuna FieldConfiguration per quel Field rimane) hanno impatto
+        // IMPORTANTE: Deve considerare anche le nuove configurazioni che verranno aggiunte
+        
+        // 1. Trova tutte le configurazioni attuali nel FieldSet
+        Set<Long> currentConfigIds = fieldSet.getFieldSetEntries().stream()
+                .map(entry -> entry.getFieldConfiguration().getId())
+                .collect(Collectors.toSet());
+        
+        // 2. Calcola le configurazioni che RIMARRANNO dopo la rimozione E l'aggiunta
+        // Rimuovi quelle rimosse e aggiungi quelle nuove
+        Set<Long> remainingConfigIds = new HashSet<>(currentConfigIds);
+        remainingConfigIds.removeAll(removedFieldConfigIds); // Rimuovi quelle rimosse
+        if (addedFieldConfigIds != null) {
+            remainingConfigIds.addAll(addedFieldConfigIds); // Aggiungi quelle nuove
+        }
+        
+        // 3. Calcola i Field IDs dalle configurazioni che rimarranno
+        Set<Long> remainingFieldIds = remainingConfigIds.stream()
+                .map(configId -> {
+                    try {
+                        FieldConfiguration config = fieldConfigurationLookup.getById(configId, tenant);
+                        return config.getField().getId();
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(fieldId -> fieldId != null)
+                .collect(Collectors.toSet());
+        
+        // 4. Per ogni configurazione rimossa, verifica se il suo Field è completamente rimosso
+        Set<Long> removedFieldIds = new HashSet<>();
+        for (Long fieldConfigId : removedFieldConfigIds) {
+            FieldConfiguration removedConfig = fieldConfigurationLookup.getById(fieldConfigId, tenant);
+            Long fieldId = removedConfig.getField().getId();
+            
+            // Il Field è completamente rimosso solo se nessuna FieldConfiguration per quel Field rimane nel FieldSet
+            if (!remainingFieldIds.contains(fieldId)) {
+                removedFieldIds.add(fieldId);
+            }
+        }
+
+        // DEBUG: Log per capire cosa succede
+        System.out.println("=== FieldSet Removal Impact Analysis ===");
+        System.out.println("FieldSet ID: " + fieldSetId);
+        System.out.println("Removed FieldConfig IDs: " + removedFieldConfigIds);
+        System.out.println("Added FieldConfig IDs: " + (addedFieldConfigIds != null ? addedFieldConfigIds : "null"));
+        System.out.println("Remaining Config IDs: " + remainingConfigIds);
+        System.out.println("Remaining Field IDs: " + remainingFieldIds);
+        System.out.println("Removed Field IDs: " + removedFieldIds);
+
+        // Se non ci sono Field completamente rimossi, ritorna un report vuoto
+        if (removedFieldIds.isEmpty()) {
+            return FieldSetRemovalImpactDto.builder()
+                    .fieldSetId(fieldSetId)
+                    .fieldSetName(fieldSet.getName())
+                    .removedFieldConfigurationIds(new ArrayList<>(removedFieldConfigIds))
+                    .removedFieldConfigurationNames(getFieldConfigurationNames(removedFieldConfigIds, tenant))
+                    .affectedItemTypeSets(new ArrayList<>())
+                    .fieldOwnerPermissions(new ArrayList<>())
+                    .fieldStatusPermissions(new ArrayList<>())
+                    .itemTypeSetRoles(new ArrayList<>())
+                    .totalAffectedItemTypeSets(0)
+                    .totalFieldOwnerPermissions(0)
+                    .totalFieldStatusPermissions(0)
+                    .totalItemTypeSetRoles(0)
+                    .totalGrantAssignments(0)
+                    .totalRoleAssignments(0)
+                    .build();
+        }
+
         // Trova tutti gli ItemTypeSet che usano questo FieldSet
         List<ItemTypeSet> allItemTypeSetsUsingFieldSet = findItemTypeSetsUsingFieldSet(fieldSetId, tenant);
         
-        // Analizza le permissions che verranno rimosse
+        // Analizza le permissions che verranno rimosse (solo per Field completamente rimossi)
         List<FieldSetRemovalImpactDto.PermissionImpact> fieldOwnerPermissions = 
-                analyzeFieldOwnerPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldConfigIds);
+                analyzeFieldOwnerPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds);
         
         List<FieldSetRemovalImpactDto.PermissionImpact> fieldStatusPermissions = 
-                analyzeFieldStatusPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldConfigIds);
+                analyzeFieldStatusPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds);
         
         List<FieldSetRemovalImpactDto.PermissionImpact> itemTypeSetRoles = 
-                analyzeItemTypeSetRoleImpacts(allItemTypeSetsUsingFieldSet, removedFieldConfigIds);
+                analyzeItemTypeSetRoleImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds);
         
         // Calcola solo gli ItemTypeSet che hanno effettivamente impatti (permissions con ruoli assegnati)
         Set<Long> itemTypeSetIdsWithImpact = new HashSet<>();
@@ -465,24 +582,77 @@ public class FieldSetService {
     
     /**
      * Rimuove le permissions orfane dopo la conferma dell'utente
+     * IMPORTANTE: Converti removedFieldConfigIds in removedFieldIds e rimuovi solo per Field completamente rimossi
+     * 
+     * @param addedFieldConfigIds Le nuove configurazioni che verranno aggiunte (per calcolare correttamente quali Field rimarranno)
      */
     @Transactional
     public void removeOrphanedPermissions(
             Tenant tenant, 
             Long fieldSetId, 
-            Set<Long> removedFieldConfigIds
+            Set<Long> removedFieldConfigIds,
+            Set<Long> addedFieldConfigIds
     ) {
+        FieldSet fieldSet = fieldSetRepository.findByIdAndTenant(fieldSetId, tenant)
+                .orElseThrow(() -> new ApiException(FIELDSET_NOT_FOUND + ": " + fieldSetId));
+        
+        // Converti removedFieldConfigIds in removedFieldIds (solo Field completamente rimossi)
+        // IMPORTANTE: Calcoliamo i Field rimasti DOPO la rimozione E l'aggiunta, non quelli attuali
+        // IMPORTANTE: Deve considerare anche le nuove configurazioni che verranno aggiunte
+        
+        // 1. Trova tutte le configurazioni attuali nel FieldSet
+        Set<Long> currentConfigIds = fieldSet.getFieldSetEntries().stream()
+                .map(entry -> entry.getFieldConfiguration().getId())
+                .collect(Collectors.toSet());
+        
+        // 2. Calcola le configurazioni che RIMARRANNO dopo la rimozione E l'aggiunta
+        // Rimuovi quelle rimosse e aggiungi quelle nuove
+        Set<Long> remainingConfigIds = new HashSet<>(currentConfigIds);
+        remainingConfigIds.removeAll(removedFieldConfigIds); // Rimuovi quelle rimosse
+        if (addedFieldConfigIds != null) {
+            remainingConfigIds.addAll(addedFieldConfigIds); // Aggiungi quelle nuove
+        }
+        
+        // 3. Calcola i Field IDs dalle configurazioni che rimarranno
+        Set<Long> remainingFieldIds = remainingConfigIds.stream()
+                .map(configId -> {
+                    try {
+                        FieldConfiguration config = fieldConfigurationLookup.getById(configId, tenant);
+                        return config.getField().getId();
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(fieldId -> fieldId != null)
+                .collect(Collectors.toSet());
+        
+        // 4. Per ogni configurazione rimossa, verifica se il suo Field è completamente rimosso
+        Set<Long> removedFieldIds = new HashSet<>();
+        for (Long fieldConfigId : removedFieldConfigIds) {
+            FieldConfiguration removedConfig = fieldConfigurationLookup.getById(fieldConfigId, tenant);
+            Long fieldId = removedConfig.getField().getId();
+            
+            // Il Field è completamente rimosso solo se nessuna FieldConfiguration per quel Field rimane nel FieldSet
+            if (!remainingFieldIds.contains(fieldId)) {
+                removedFieldIds.add(fieldId);
+            }
+        }
+        
+        if (removedFieldIds.isEmpty()) {
+            return; // Nessun Field completamente rimosso, non rimuovere permission
+        }
+        
         // Trova tutti gli ItemTypeSet che usano questo FieldSet
         List<ItemTypeSet> affectedItemTypeSets = findItemTypeSetsUsingFieldSet(fieldSetId, tenant);
         
         // Rimuovi FieldOwnerPermissions orfane
-        removeOrphanedFieldOwnerPermissions(affectedItemTypeSets, removedFieldConfigIds);
+        removeOrphanedFieldOwnerPermissions(affectedItemTypeSets, removedFieldIds);
         
         // Rimuovi FieldStatusPermissions orfane
-        removeOrphanedFieldStatusPermissions(affectedItemTypeSets, removedFieldConfigIds);
+        removeOrphanedFieldStatusPermissions(affectedItemTypeSets, removedFieldIds);
         
         // Rimuovi ItemTypeSetRoles orfane
-        removeOrphanedItemTypeSetRoles(affectedItemTypeSets, removedFieldConfigIds);
+        removeOrphanedItemTypeSetRoles(affectedItemTypeSets, removedFieldIds);
     }
     
     private List<String> getFieldConfigurationNames(Set<Long> fieldConfigIds, Tenant tenant) {
@@ -509,28 +679,44 @@ public class FieldSetService {
                 .collect(Collectors.toList());
     }
     
+    /**
+     * Analizza gli impatti delle FieldOwnerPermission per Field rimossi
+     */
     private List<FieldSetRemovalImpactDto.PermissionImpact> analyzeFieldOwnerPermissionImpacts(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldConfigIds
+            Set<Long> removedFieldIds
     ) {
         List<FieldSetRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
         
         for (ItemTypeSet itemTypeSet : itemTypeSets) {
             for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-                for (Long fieldConfigId : removedFieldConfigIds) {
+                for (Long fieldId : removedFieldIds) {
                     FieldOwnerPermission permission = fieldOwnerPermissionRepository
-                            .findByItemTypeConfigurationAndFieldConfigurationId(config, fieldConfigId);
+                            .findByItemTypeConfigurationAndFieldId(config, fieldId);
                     
                     if (permission != null) {
-                        FieldConfiguration fieldConfig = permission.getFieldConfiguration();
+                        Field field = permission.getField();
+                        // IMPORTANTE: assignedRoles è già caricato grazie al JOIN FETCH nella query
                         List<String> assignedRoles = permission.getAssignedRoles() != null 
                                 ? permission.getAssignedRoles().stream()
                                         .map(role -> role.getName())
                                         .collect(Collectors.toList())
                                 : new ArrayList<>();
                         
+                        // DEBUG: Log per capire se i ruoli vengono trovati
+                        System.out.println("Found FieldOwnerPermission for Field ID " + fieldId + 
+                                          " in ItemTypeSet " + itemTypeSet.getId() + 
+                                          " - Assigned roles: " + assignedRoles.size());
+                        
                         // Solo se ha ruoli assegnati
                         if (!assignedRoles.isEmpty()) {
+                            // Per il DTO, manteniamo fieldConfigurationId/Name per retrocompatibilità
+                            // ma in realtà ora è un Field - prendiamo una FieldConfiguration di esempio per quel Field
+                            FieldConfiguration exampleConfig = fieldConfigurationLookup.getAllByField(fieldId, itemTypeSet.getTenant())
+                                    .stream()
+                                    .findFirst()
+                                    .orElse(null);
+                            
                             impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
                                     .permissionId(permission.getId())
                                     .permissionType("FIELD_OWNERS")
@@ -538,8 +724,8 @@ public class FieldSetService {
                                     .itemTypeSetName(itemTypeSet.getName())
                                     .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
                                     .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
-                                    .fieldConfigurationId(fieldConfigId)
-                                    .fieldConfigurationName(fieldConfig.getName())
+                                    .fieldConfigurationId(exampleConfig != null ? exampleConfig.getId() : null)
+                                    .fieldConfigurationName(exampleConfig != null ? exampleConfig.getName() : field.getName())
                                     .assignedRoles(assignedRoles)
                                     .hasAssignments(true)
                                     .build());
@@ -552,33 +738,49 @@ public class FieldSetService {
         return impacts;
     }
     
+    /**
+     * Analizza gli impatti delle FieldStatusPermission per Field rimossi
+     */
     private List<FieldSetRemovalImpactDto.PermissionImpact> analyzeFieldStatusPermissionImpacts(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldConfigIds
+            Set<Long> removedFieldIds
     ) {
         List<FieldSetRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
         
         for (ItemTypeSet itemTypeSet : itemTypeSets) {
             for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-                for (Long fieldConfigId : removedFieldConfigIds) {
-                    FieldConfiguration fieldConfig = fieldConfigurationLookup.getById(fieldConfigId, itemTypeSet.getTenant());
+                for (Long fieldId : removedFieldIds) {
+                    Field field = fieldLookup.getById(fieldId, itemTypeSet.getTenant());
                     List<WorkflowStatus> workflowStatuses = workflowStatusLookup.findAllByWorkflow(config.getWorkflow());
                     
                     for (WorkflowStatus workflowStatus : workflowStatuses) {
                         // Controlla EDITORS permission
                         FieldStatusPermission editorsPermission = fieldStatusPermissionRepository
-                                .findByItemTypeConfigurationAndFieldConfigurationAndWorkflowStatusAndPermissionType(
-                                        config, fieldConfig, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
+                                .findByItemTypeConfigurationAndFieldAndWorkflowStatusAndPermissionType(
+                                        config, field, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
                         
                         if (editorsPermission != null) {
+                            // IMPORTANTE: assignedRoles è già caricato grazie al JOIN FETCH nella query
                             List<String> assignedRoles = editorsPermission.getAssignedRoles() != null 
                                     ? editorsPermission.getAssignedRoles().stream()
                                             .map(role -> role.getName())
                                             .collect(Collectors.toList())
                                     : new ArrayList<>();
                             
+                            // DEBUG: Log per capire se i ruoli vengono trovati
+                            System.out.println("Found FieldStatusPermission (EDITORS) for Field ID " + fieldId + 
+                                              " in ItemTypeSet " + itemTypeSet.getId() + 
+                                              " Status " + workflowStatus.getId() +
+                                              " - Assigned roles: " + assignedRoles.size());
+                            
                             // Solo se ha ruoli assegnati
                             if (!assignedRoles.isEmpty()) {
+                                // Per il DTO, manteniamo fieldConfigurationId/Name per retrocompatibilità
+                                FieldConfiguration exampleConfig = fieldConfigurationLookup.getAllByField(fieldId, itemTypeSet.getTenant())
+                                        .stream()
+                                        .findFirst()
+                                        .orElse(null);
+                                
                                 impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
                                         .permissionId(editorsPermission.getId())
                                         .permissionType("EDITORS")
@@ -586,8 +788,8 @@ public class FieldSetService {
                                         .itemTypeSetName(itemTypeSet.getName())
                                         .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
                                         .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
-                                        .fieldConfigurationId(fieldConfigId)
-                                        .fieldConfigurationName(fieldConfig.getName())
+                                        .fieldConfigurationId(exampleConfig != null ? exampleConfig.getId() : null)
+                                        .fieldConfigurationName(exampleConfig != null ? exampleConfig.getName() : field.getName())
                                         .workflowStatusId(workflowStatus.getId())
                                         .workflowStatusName(workflowStatus.getStatus().getName())
                                         .assignedRoles(assignedRoles)
@@ -598,18 +800,31 @@ public class FieldSetService {
                         
                         // Controlla VIEWERS permission
                         FieldStatusPermission viewersPermission = fieldStatusPermissionRepository
-                                .findByItemTypeConfigurationAndFieldConfigurationAndWorkflowStatusAndPermissionType(
-                                        config, fieldConfig, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
+                                .findByItemTypeConfigurationAndFieldAndWorkflowStatusAndPermissionType(
+                                        config, field, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
                         
                         if (viewersPermission != null) {
+                            // IMPORTANTE: assignedRoles è già caricato grazie al JOIN FETCH nella query
                             List<String> assignedRoles = viewersPermission.getAssignedRoles() != null 
                                     ? viewersPermission.getAssignedRoles().stream()
                                             .map(role -> role.getName())
                                             .collect(Collectors.toList())
                                     : new ArrayList<>();
                             
+                            // DEBUG: Log per capire se i ruoli vengono trovati
+                            System.out.println("Found FieldStatusPermission (VIEWERS) for Field ID " + fieldId + 
+                                              " in ItemTypeSet " + itemTypeSet.getId() + 
+                                              " Status " + workflowStatus.getId() +
+                                              " - Assigned roles: " + assignedRoles.size());
+                            
                             // Solo se ha ruoli assegnati
                             if (!assignedRoles.isEmpty()) {
+                                // Per il DTO, manteniamo fieldConfigurationId/Name per retrocompatibilità
+                                FieldConfiguration exampleConfig = fieldConfigurationLookup.getAllByField(fieldId, itemTypeSet.getTenant())
+                                        .stream()
+                                        .findFirst()
+                                        .orElse(null);
+                                
                                 impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
                                         .permissionId(viewersPermission.getId())
                                         .permissionType("VIEWERS")
@@ -617,8 +832,8 @@ public class FieldSetService {
                                         .itemTypeSetName(itemTypeSet.getName())
                                         .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
                                         .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
-                                        .fieldConfigurationId(fieldConfigId)
-                                        .fieldConfigurationName(fieldConfig.getName())
+                                        .fieldConfigurationId(exampleConfig != null ? exampleConfig.getId() : null)
+                                        .fieldConfigurationName(exampleConfig != null ? exampleConfig.getName() : field.getName())
                                         .workflowStatusId(workflowStatus.getId())
                                         .workflowStatusName(workflowStatus.getStatus().getName())
                                         .assignedRoles(assignedRoles)
@@ -636,22 +851,25 @@ public class FieldSetService {
     
     private List<FieldSetRemovalImpactDto.PermissionImpact> analyzeItemTypeSetRoleImpacts(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldConfigIds
+            Set<Long> removedFieldIds
     ) {
         // TODO: Implementare analisi ItemTypeSetRole se necessario
         // Per ora ritorniamo lista vuota
         return new ArrayList<>();
     }
     
+    /**
+     * Rimuove le FieldOwnerPermission orfane per Field rimossi
+     */
     private void removeOrphanedFieldOwnerPermissions(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldConfigIds
+            Set<Long> removedFieldIds
     ) {
         for (ItemTypeSet itemTypeSet : itemTypeSets) {
             for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-                for (Long fieldConfigId : removedFieldConfigIds) {
+                for (Long fieldId : removedFieldIds) {
                     FieldOwnerPermission permission = fieldOwnerPermissionRepository
-                            .findByItemTypeConfigurationAndFieldConfigurationId(config, fieldConfigId);
+                            .findByItemTypeConfigurationAndFieldId(config, fieldId);
                     
                     if (permission != null) {
                         fieldOwnerPermissionRepository.delete(permission);
@@ -661,21 +879,24 @@ public class FieldSetService {
         }
     }
     
+    /**
+     * Rimuove le FieldStatusPermission orfane per Field rimossi
+     */
     private void removeOrphanedFieldStatusPermissions(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldConfigIds
+            Set<Long> removedFieldIds
     ) {
         for (ItemTypeSet itemTypeSet : itemTypeSets) {
             for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-                for (Long fieldConfigId : removedFieldConfigIds) {
-                    FieldConfiguration fieldConfig = fieldConfigurationLookup.getById(fieldConfigId, itemTypeSet.getTenant());
+                for (Long fieldId : removedFieldIds) {
+                    Field field = fieldLookup.getById(fieldId, itemTypeSet.getTenant());
                     List<WorkflowStatus> workflowStatuses = workflowStatusLookup.findAllByWorkflow(config.getWorkflow());
                     
                     for (WorkflowStatus workflowStatus : workflowStatuses) {
                         // Rimuovi EDITORS permission
                         FieldStatusPermission editorsPermission = fieldStatusPermissionRepository
-                                .findByItemTypeConfigurationAndFieldConfigurationAndWorkflowStatusAndPermissionType(
-                                        config, fieldConfig, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
+                                .findByItemTypeConfigurationAndFieldAndWorkflowStatusAndPermissionType(
+                                        config, field, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
                         
                         if (editorsPermission != null) {
                             fieldStatusPermissionRepository.delete(editorsPermission);
@@ -683,8 +904,8 @@ public class FieldSetService {
                         
                         // Rimuovi VIEWERS permission
                         FieldStatusPermission viewersPermission = fieldStatusPermissionRepository
-                                .findByItemTypeConfigurationAndFieldConfigurationAndWorkflowStatusAndPermissionType(
-                                        config, fieldConfig, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
+                                .findByItemTypeConfigurationAndFieldAndWorkflowStatusAndPermissionType(
+                                        config, field, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
                         
                         if (viewersPermission != null) {
                             fieldStatusPermissionRepository.delete(viewersPermission);
@@ -697,7 +918,7 @@ public class FieldSetService {
     
     private void removeOrphanedItemTypeSetRoles(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldConfigIds
+            Set<Long> removedFieldIds
     ) {
         // TODO: Implementare rimozione ItemTypeSetRoles se necessario
     }

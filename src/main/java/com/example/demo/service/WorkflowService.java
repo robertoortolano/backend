@@ -27,6 +27,7 @@ public class WorkflowService {
     private final ItemTypeSetRepository itemTypeSetRepository;
     private final StatusLookup statusLookup;
     private final WorkflowLookup workflowLookup;
+    private final FieldLookup fieldLookup;
     private final DtoMapperFacade dtoMapper;
     private final ItemTypeConfigurationLookup itemTypeConfigurationLookup;
     private final ItemTypeSetLookup itemTypeSetLookup;
@@ -635,45 +636,49 @@ public class WorkflowService {
     }
     
     /**
-     * Crea EDITORS/VIEWERS permissions per le coppie (FieldConfiguration, WorkflowStatus)
+     * Crea EDITORS/VIEWERS permissions per le coppie (Field, WorkflowStatus)
+     * IMPORTANTE: Le permission sono associate ai Field, non alle FieldConfiguration
      */
     private void createFieldStatusPermissionsForNewStatus(ItemTypeConfiguration config, Long workflowStatusId) {
         WorkflowStatus workflowStatus = workflowStatusRepository.findById(workflowStatusId)
                 .orElseThrow(() -> new ApiException("WorkflowStatus not found: " + workflowStatusId));
         
-        // Trova tutte le FieldConfiguration del FieldSet associato
-        List<FieldConfiguration> fieldConfigurations = config.getFieldSet().getFieldSetEntries().stream()
-                .map(FieldSetEntry::getFieldConfiguration)
-                .toList();
+        // Trova tutti i Field unici del FieldSet (non FieldConfiguration!)
+        Set<Long> fieldIds = config.getFieldSet().getFieldSetEntries().stream()
+                .map(entry -> entry.getFieldConfiguration().getField().getId())
+                .collect(Collectors.toSet());
         
-        for (FieldConfiguration fieldConfig : fieldConfigurations) {
+        for (Long fieldId : fieldIds) {
+            Field field = fieldLookup.getById(fieldId, config.getTenant());
+            
             // Crea EDITORS permission
-            createFieldStatusPermission(config, fieldConfig, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
+            createFieldStatusPermission(config, field, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
             
             // Crea VIEWERS permission
-            createFieldStatusPermission(config, fieldConfig, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
+            createFieldStatusPermission(config, field, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
         }
     }
     
     /**
      * Crea una FieldStatusPermission specifica
+     * IMPORTANTE: Le permission sono associate al Field, non alla FieldConfiguration
      */
     private void createFieldStatusPermission(
             ItemTypeConfiguration config,
-            FieldConfiguration fieldConfig,
+            Field field,
             WorkflowStatus workflowStatus,
             FieldStatusPermission.PermissionType permissionType
     ) {
         // Verifica se la permission esiste già
         FieldStatusPermission existingPermission = fieldStatusPermissionRepository
-                .findByItemTypeConfigurationAndFieldConfigurationAndWorkflowStatusAndPermissionType(
-                        config, fieldConfig, workflowStatus, permissionType);
+                .findByItemTypeConfigurationAndFieldAndWorkflowStatusAndPermissionType(
+                        config, field, workflowStatus, permissionType);
         
         if (existingPermission == null) {
             // Crea nuova permission
             FieldStatusPermission permission = new FieldStatusPermission();
             permission.setItemTypeConfiguration(config);
-            permission.setFieldConfiguration(fieldConfig);
+            permission.setField(field);
             permission.setWorkflowStatus(workflowStatus);
             permission.setPermissionType(permissionType);
             permission.setAssignedRoles(new HashSet<>());

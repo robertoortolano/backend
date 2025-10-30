@@ -1,10 +1,12 @@
 package com.example.demo.repository;
 
-import com.example.demo.entity.FieldConfiguration;
+import com.example.demo.entity.Field;
 import com.example.demo.entity.FieldStatusPermission;
 import com.example.demo.entity.ItemTypeConfiguration;
 import com.example.demo.entity.WorkflowStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -14,20 +16,25 @@ public interface FieldStatusPermissionRepository extends JpaRepository<FieldStat
     List<FieldStatusPermission> findByItemTypeConfigurationId(Long itemTypeConfigurationId);
     List<FieldStatusPermission> findAllByItemTypeConfiguration(ItemTypeConfiguration itemTypeConfiguration);
     List<FieldStatusPermission> findAllByItemTypeConfigurationAndPermissionType(ItemTypeConfiguration itemTypeConfiguration, FieldStatusPermission.PermissionType permissionType);
-    boolean existsByItemTypeConfigurationIdAndFieldConfigurationIdAndWorkflowStatusIdAndPermissionType(
+    boolean existsByItemTypeConfigurationIdAndFieldIdAndWorkflowStatusIdAndPermissionType(
             Long itemTypeConfigurationId, 
-            Long fieldConfigurationId, 
+            Long fieldId, 
             Long workflowStatusId, 
             FieldStatusPermission.PermissionType permissionType
     );
     
     /**
-     * Trova FieldStatusPermission per ItemTypeConfiguration, FieldConfiguration, WorkflowStatus e PermissionType
+     * Trova FieldStatusPermission per ItemTypeConfiguration, Field, WorkflowStatus e PermissionType
+     * IMPORTANTE: Carica anche i ruoli associati (JOIN FETCH) per evitare problemi di lazy loading
      */
-    FieldStatusPermission findByItemTypeConfigurationAndFieldConfigurationAndWorkflowStatusAndPermissionType(
-        ItemTypeConfiguration config,
-        FieldConfiguration fieldConfig,
-        WorkflowStatus workflowStatus,
-        FieldStatusPermission.PermissionType permissionType
+    @Query("SELECT p FROM FieldStatusPermission p " +
+           "LEFT JOIN FETCH p.assignedRoles " +
+           "WHERE p.itemTypeConfiguration = :config AND p.field = :field AND " +
+           "p.workflowStatus = :workflowStatus AND p.permissionType = :permissionType")
+    FieldStatusPermission findByItemTypeConfigurationAndFieldAndWorkflowStatusAndPermissionType(
+        @Param("config") ItemTypeConfiguration config,
+        @Param("field") Field field,
+        @Param("workflowStatus") WorkflowStatus workflowStatus,
+        @Param("permissionType") FieldStatusPermission.PermissionType permissionType
     );
 }

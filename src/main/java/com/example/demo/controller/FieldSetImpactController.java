@@ -30,19 +30,35 @@ public class FieldSetImpactController {
 
     /**
      * Analizza gli impatti della rimozione di FieldConfiguration da un FieldSet
+     * IMPORTANTE: Accetta anche le nuove configurazioni che verranno aggiunte per calcolare correttamente quali Field rimarranno
      */
     @PostMapping("/{fieldSetId}/analyze-removal-impact")
     @PreAuthorize("@securityService.canEditFieldSet(principal, #tenant, #fieldSetId)")
     public ResponseEntity<FieldSetRemovalImpactDto> analyzeRemovalImpact(
             @PathVariable Long fieldSetId,
-            @RequestBody Set<Long> removedFieldConfigIds,
+            @RequestBody AnalyzeRemovalImpactRequest request,
             @CurrentTenant Tenant tenant
     ) {
+        Set<Long> removedFieldConfigIds = request.removedFieldConfigIds() != null 
+                ? request.removedFieldConfigIds() 
+                : new java.util.HashSet<>();
+        Set<Long> addedFieldConfigIds = request.addedFieldConfigIds() != null 
+                ? request.addedFieldConfigIds() 
+                : new java.util.HashSet<>();
+        
         FieldSetRemovalImpactDto impact = fieldSetService.analyzeFieldSetRemovalImpact(
-                tenant, fieldSetId, removedFieldConfigIds);
+                tenant, fieldSetId, removedFieldConfigIds, addedFieldConfigIds);
         
         return ResponseEntity.ok(impact);
     }
+    
+    /**
+     * Request DTO per l'analisi dell'impatto
+     */
+    public record AnalyzeRemovalImpactRequest(
+            Set<Long> removedFieldConfigIds,
+            Set<Long> addedFieldConfigIds
+    ) {}
 
     /**
      * Esporta il report degli impatti in formato JSON
@@ -55,7 +71,7 @@ public class FieldSetImpactController {
             @CurrentTenant Tenant tenant
     ) throws IOException {
         FieldSetRemovalImpactDto impact = fieldSetService.analyzeFieldSetRemovalImpact(
-                tenant, fieldSetId, removedFieldConfigIds);
+                tenant, fieldSetId, removedFieldConfigIds, new java.util.HashSet<>());
         
         // Configura ObjectMapper per output leggibile
         objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
@@ -91,7 +107,7 @@ public class FieldSetImpactController {
     ) throws IOException {
         try {
             FieldSetRemovalImpactDto impact = fieldSetService.analyzeFieldSetRemovalImpact(
-                    tenant, fieldSetId, removedFieldConfigIds);
+                    tenant, fieldSetId, removedFieldConfigIds, new java.util.HashSet<>());
         
         StringBuilder csv = new StringBuilder();
         
@@ -166,18 +182,34 @@ public class FieldSetImpactController {
     
     /**
      * Rimuove le permissions orfane dopo la conferma dell'utente
+     * IMPORTANTE: Accetta anche le nuove configurazioni che verranno aggiunte per calcolare correttamente quali Field rimarranno
      */
     @PostMapping("/{fieldSetId}/remove-orphaned-permissions")
     @PreAuthorize("@securityService.canEditFieldSet(principal, #tenant, #fieldSetId)")
     public ResponseEntity<String> removeOrphanedPermissions(
             @PathVariable Long fieldSetId,
-            @RequestBody Set<Long> removedFieldConfigIds,
+            @RequestBody RemoveOrphanedPermissionsRequest request,
             @CurrentTenant Tenant tenant
     ) {
-        fieldSetService.removeOrphanedPermissions(tenant, fieldSetId, removedFieldConfigIds);
+        Set<Long> removedFieldConfigIds = request.removedFieldConfigIds() != null 
+                ? request.removedFieldConfigIds() 
+                : new java.util.HashSet<>();
+        Set<Long> addedFieldConfigIds = request.addedFieldConfigIds() != null 
+                ? request.addedFieldConfigIds() 
+                : new java.util.HashSet<>();
+        
+        fieldSetService.removeOrphanedPermissions(tenant, fieldSetId, removedFieldConfigIds, addedFieldConfigIds);
         
         return ResponseEntity.ok("Permissions orfane rimosse con successo");
     }
+    
+    /**
+     * Request DTO per la rimozione delle permission orfane
+     */
+    public record RemoveOrphanedPermissionsRequest(
+            Set<Long> removedFieldConfigIds,
+            Set<Long> addedFieldConfigIds
+    ) {}
     
     /**
      * Utility method per escape dei valori CSV
