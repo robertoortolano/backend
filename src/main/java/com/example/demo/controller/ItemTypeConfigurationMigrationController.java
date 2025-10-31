@@ -6,6 +6,7 @@ import com.example.demo.entity.Tenant;
 import com.example.demo.security.CurrentTenant;
 import com.example.demo.service.ItemTypeConfigurationMigrationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +25,7 @@ import java.time.format.DateTimeFormatter;
 @RestController
 @RequestMapping("/api/item-type-configurations")
 @RequiredArgsConstructor
+@Slf4j
 public class ItemTypeConfigurationMigrationController {
     
     private final ItemTypeConfigurationMigrationService migrationService;
@@ -216,8 +218,7 @@ public class ItemTypeConfigurationMigrationController {
                     .headers(headers)
                     .body(csv.toString().getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
-            System.err.println("Error generating CSV export: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error generating CSV export", e);
             throw new IOException("Error generating CSV export: " + e.getMessage(), e);
         }
     }

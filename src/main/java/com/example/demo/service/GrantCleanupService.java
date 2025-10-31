@@ -22,7 +22,6 @@ public class GrantCleanupService {
             return;
         }
         
-        System.out.println("DEBUG: GrantCleanupService - Deleting grant in separate transaction, grantId=" + grantId);
         
         // Elimina dalle tabelle di join ManyToMany
         // Hibernate genera i nomi delle colonne come: [entity_field]_[id] e [target_entity]_id
@@ -36,7 +35,6 @@ public class GrantCleanupService {
                 entityManager.createNativeQuery("DELETE FROM grant_assignment_users WHERE grant_id = :grantId")
                     .setParameter("grantId", grantId).executeUpdate();
             } catch (Exception e2) {
-                System.out.println("WARN: Could not delete from grant_assignment_users: " + e2.getMessage());
             }
         }
         
@@ -81,56 +79,43 @@ public class GrantCleanupService {
         try {
             entityManager.createNativeQuery("DELETE FROM workerpermission_grant WHERE grant_id = :grantId")
                 .setParameter("grantId", grantId).executeUpdate();
-            System.out.println("DEBUG: Deleted from workerpermission_grant");
         } catch (Exception e) {
-            System.out.println("WARN: Could not delete from workerpermission_grant: " + e.getMessage());
         }
         
         try {
             entityManager.createNativeQuery("DELETE FROM statusownerpermission_grant WHERE grant_id = :grantId")
                 .setParameter("grantId", grantId).executeUpdate();
-            System.out.println("DEBUG: Deleted from statusownerpermission_grant");
         } catch (Exception e) {
-            System.out.println("WARN: Could not delete from statusownerpermission_grant: " + e.getMessage());
         }
         
         try {
             entityManager.createNativeQuery("DELETE FROM fieldownerpermission_grant WHERE grant_id = :grantId")
                 .setParameter("grantId", grantId).executeUpdate();
-            System.out.println("DEBUG: Deleted from fieldownerpermission_grant");
         } catch (Exception e) {
-            System.out.println("WARN: Could not delete from fieldownerpermission_grant: " + e.getMessage());
         }
         
         try {
             entityManager.createNativeQuery("DELETE FROM creatorpermission_grant WHERE grant_id = :grantId")
                 .setParameter("grantId", grantId).executeUpdate();
-            System.out.println("DEBUG: Deleted from creatorpermission_grant");
         } catch (Exception e) {
-            System.out.println("WARN: Could not delete from creatorpermission_grant: " + e.getMessage());
         }
         
         try {
             entityManager.createNativeQuery("DELETE FROM executorpermission_grant WHERE grant_id = :grantId")
                 .setParameter("grantId", grantId).executeUpdate();
-            System.out.println("DEBUG: Deleted from executorpermission_grant");
         } catch (Exception e) {
-            System.out.println("WARN: Could not delete from executorpermission_grant: " + e.getMessage());
         }
         
         try {
             entityManager.createNativeQuery("DELETE FROM fieldstatuspermission_grant WHERE grant_id = :grantId")
                 .setParameter("grantId", grantId).executeUpdate();
-            System.out.println("DEBUG: Deleted from fieldstatuspermission_grant");
         } catch (Exception e) {
-            System.out.println("WARN: Could not delete from fieldstatuspermission_grant: " + e.getMessage());
         }
         
         // Elimina la grant stessa
         entityManager.createNativeQuery("DELETE FROM grant_assignment WHERE id = :grantId")
             .setParameter("grantId", grantId).executeUpdate();
         
-        System.out.println("DEBUG: GrantCleanupService - Grant deleted successfully");
     }
 }
 

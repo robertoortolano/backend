@@ -10,6 +10,7 @@ import com.example.demo.service.ItemTypeSetService;
 import com.example.demo.service.ItemTypeSetRoleService;
 import com.example.demo.service.ItemTypeSetPermissionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/item-type-sets")
 @RequiredArgsConstructor
+@Slf4j
 public class ItemTypeSetController {
 
     private final ItemTypeSetService itemTypeSetService;
@@ -58,7 +60,7 @@ public class ItemTypeSetController {
             itemTypeSetPermissionService.createPermissionsForItemTypeSet(created.id(), tenant);
         } catch (Exception e) {
             // Log dell'errore ma non bloccare la creazione dell'ItemTypeSet
-            System.err.println("Error creating permissions for ItemTypeSet " + created.id() + ": " + e.getMessage());
+            log.error("Error creating permissions for ItemTypeSet {}", created.id(), e);
         }
         
         return ResponseEntity.ok(created);

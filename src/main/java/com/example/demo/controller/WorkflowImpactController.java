@@ -11,6 +11,7 @@ import com.example.demo.service.WorkflowService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/workflows")
 @RequiredArgsConstructor
+@Slf4j
 public class WorkflowImpactController {
 
     private final WorkflowService workflowService;
@@ -135,8 +137,7 @@ public class WorkflowImpactController {
                     .headers(headers)
                     .body(csv.toString().getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
-            System.err.println("Error generating CSV export: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error generating CSV export", e);
             throw new IOException("Error generating CSV export: " + e.getMessage(), e);
         }
     }
@@ -283,8 +284,7 @@ public class WorkflowImpactController {
                     .headers(headers)
                     .body(csv.toString().getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
-            System.err.println("Error generating Status CSV export: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error generating Status CSV export", e);
             throw new IOException("Error generating Status CSV export: " + e.getMessage(), e);
         }
     }

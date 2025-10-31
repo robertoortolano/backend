@@ -66,12 +66,7 @@ public class AuthController {
             @RequestBody Map<String, Object> request,
             @CurrentUser User user
     ) {
-        System.out.println("=== Select Tenant Request ===");
-        System.out.println("Request body: " + request);
-        System.out.println("User: " + (user != null ? user.getUsername() : "null"));
-        
         Object tenantIdObj = request.get("tenantId");
-        System.out.println("TenantId object: " + tenantIdObj + " (type: " + (tenantIdObj != null ? tenantIdObj.getClass().getName() : "null") + ")");
         
         if (tenantIdObj == null) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -90,11 +85,8 @@ public class AuthController {
             ));
         }
         
-        System.out.println("Parsed tenantId: " + tenantId);
-
         try {
             String newToken = tenantService.selectTenant(user, tenantId);
-            System.out.println("Token generated successfully");
             return ResponseEntity.ok(Map.of(
                     MESSAGE, "Tenant selezionato",
                     "token", newToken

@@ -7,6 +7,7 @@ import com.example.demo.service.FieldSetService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,7 @@ import java.util.Set;
 @RestController
 @RequestMapping("/api/field-sets")
 @RequiredArgsConstructor
+@Slf4j
 public class FieldSetImpactController {
 
     private final FieldSetService fieldSetService;
@@ -174,8 +176,7 @@ public class FieldSetImpactController {
                     .headers(headers)
                     .body(csv.toString().getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
-            System.err.println("Error generating CSV export: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error generating CSV export", e);
             throw new IOException("Error generating CSV export: " + e.getMessage(), e);
         }
     }

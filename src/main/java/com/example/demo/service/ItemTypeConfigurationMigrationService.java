@@ -400,10 +400,6 @@ public class ItemTypeConfigurationMigrationService {
                     boolean hasAssignments = !assignedRoles.isEmpty();
                     boolean defaultPreserve = canPreserve && hasAssignments;
                     
-                    log.debug("StatusOwnerPermission {}: statusId={}, statusName={}, canPreserve={}, matchingStatus={}", 
-                            perm.getId(), statusId, statusName, canPreserve, 
-                            matchingStatus != null ? matchingStatus.getWorkflowStatusId() : null);
-                    
                     return ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact.builder()
                             .permissionId(perm.getId())
                             .permissionType("STATUS_OWNERS")
@@ -598,11 +594,9 @@ public class ItemTypeConfigurationMigrationService {
                 // In realtà, se il Field è lo stesso, la permission può rimanere invariata
                 // Ma se stiamo cambiando ItemTypeConfiguration, dobbiamo gestire diversamente
                 // Per ora, manteniamo la permission così com'è
-                log.debug("Preserving FieldOwnerPermission {}", permImpact.getPermissionId());
             } else {
                 // Rimuovi la permission
                 fieldOwnerPermissionRepository.deleteById(permImpact.getPermissionId());
-                log.debug("Removing FieldOwnerPermission {}", permImpact.getPermissionId());
             }
         }
     }
@@ -614,10 +608,8 @@ public class ItemTypeConfigurationMigrationService {
     ) {
         for (ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact permImpact : impact.getStatusOwnerPermissions()) {
             if (permissionsToPreserve.contains(permImpact.getPermissionId())) {
-                log.debug("Preserving StatusOwnerPermission {}", permImpact.getPermissionId());
             } else {
                 statusOwnerPermissionRepository.deleteById(permImpact.getPermissionId());
-                log.debug("Removing StatusOwnerPermission {}", permImpact.getPermissionId());
             }
         }
     }
@@ -629,10 +621,8 @@ public class ItemTypeConfigurationMigrationService {
     ) {
         for (ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact permImpact : impact.getFieldStatusPermissions()) {
             if (permissionsToPreserve.contains(permImpact.getPermissionId())) {
-                log.debug("Preserving FieldStatusPermission {}", permImpact.getPermissionId());
             } else {
                 fieldStatusPermissionRepository.deleteById(permImpact.getPermissionId());
-                log.debug("Removing FieldStatusPermission {}", permImpact.getPermissionId());
             }
         }
     }
@@ -644,10 +634,8 @@ public class ItemTypeConfigurationMigrationService {
     ) {
         for (ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact permImpact : impact.getExecutorPermissions()) {
             if (permissionsToPreserve.contains(permImpact.getPermissionId())) {
-                log.debug("Preserving ExecutorPermission {}", permImpact.getPermissionId());
             } else {
                 executorPermissionRepository.deleteById(permImpact.getPermissionId());
-                log.debug("Removing ExecutorPermission {}", permImpact.getPermissionId());
             }
         }
     }

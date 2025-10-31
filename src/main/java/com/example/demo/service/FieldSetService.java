@@ -167,20 +167,9 @@ public class FieldSetService {
                 .filter(fieldId -> !finalFieldIds.contains(fieldId))
                 .collect(Collectors.toSet());
         
-        // DEBUG: Log per capire cosa succede durante il salvataggio
-        System.out.println("=== FieldSet Update ===");
-        System.out.println("FieldSet ID: " + id);
-        System.out.println("Existing Field IDs: " + existingFieldIds);
-        System.out.println("Final Field IDs: " + finalFieldIds);
-        System.out.println("Truly New Field IDs: " + trulyNewFieldIds);
-        System.out.println("Removed Field IDs: " + removedFieldIds);
-        
         // ✅ Gestisci le permissions solo per Field VERAMENTE nuovi (non per cambio FieldConfiguration)
         if (!trulyNewFieldIds.isEmpty()) {
-            System.out.println("Creating permissions for new Fields: " + trulyNewFieldIds);
             handlePermissionsForNewFields(tenant, saved, trulyNewFieldIds);
-        } else {
-            System.out.println("No new Fields - permissions will not be created or removed");
         }
         
         // ✅ IMPORTANTE: Non rimuovere le permission qui!
@@ -377,10 +366,6 @@ public class FieldSetService {
             permission.setAssignedRoles(new HashSet<>());
             
             fieldOwnerPermissionRepository.save(permission);
-            System.out.println("Created new FieldOwnerPermission for Field ID " + fieldId + " in ItemTypeConfiguration " + config.getId());
-        } else {
-            System.out.println("FieldOwnerPermission already exists for Field ID " + fieldId + " in ItemTypeConfiguration " + config.getId() + 
-                              " - preserving existing permission with " + (existingPermission.getAssignedRoles() != null ? existingPermission.getAssignedRoles().size() : 0) + " roles");
         }
     }
     
@@ -427,14 +412,6 @@ public class FieldSetService {
             permission.setAssignedRoles(new HashSet<>());
             
             fieldStatusPermissionRepository.save(permission);
-            System.out.println("Created new FieldStatusPermission for Field ID " + field.getId() + 
-                              " Status " + workflowStatus.getId() + " Type " + permissionType + 
-                              " in ItemTypeConfiguration " + config.getId());
-        } else {
-            System.out.println("FieldStatusPermission already exists for Field ID " + field.getId() + 
-                              " Status " + workflowStatus.getId() + " Type " + permissionType + 
-                              " in ItemTypeConfiguration " + config.getId() + 
-                              " - preserving existing permission with " + (existingPermission.getAssignedRoles() != null ? existingPermission.getAssignedRoles().size() : 0) + " roles");
         }
     }
 
@@ -496,15 +473,6 @@ public class FieldSetService {
                 removedFieldIds.add(fieldId);
             }
         }
-
-        // DEBUG: Log per capire cosa succede
-        System.out.println("=== FieldSet Removal Impact Analysis ===");
-        System.out.println("FieldSet ID: " + fieldSetId);
-        System.out.println("Removed FieldConfig IDs: " + removedFieldConfigIds);
-        System.out.println("Added FieldConfig IDs: " + (addedFieldConfigIds != null ? addedFieldConfigIds : "null"));
-        System.out.println("Remaining Config IDs: " + remainingConfigIds);
-        System.out.println("Remaining Field IDs: " + remainingFieldIds);
-        System.out.println("Removed Field IDs: " + removedFieldIds);
 
         // Se non ci sono Field completamente rimossi, ritorna un report vuoto
         if (removedFieldIds.isEmpty()) {
@@ -703,10 +671,6 @@ public class FieldSetService {
                                         .collect(Collectors.toList())
                                 : new ArrayList<>();
                         
-                        // DEBUG: Log per capire se i ruoli vengono trovati
-                        System.out.println("Found FieldOwnerPermission for Field ID " + fieldId + 
-                                          " in ItemTypeSet " + itemTypeSet.getId() + 
-                                          " - Assigned roles: " + assignedRoles.size());
                         
                         // Solo se ha ruoli assegnati
                         if (!assignedRoles.isEmpty()) {
@@ -767,11 +731,6 @@ public class FieldSetService {
                                             .collect(Collectors.toList())
                                     : new ArrayList<>();
                             
-                            // DEBUG: Log per capire se i ruoli vengono trovati
-                            System.out.println("Found FieldStatusPermission (EDITORS) for Field ID " + fieldId + 
-                                              " in ItemTypeSet " + itemTypeSet.getId() + 
-                                              " Status " + workflowStatus.getId() +
-                                              " - Assigned roles: " + assignedRoles.size());
                             
                             // Solo se ha ruoli assegnati
                             if (!assignedRoles.isEmpty()) {
@@ -811,11 +770,6 @@ public class FieldSetService {
                                             .collect(Collectors.toList())
                                     : new ArrayList<>();
                             
-                            // DEBUG: Log per capire se i ruoli vengono trovati
-                            System.out.println("Found FieldStatusPermission (VIEWERS) for Field ID " + fieldId + 
-                                              " in ItemTypeSet " + itemTypeSet.getId() + 
-                                              " Status " + workflowStatus.getId() +
-                                              " - Assigned roles: " + assignedRoles.size());
                             
                             // Solo se ha ruoli assegnati
                             if (!assignedRoles.isEmpty()) {

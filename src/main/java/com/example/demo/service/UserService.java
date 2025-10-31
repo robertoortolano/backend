@@ -47,21 +47,15 @@ public class UserService {
     @Transactional
     public LoginResponse authenticateUser(LoginRequest request) {
         try {
-            System.out.println("=== Attempting authentication for user: " + request.username());
-            
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.username(), request.password())
             );
-            System.out.println("=== Authentication successful");
 
             CustomUserDetails userDetails = (CustomUserDetails) customUserDetailsService.loadUserByUsername(request.username());
-            System.out.println("=== User details loaded");
             
             String accessToken = jwtTokenUtil.generateAccessTokenWithoutTenantId(userDetails);
-            System.out.println("=== Access token generated");
             
             String refreshToken = jwtTokenUtil.generateRefreshToken(userDetails);
-            System.out.println("=== Refresh token generated");
 
             return new LoginResponse(accessToken, refreshToken, "Login successful", null, true);
         } catch (Exception e) {
