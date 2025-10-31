@@ -56,6 +56,16 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
     Optional<ItemTypeSet> findByIdWithItemTypeConfigurationsAndTenant(@Param("id") Long id, @Param("tenant") Tenant tenant);
 
     boolean existsByItemTypeConfigurations_IdAndTenant_Id(Long itemTypeConfigurationId, Long tenantId);
+    
+    /**
+     * Trova l'ItemTypeSet che contiene una specifica ItemTypeConfiguration
+     */
+    @Query("""
+        SELECT DISTINCT its FROM ItemTypeSet its
+        JOIN its.itemTypeConfigurations itc
+        WHERE itc.id = :itemTypeConfigurationId
+    """)
+    List<ItemTypeSet> findByItemTypeConfigurations_Id(@Param("itemTypeConfigurationId") Long itemTypeConfigurationId);
 
     /**
      * Trova tutti gli ItemTypeSet che usano un FieldSet specifico

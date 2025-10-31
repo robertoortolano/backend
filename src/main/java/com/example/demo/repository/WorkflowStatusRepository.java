@@ -34,8 +34,13 @@ public interface WorkflowStatusRepository extends JpaRepository<WorkflowStatus, 
             @Param("tenant") Tenant tenant
     );
 
+    /**
+     * Trova tutti i WorkflowStatus di un Workflow
+     * IMPORTANTE: Carica anche lo Status associato (JOIN FETCH) per evitare problemi di lazy loading
+     */
     @Query("""
         SELECT ws FROM WorkflowStatus ws
+        LEFT JOIN FETCH ws.status
         WHERE ws.workflow.id = :workflowId
     """)
     List<WorkflowStatus> findAllByWorkflowId(@Param("workflowId") Long workflowId);

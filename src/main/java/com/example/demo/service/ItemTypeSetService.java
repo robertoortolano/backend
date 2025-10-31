@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -136,7 +137,11 @@ public class ItemTypeSetService {
             throw new ApiException("Default Item Type Set cannot be edited");
         }
 
-        Set<ItemTypeConfiguration> newConfigurations = new HashSet<>();
+        Set<ItemTypeConfiguration> updatedConfigurations = new HashSet<>();
+        
+        // Mappa delle configurazioni esistenti per ID per aggiornamento efficiente
+        Map<Long, ItemTypeConfiguration> existingConfigsMap = set.getItemTypeConfigurations().stream()
+                .collect(java.util.stream.Collectors.toMap(ItemTypeConfiguration::getId, config -> config));
 
         // Recupera il FieldSet di default del tenant (per clonazioni)
         FieldSet defaultFieldSet = fieldSetLookup.getFirstDefault(tenant);
@@ -146,30 +151,70 @@ public class ItemTypeSetService {
             Workflow workflow = workflowLookup.getByIdEntity(tenant, entryDto.workflowId());
             FieldSet fieldSet = fieldSetLookup.getById(entryDto.fieldSetId(), tenant);
 
-            ItemTypeConfiguration entry = new ItemTypeConfiguration();
-            entry.setTenant(tenant);
-            entry.setScope(set.getScope());
-            entry.setItemType(itemType);
-            entry.setCategory(entryDto.category());
-            entry.setWorkflow(workflow);
-
-            if (!set.getScope().equals(ScopeType.TENANT)) {
-                // Clona il FieldSet associato
-                FieldSet clonedFieldSet = fieldSetCloner.cloneFieldSet(defaultFieldSet, " (copy for " + itemType.getName() + ")");
-                fieldSetRepository.save(clonedFieldSet);
-                entry.setFieldSet(clonedFieldSet);
+            ItemTypeConfiguration entry;
+            
+            // Se esiste già una configurazione con questo ID, aggiornala invece di crearne una nuova
+            if (entryDto.id() != null && existingConfigsMap.containsKey(entryDto.id())) {
+                entry = existingConfigsMap.get(entryDto.id());
+                // Aggiorna solo i campi modificabili (non creare una nuova entità)
+                entry.setItemType(itemType);
+                entry.setCategory(entryDto.category());
+                entry.setWorkflow(workflow);
+                
+                if (!set.getScope().equals(ScopeType.TENANT)) {
+                    // Per scope non-TENANT, potrebbe essere necessario clonare
+                    // Ma se la configurazione esiste già, probabilmente ha già un FieldSet clonato
+                    // Per sicurezza, controlliamo se il FieldSet è diverso
+                    if (entry.getFieldSet() == null || !entry.getFieldSet().getId().equals(fieldSet.getId())) {
+                        // Clona solo se necessario
+                        FieldSet clonedFieldSet = fieldSetCloner.cloneFieldSet(defaultFieldSet, " (copy for " + itemType.getName() + ")");
+                        fieldSetRepository.save(clonedFieldSet);
+                        entry.setFieldSet(clonedFieldSet);
+                    }
+                } else {
+                    entry.setFieldSet(fieldSet);
+                }
             } else {
-                entry.setFieldSet(fieldSet);
+                // Crea una nuova configurazione solo se non esiste
+                entry = new ItemTypeConfiguration();
+                entry.setTenant(tenant);
+                entry.setScope(set.getScope());
+                entry.setItemType(itemType);
+                entry.setCategory(entryDto.category());
+                entry.setWorkflow(workflow);
+
+                if (!set.getScope().equals(ScopeType.TENANT)) {
+                    // Clona il FieldSet associato
+                    FieldSet clonedFieldSet = fieldSetCloner.cloneFieldSet(defaultFieldSet, " (copy for " + itemType.getName() + ")");
+                    fieldSetRepository.save(clonedFieldSet);
+                    entry.setFieldSet(clonedFieldSet);
+                } else {
+                    entry.setFieldSet(fieldSet);
+                }
             }
 
-            // salva subito la configuration
+            // salva subito la configuration (update o create)
             itemTypeConfigurationRepository.save(entry);
 
-            newConfigurations.add(entry);
+            updatedConfigurations.add(entry);
+        }
+        
+        // Rimuovi le configurazioni che non sono più nel DTO
+        Set<Long> newConfigIds = dto.itemTypeConfigurations().stream()
+                .filter(e -> e.id() != null)
+                .map(ItemTypeConfigurationCreateDto::id)
+                .collect(java.util.stream.Collectors.toSet());
+        
+        Set<ItemTypeConfiguration> configsToRemove = set.getItemTypeConfigurations().stream()
+                .filter(config -> !newConfigIds.contains(config.getId()))
+                .collect(java.util.stream.Collectors.toSet());
+        
+        for (ItemTypeConfiguration configToRemove : configsToRemove) {
+            itemTypeConfigurationRepository.delete(configToRemove);
         }
 
         set.getItemTypeConfigurations().clear();
-        set.getItemTypeConfigurations().addAll(newConfigurations);
+        set.getItemTypeConfigurations().addAll(updatedConfigurations);
 
         ItemTypeSet updated = itemTypeSetRepository.save(set);
         return dtoMapper.toItemTypeSetViewDto(updated);

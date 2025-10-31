@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import java.util.Set;
 
 public record ItemTypeConfigurationCreateDto (
+    Long id, // ID opzionale (usato per aggiornamenti)
     @NotNull(message = "Item Type id required")
     Long itemTypeId,
     @NotNull(message = "Item Type Category required")

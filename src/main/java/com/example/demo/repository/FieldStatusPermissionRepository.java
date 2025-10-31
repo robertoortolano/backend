@@ -14,7 +14,17 @@ import java.util.List;
 @Repository
 public interface FieldStatusPermissionRepository extends JpaRepository<FieldStatusPermission, Long> {
     List<FieldStatusPermission> findByItemTypeConfigurationId(Long itemTypeConfigurationId);
-    List<FieldStatusPermission> findAllByItemTypeConfiguration(ItemTypeConfiguration itemTypeConfiguration);
+    
+    /**
+     * Trova tutte le FieldStatusPermission per una ItemTypeConfiguration
+     * IMPORTANTE: Carica anche i ruoli associati e lo Status (JOIN FETCH) per evitare problemi di lazy loading
+     */
+    @Query("SELECT p FROM FieldStatusPermission p " +
+           "LEFT JOIN FETCH p.assignedRoles " +
+           "LEFT JOIN FETCH p.workflowStatus ws " +
+           "LEFT JOIN FETCH ws.status " +
+           "WHERE p.itemTypeConfiguration = :config")
+    List<FieldStatusPermission> findAllByItemTypeConfiguration(@Param("config") ItemTypeConfiguration itemTypeConfiguration);
     List<FieldStatusPermission> findAllByItemTypeConfigurationAndPermissionType(ItemTypeConfiguration itemTypeConfiguration, FieldStatusPermission.PermissionType permissionType);
     boolean existsByItemTypeConfigurationIdAndFieldIdAndWorkflowStatusIdAndPermissionType(
             Long itemTypeConfigurationId, 
