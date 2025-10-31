@@ -58,7 +58,7 @@ public class TenantService {
 
         // Reload user to ensure it's managed by the current Hibernate session
         User managedUser = userRepository.findById(user.getId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ApiException("User not found"));
 
         // Create tenant
         Tenant tenant = new Tenant();
@@ -110,7 +110,7 @@ public class TenantService {
 
         // Reload user to ensure it's managed by the current Hibernate session
         User managedUser = userRepository.findById(user.getId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ApiException("User not found"));
 
         // Load user's roles for this tenant
         List<UserRole> userRoles = userRoleRepository.findByUserIdAndTenantId(
@@ -135,7 +135,7 @@ public class TenantService {
         
         // Find the user to assign
         User userToAssign = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ApiException("User not found"));
 
         // Check if user already has USER role in this tenant
         if (userRoleRepository.existsByUserIdAndTenantIdAndRoleName(

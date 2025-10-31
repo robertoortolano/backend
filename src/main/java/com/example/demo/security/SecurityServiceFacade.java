@@ -373,7 +373,7 @@ public class SecurityServiceFacade {
         if (principal instanceof CustomUserDetails customUserDetails) {
             return customUserDetails.getUser();
         }
-        throw new IllegalArgumentException("Unexpected principal type");
+        throw new ApiException("Unexpected principal type");
     }
 
 

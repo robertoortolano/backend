@@ -38,7 +38,7 @@ public class ItemTypeSetRoleService {
      */
     public void createRolesForItemTypeSet(Long itemTypeSetId, Tenant tenant) {
         ItemTypeSet itemTypeSet = itemTypeSetRepository.findById(itemTypeSetId)
-                .orElseThrow(() -> new RuntimeException("ItemTypeSet not found"));
+                .orElseThrow(() -> new ApiException("ItemTypeSet not found"));
         
         // 1. Creare ruoli WORKER per ogni ItemType
         createWorkerRoles(itemTypeSet, tenant);
@@ -240,22 +240,11 @@ public class ItemTypeSetRoleService {
      * Assegna un Grant diretto a un ruolo specifico
      */
     public ItemTypeSetRoleDTO assignGrantDirect(Long roleId, Long grantId, Tenant tenant) {
-        ItemTypeSetRole role = itemTypeSetRoleRepository.findById(roleId)
+        ItemTypeSetRole role = itemTypeSetRoleRepository.findByIdAndTenant(roleId, tenant)
                 .orElseThrow(() -> new ApiException("Role not found"));
         
-        if (!role.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Role does not belong to current tenant");
-        }
-        
-        Grant grant = grantRepository.findById(grantId)
+        Grant grant = grantRepository.findByIdAndTenant(grantId, tenant)
                 .orElseThrow(() -> new ApiException("Grant not found"));
-        
-        /*
-        if (!grant.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Grant does not belong to current tenant");
-        }
-
-         */
         
         // Rimuovi eventuali assegnazioni precedenti
         role.setGrant(grant);
@@ -270,19 +259,11 @@ public class ItemTypeSetRoleService {
      * Assegna un Role template a un ruolo specifico
      */
     public ItemTypeSetRoleDTO assignRoleTemplate(Long roleId, Long roleTemplateId, Tenant tenant) {
-        ItemTypeSetRole role = itemTypeSetRoleRepository.findById(roleId)
+        ItemTypeSetRole role = itemTypeSetRoleRepository.findByIdAndTenant(roleId, tenant)
                 .orElseThrow(() -> new ApiException("Role not found"));
         
-        if (!role.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Role does not belong to current tenant");
-        }
-        
-        Role roleTemplate = roleRepository.findById(roleTemplateId)
+        Role roleTemplate = roleRepository.findByIdAndTenant(roleTemplateId, tenant)
                 .orElseThrow(() -> new ApiException("Role template not found"));
-        
-        if (!roleTemplate.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Role template does not belong to current tenant");
-        }
         
         // Rimuovi eventuali assegnazioni precedenti
         role.setRoleTemplate(roleTemplate);
@@ -297,12 +278,8 @@ public class ItemTypeSetRoleService {
      * Rimuove l'assegnazione (Grant o Role) da un ruolo specifico
      */
     public void removeAssignment(Long roleId, Tenant tenant) {
-        ItemTypeSetRole role = itemTypeSetRoleRepository.findById(roleId)
+        ItemTypeSetRole role = itemTypeSetRoleRepository.findByIdAndTenant(roleId, tenant)
                 .orElseThrow(() -> new ApiException("Role not found"));
-        
-        if (!role.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Role does not belong to current tenant");
-        }
         
         // Rimuovi tutte le assegnazioni
         role.setGrant(null);
@@ -325,7 +302,7 @@ public class ItemTypeSetRoleService {
      */
     public ItemTypeSetRoleDTO createRole(ItemTypeSetRoleCreateDTO createDTO, Tenant tenant) {
         ItemTypeSet itemTypeSet = itemTypeSetRepository.findById(createDTO.getItemTypeSetId())
-                .orElseThrow(() -> new RuntimeException("ItemTypeSet not found"));
+                .orElseThrow(() -> new ApiException("ItemTypeSet not found"));
         
         ItemTypeSetRole role = ItemTypeSetRole.builder()
                 .roleType(createDTO.getRoleType())

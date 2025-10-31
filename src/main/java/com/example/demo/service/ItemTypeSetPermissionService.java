@@ -33,7 +33,7 @@ public class ItemTypeSetPermissionService {
      */
     public void createPermissionsForItemTypeSet(Long itemTypeSetId, Tenant tenant) {
         ItemTypeSet itemTypeSet = itemTypeSetRepository.findById(itemTypeSetId)
-                .orElseThrow(() -> new RuntimeException("ItemTypeSet not found"));
+                .orElseThrow(() -> new ApiException("ItemTypeSet not found"));
         
         // Crea le permissions per ogni ItemTypeConfiguration
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
@@ -47,7 +47,7 @@ public class ItemTypeSetPermissionService {
     public Map<String, List<Map<String, Object>>> getPermissionsByItemTypeSet(Long itemTypeSetId, Tenant tenant) {
         try {
             ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdWithAllRelations(itemTypeSetId, tenant)
-                    .orElseThrow(() -> new RuntimeException("ItemTypeSet not found"));
+                    .orElseThrow(() -> new ApiException("ItemTypeSet not found"));
             
             Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
         
@@ -386,7 +386,7 @@ public class ItemTypeSetPermissionService {
      * Assegna un ruolo a una permission
      */
     public void assignRoleToPermission(Long permissionId, Long roleId, String permissionType) {
-        Role role = roleRepository.findById(roleId).orElseThrow(() -> new RuntimeException("Role not found"));
+        Role role = roleRepository.findById(roleId).orElseThrow(() -> new ApiException("Role not found"));
         
         // Trova la permission per ID e TIPO
         WorkerPermission workerPermission = null;

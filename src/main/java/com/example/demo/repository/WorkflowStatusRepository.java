@@ -49,5 +49,12 @@ public interface WorkflowStatusRepository extends JpaRepository<WorkflowStatus, 
      * Trova tutti gli WorkflowStatus di un Workflow
      */
     List<WorkflowStatus> findByWorkflow(Workflow workflow);
+    
+    /**
+     * Trova un WorkflowStatus per ID e Tenant (sicurezza)
+     * Verifica che il WorkflowStatus appartenga a un Workflow del Tenant specificato
+     */
+    @Query("SELECT ws FROM WorkflowStatus ws JOIN ws.workflow w WHERE ws.id = :id AND w.tenant = :tenant")
+    Optional<WorkflowStatus> findByIdAndTenant(@Param("id") Long id, @Param("tenant") com.example.demo.entity.Tenant tenant);
 
 }

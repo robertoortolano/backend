@@ -49,13 +49,8 @@ public class RoleService {
      * Gestisce solo ruoli custom (non di default) del tenant.
      */
     public RoleViewDto updateTenantRole(Long roleId, RoleUpdateDto updateDto, Tenant tenant) {
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository.findByIdAndTenant(roleId, tenant)
                 .orElseThrow(() -> new ApiException("Ruolo non trovato con ID: " + roleId));
-
-        // Verifica che il ruolo appartenga al tenant
-        if (!role.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Il ruolo non appartiene a questo tenant");
-        }
 
         // Verifica che non sia un ruolo di default (non modificabile dalla UI)
         if (role.isDefaultRole()) {
@@ -80,13 +75,8 @@ public class RoleService {
      * Gestisce solo ruoli custom (non di default) del tenant.
      */
     public void deleteTenantRole(Long roleId, Tenant tenant) {
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository.findByIdAndTenant(roleId, tenant)
                 .orElseThrow(() -> new ApiException("Ruolo non trovato con ID: " + roleId));
-
-        // Verifica che il ruolo appartenga al tenant
-        if (!role.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Il ruolo non appartiene a questo tenant");
-        }
 
         // Verifica che non sia un ruolo di default
         if (role.isDefaultRole()) {
@@ -115,13 +105,8 @@ public class RoleService {
      */
     @Transactional(readOnly = true)
     public RoleViewDto getTenantRoleById(Long roleId, Tenant tenant) {
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository.findByIdAndTenant(roleId, tenant)
                 .orElseThrow(() -> new ApiException("Ruolo non trovato con ID: " + roleId));
-
-        // Verifica che il ruolo appartenga al tenant
-        if (!role.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Il ruolo non appartiene a questo tenant");
-        }
 
         return dtoMapper.toRoleViewDto(role);
     }

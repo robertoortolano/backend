@@ -74,15 +74,10 @@ public class TransitionService {
     }
 
     public void deleteTransition(Tenant tenant, Long id) {
-        Transition transition = transitionRepository.findById(id)
+        Transition transition = transitionRepository.findByIdAndTenant(id, tenant)
                 .orElseThrow(() -> new ApiException("Transition not found"));
 
         if (transition.getWorkflow().isDefaultWorkflow()) throw new ApiException("Default Workflow transition cannot be deleted");
-
-        if (!transition.getFromStatus().getStatus().getTenant().equals(tenant) ||
-                !transition.getToStatus().getStatus().getTenant().equals(tenant)) {
-            throw new ApiException("Illegal Tenant");
-        }
 
         // Prima rimuovi le ExecutorPermissions associate
         workflowService.removeExecutorPermissionsForTransition(tenant, id);

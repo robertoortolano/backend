@@ -39,7 +39,23 @@ public class WorkflowLookup {
     }
 
     public List<WorkflowViewDto> getAllByTenant(Tenant tenant) {
-        return dtoMapper.toWorkflowViewDtos(workflowRepository.findAllByTenant(tenant));
+        // IMPORTANTE: Mostra solo i workflow con scope TENANT, non quelli di progetto
+        return dtoMapper.toWorkflowViewDtos(workflowRepository.findAllByTenantAndScopeTenant(tenant));
+    }
+    
+    public List<WorkflowViewDto> getAllByTenantAndProject(Tenant tenant, Long projectId) {
+        return dtoMapper.toWorkflowViewDtos(workflowRepository.findAllByTenantAndProjectId(tenant, projectId));
+    }
+    
+    public WorkflowViewDto getByIdForProject(Tenant tenant, Long workflowId, Long projectId) {
+        Workflow workflow = workflowRepository.findByIdAndTenantAndProjectId(workflowId, tenant, projectId)
+                .orElseThrow(() -> new ApiException("Workflow not found"));
+        WorkflowViewDto workflowViewDto = dtoMapper.toWorkflowViewDto(workflow);
+        List<WorkflowNode> workflowNodes = workflowNodeRepository.findByWorkflowIdAndTenant(workflowViewDto.getId(), tenant);
+        List<WorkflowEdge> workflowEdges = workflowEdgeRepository.findByWorkflowIdAndTenant(workflowViewDto.getId(), tenant);
+        workflowViewDto.setWorkflowNodes(dtoMapper.toWorkflowNodeDtos(workflowNodes));
+        workflowViewDto.setWorkflowEdges(dtoMapper.toWorkflowEdgeDtos(workflowEdges));
+        return workflowViewDto;
     }
 
     public boolean isNotInAnyItemTypeSet(Long workflowId, Tenant tenant) {

@@ -34,4 +34,11 @@ public interface ItemTypeSetRoleRepository extends JpaRepository<ItemTypeSetRole
             Long itemTypeSetId, String relatedEntityType, Long relatedEntityId, ItemTypeSetRoleType roleType, Long tenantId);
     
     void deleteByItemTypeSetIdAndTenantId(Long itemTypeSetId, Long tenantId);
+    
+    // Trova un ruolo per ID e tenant (sicurezza)
+    Optional<ItemTypeSetRole> findByIdAndTenantId(Long id, Long tenantId);
+    
+    // Trova un ruolo per ID e tenant (usando oggetto Tenant)
+    @Query("SELECT r FROM ItemTypeSetRole r WHERE r.id = :id AND r.tenant = :tenant")
+    Optional<ItemTypeSetRole> findByIdAndTenant(@Param("id") Long id, @Param("tenant") com.example.demo.entity.Tenant tenant);
 }

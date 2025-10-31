@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
+import com.example.demo.exception.ApiException;
 import com.example.demo.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,7 +31,7 @@ public class ItemTypePermissionService {
      */
     public void createPermissionsForItemTypeConfiguration(ItemTypeConfiguration itemTypeConfiguration) {
         ItemTypeConfiguration config = itemTypeConfigurationRepository.findById(itemTypeConfiguration.getId())
-                .orElseThrow(() -> new RuntimeException("ItemTypeConfiguration not found with id: " + itemTypeConfiguration.getId()));
+                .orElseThrow(() -> new ApiException("ItemTypeConfiguration not found with id: " + itemTypeConfiguration.getId()));
         
         // 1. Workers - uno per ItemType
         createWorkersPermission(config);

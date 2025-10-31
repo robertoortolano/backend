@@ -28,4 +28,7 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
 
     // Trova tutti i ruoli default per una tenant
     List<Role> findByTenantAndDefaultRoleTrue(Tenant tenant);
+    
+    // Trova un ruolo per ID e tenant (sicurezza)
+    Optional<Role> findByIdAndTenant(Long id, Tenant tenant);
 }

@@ -17,6 +17,13 @@ public interface WorkflowRepository extends JpaRepository<Workflow, Long> {
     Optional<Workflow> findByTenantIdAndName(Long tenantId, String name);
     Optional<Workflow> findByTenantAndDefaultWorkflowTrue(Tenant tenant);
     List<Workflow> findAllByTenant(Tenant tenant);
+    
+    @Query("SELECT w FROM Workflow w WHERE w.tenant = :tenant AND w.scope = 'TENANT'")
+    List<Workflow> findAllByTenantAndScopeTenant(@Param("tenant") Tenant tenant);
+    
+    List<Workflow> findAllByTenantAndProjectId(Tenant tenant, Long projectId);
+    
+    Optional<Workflow> findByIdAndTenantAndProjectId(Long id, Tenant tenant, Long projectId);
 
     @Query("""
     SELECT DISTINCT t.workflow FROM Transition t

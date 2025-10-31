@@ -11,6 +11,7 @@ import java.util.Optional;
 @Repository
 public interface GroupRepository extends JpaRepository<Group, Long> {
     List<Group> findByTenant(Tenant tenant);
+    Optional<Group> findByIdAndTenant(Long id, Tenant tenant);
     Optional<Group> findByNameAndTenant(String name, Tenant tenant);
     boolean existsByNameAndTenant(String name, Tenant tenant);
 }

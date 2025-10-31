@@ -92,4 +92,75 @@ public class WorkflowController {
         WorkflowDetailDto dto = workflowService.getWorkflowDetail(id, tenant);
         return ResponseEntity.ok(dto);
     }
+    
+    // ==================== PROJECT WORKFLOWS ====================
+    
+    @GetMapping("/project/{projectId}")
+    @PreAuthorize("@securityService.canCreateWorkflow(principal, #tenant, #projectId)")
+    public ResponseEntity<List<WorkflowViewDto>> getProjectWorkflows(
+            @PathVariable Long projectId,
+            @CurrentTenant Tenant tenant
+    ) {
+        List<WorkflowViewDto> workflows = workflowLookup.getAllByTenantAndProject(tenant, projectId);
+        return ResponseEntity.ok(workflows);
+    }
+    
+    @GetMapping("/project/{projectId}/{id}")
+    @PreAuthorize("@securityService.canCreateWorkflow(principal, #tenant, #projectId)")
+    public ResponseEntity<WorkflowViewDto> getProjectWorkflowById(
+            @PathVariable Long projectId,
+            @PathVariable Long id,
+            @CurrentTenant Tenant tenant
+    ) {
+        WorkflowViewDto workflow = workflowLookup.getByIdForProject(tenant, id, projectId);
+        return ResponseEntity.ok(workflow);
+    }
+    
+    @PostMapping("/project/{projectId}")
+    @PreAuthorize("@securityService.canCreateWorkflow(principal, #tenant, #projectId)")
+    public ResponseEntity<WorkflowViewDto> createProjectWorkflow(
+            @PathVariable Long projectId,
+            @Valid @RequestBody WorkflowCreateDto dto,
+            @CurrentTenant Tenant tenant
+    ) {
+        WorkflowViewDto created = workflowService.createForProject(dto, tenant, projectId);
+        return ResponseEntity.ok(created);
+    }
+    
+    @PutMapping("/project/{projectId}/{id}")
+    @PreAuthorize("@securityService.canCreateWorkflow(principal, #tenant, #projectId)")
+    public ResponseEntity<WorkflowViewDto> updateProjectWorkflow(
+            @PathVariable Long projectId,
+            @PathVariable Long id,
+            @RequestBody WorkflowUpdateDto dto,
+            @CurrentTenant Tenant tenant
+    ) {
+        if (!id.equals(dto.id())) {
+            return ResponseEntity.badRequest().build();
+        }
+        WorkflowViewDto updated = workflowService.updateWorkflow(id, dto, tenant);
+        return ResponseEntity.ok(updated);
+    }
+    
+    @DeleteMapping("/project/{projectId}/{id}")
+    @PreAuthorize("@securityService.canDeleteWorkflow(principal, #tenant, #id)")
+    public ResponseEntity<Void> deleteProjectWorkflow(
+            @PathVariable Long projectId,
+            @PathVariable Long id,
+            @CurrentTenant Tenant tenant
+    ) {
+        workflowService.delete(tenant, id);
+        return ResponseEntity.noContent().build();
+    }
+    
+    @GetMapping("/project/{projectId}/{id}/details")
+    @PreAuthorize("@securityService.canCreateWorkflow(principal, #tenant, #projectId)")
+    public ResponseEntity<WorkflowDetailDto> getProjectWorkflowDetails(
+            @PathVariable Long projectId,
+            @PathVariable Long id,
+            @CurrentTenant Tenant tenant
+    ) {
+        WorkflowDetailDto dto = workflowService.getWorkflowDetail(id, tenant);
+        return ResponseEntity.ok(dto);
+    }
 }

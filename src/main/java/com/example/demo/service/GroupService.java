@@ -35,12 +35,8 @@ public class GroupService {
 
     @Transactional(readOnly = true)
     public GroupViewDto getById(Long id, Tenant tenant) {
-        Group group = groupRepository.findById(id)
+        Group group = groupRepository.findByIdAndTenant(id, tenant)
                 .orElseThrow(() -> new ApiException("Group not found"));
-        
-        if (!group.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Group does not belong to this tenant");
-        }
         
         return dtoMapper.toGroupViewDto(group);
     }
@@ -70,12 +66,8 @@ public class GroupService {
     }
 
     public GroupViewDto updateGroup(Long id, Tenant tenant, GroupUpdateDto dto) {
-        Group group = groupRepository.findById(id)
+        Group group = groupRepository.findByIdAndTenant(id, tenant)
                 .orElseThrow(() -> new ApiException("Group not found"));
-        
-        if (!group.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Group does not belong to this tenant");
-        }
 
         // Verifica se esiste già un altro gruppo con lo stesso nome
         if (!group.getName().equals(dto.name()) && 
@@ -103,12 +95,8 @@ public class GroupService {
     }
 
     public void deleteGroup(Long id, Tenant tenant) {
-        Group group = groupRepository.findById(id)
+        Group group = groupRepository.findByIdAndTenant(id, tenant)
                 .orElseThrow(() -> new ApiException("Group not found"));
-        
-        if (!group.getTenant().getId().equals(tenant.getId())) {
-            throw new ApiException("Group does not belong to this tenant");
-        }
 
         groupRepository.delete(group);
     }

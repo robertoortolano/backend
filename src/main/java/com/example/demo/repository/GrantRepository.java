@@ -34,6 +34,25 @@ public interface GrantRepository extends JpaRepository<Grant, Long> {
            "WHERE g.id = :id")
     Optional<Grant> findByIdWithCollections(@Param("id") Long id);
     
+    /**
+     * Trova una Grant per ID e Tenant (sicurezza)
+     * Verifica che la Grant appartenga a un Role del Tenant specificato
+     */
+    @Query("SELECT g FROM Grant g JOIN g.role r WHERE g.id = :id AND r.tenant = :tenant")
+    Optional<Grant> findByIdAndTenant(@Param("id") Long id, @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
+    /**
+     * Trova una Grant con collezioni per ID e Tenant (sicurezza)
+     */
+    @Query("SELECT g FROM Grant g " +
+           "LEFT JOIN FETCH g.users " +
+           "LEFT JOIN FETCH g.groups " +
+           "LEFT JOIN FETCH g.negatedUsers " +
+           "LEFT JOIN FETCH g.negatedGroups " +
+           "JOIN g.role r " +
+           "WHERE g.id = :id AND r.tenant = :tenant")
+    Optional<Grant> findByIdWithCollectionsAndTenant(@Param("id") Long id, @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
     // Elimina una grant bypassando completamente Hibernate ORM
     @Modifying
     @Query(value = "DELETE FROM grant_assignment WHERE id = :grantId", nativeQuery = true)
