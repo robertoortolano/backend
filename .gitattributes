@@ -45,3 +45,6 @@
 *.woff2 binary
 *.pyc binary
 *.pdf binary
+
+# EditorConfig files
+.editorconfig text eol=lf
