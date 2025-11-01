@@ -23,7 +23,7 @@ public class ProjectItemTypeSetRoleGrantController {
      * Crea o aggiorna un Grant di progetto per un ItemTypeSetRole
      */
     @PostMapping("/project/{projectId}")
-    @PreAuthorize("@projectSecurityService.hasProjectRole(principal, #tenant, #projectId, 'PROJECT_ADMIN')")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_ADMIN')")
     public ResponseEntity<?> createOrUpdateProjectGrant(
             @PathVariable Long projectId,
             @Valid @RequestBody ItemTypeSetRoleGrantCreateDto dto,
@@ -41,7 +41,7 @@ public class ProjectItemTypeSetRoleGrantController {
      * Recupera i dettagli di un Grant di progetto per un ItemTypeSetRole
      */
     @GetMapping("/project/{projectId}/role/{roleId}")
-    @PreAuthorize("@projectSecurityService.hasProjectRole(principal, #tenant, #projectId, 'PROJECT_ADMIN') or @projectSecurityService.hasProjectRole(principal, #tenant, #projectId, 'PROJECT_USER')")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_USER')")
     public ResponseEntity<GrantDetailsDto> getProjectGrantDetails(
             @PathVariable Long projectId,
             @PathVariable Long roleId,
@@ -58,7 +58,7 @@ public class ProjectItemTypeSetRoleGrantController {
      * Rimuove un Grant di progetto per un ItemTypeSetRole
      */
     @DeleteMapping("/project/{projectId}/role/{roleId}")
-    @PreAuthorize("@projectSecurityService.hasProjectRole(principal, #tenant, #projectId, 'PROJECT_ADMIN')")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_ADMIN')")
     public ResponseEntity<?> removeProjectGrant(
             @PathVariable Long projectId,
             @PathVariable Long roleId,
@@ -76,7 +76,7 @@ public class ProjectItemTypeSetRoleGrantController {
      * Verifica se esiste un Grant di progetto per un ItemTypeSetRole
      */
     @GetMapping("/project/{projectId}/role/{roleId}/exists")
-    @PreAuthorize("@projectSecurityService.hasProjectRole(principal, #tenant, #projectId, 'PROJECT_ADMIN') or @projectSecurityService.hasProjectRole(principal, #tenant, #projectId, 'PROJECT_USER')")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_USER')")
     public ResponseEntity<Boolean> hasProjectGrant(
             @PathVariable Long projectId,
             @PathVariable Long roleId,

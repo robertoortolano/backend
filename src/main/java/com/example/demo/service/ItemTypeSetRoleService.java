@@ -38,6 +38,24 @@ public class ItemTypeSetRoleService {
     private GroupRepository groupRepository;
     
     @Autowired
+    private ItemTypeConfigurationRepository itemTypeConfigurationRepository;
+    
+    @Autowired
+    private ItemTypeRepository itemTypeRepository;
+    
+    @Autowired
+    private WorkflowRepository workflowRepository;
+    
+    @Autowired
+    private FieldConfigurationRepository fieldConfigurationRepository;
+    
+    @Autowired
+    private WorkflowStatusRepository workflowStatusRepository;
+    
+    @Autowired
+    private TransitionRepository transitionRepository;
+    
+    @Autowired
     private DtoMapperFacade dtoMapper;
     
     /**
@@ -262,15 +280,221 @@ public class ItemTypeSetRoleService {
     }
     
     /**
+     * Trova o crea un ItemTypeSetRole basandosi sulle informazioni fornite
+     */
+    private ItemTypeSetRole findOrCreateItemTypeSetRole(ItemTypeSetRoleGrantCreateDto dto, Tenant tenant) {
+        // Prima prova a trovarlo per ID
+        Optional<ItemTypeSetRole> roleOpt = itemTypeSetRoleRepository.findByIdAndTenant(dto.itemTypeSetRoleId(), tenant);
+        if (roleOpt.isPresent()) {
+            return roleOpt.get();
+        }
+        
+        // Se non esiste e abbiamo le informazioni necessarie, crealo
+        if (dto.itemTypeSetId() == null || dto.permissionType() == null) {
+            throw new ApiException(String.format(
+                "ItemTypeSetRole with id %d not found for tenant %d and insufficient information to create it. " +
+                "itemTypeSetId and permissionType are required.",
+                dto.itemTypeSetRoleId(), 
+                tenant.getId()
+            ));
+        }
+        
+        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdAndTenant(dto.itemTypeSetId(), tenant)
+                .orElseThrow(() -> new ApiException("ItemTypeSet not found: " + dto.itemTypeSetId()));
+        
+        ItemTypeSetRole role;
+        
+        switch (dto.permissionType()) {
+            case WORKERS:
+                if (dto.itemTypeId() == null) {
+                    throw new ApiException("itemTypeId is required for WORKERS permission type");
+                }
+                // Cerca se esiste già
+                role = itemTypeSetRoleRepository
+                    .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
+                        dto.itemTypeSetId(), "ItemType", dto.itemTypeId(), ItemTypeSetRoleType.WORKERS, tenant.getId()
+                    )
+                    .orElseGet(() -> {
+                        ItemTypeSetRole newRole = ItemTypeSetRole.builder()
+                                .roleType(ItemTypeSetRoleType.WORKERS)
+                                .name("Worker for ItemType " + dto.itemTypeId())
+                                .description("Worker role")
+                                .itemTypeSet(itemTypeSet)
+                                .relatedEntityType("ItemType")
+                                .relatedEntityId(dto.itemTypeId())
+                                .tenant(tenant)
+                                .build();
+                        return itemTypeSetRoleRepository.save(newRole);
+                    });
+                break;
+                
+            case STATUS_OWNERS:
+                if (dto.workflowStatusId() == null) {
+                    throw new ApiException("workflowStatusId is required for STATUS_OWNERS permission type");
+                }
+                role = itemTypeSetRoleRepository
+                    .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
+                        dto.itemTypeSetId(), "WorkflowStatus", dto.workflowStatusId(), ItemTypeSetRoleType.STATUS_OWNERS, tenant.getId()
+                    )
+                    .orElseGet(() -> {
+                        ItemTypeSetRole newRole = ItemTypeSetRole.builder()
+                                .roleType(ItemTypeSetRoleType.STATUS_OWNERS)
+                                .name("Status Owner for WorkflowStatus " + dto.workflowStatusId())
+                                .description("Status Owner role")
+                                .itemTypeSet(itemTypeSet)
+                                .relatedEntityType("WorkflowStatus")
+                                .relatedEntityId(dto.workflowStatusId())
+                                .tenant(tenant)
+                                .build();
+                        return itemTypeSetRoleRepository.save(newRole);
+                    });
+                break;
+                
+            case FIELD_OWNERS:
+                if (dto.fieldConfigurationId() == null) {
+                    throw new ApiException("fieldConfigurationId is required for FIELD_OWNERS permission type");
+                }
+                role = itemTypeSetRoleRepository
+                    .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
+                        dto.itemTypeSetId(), "FieldConfiguration", dto.fieldConfigurationId(), ItemTypeSetRoleType.FIELD_OWNERS, tenant.getId()
+                    )
+                    .orElseGet(() -> {
+                        ItemTypeSetRole newRole = ItemTypeSetRole.builder()
+                                .roleType(ItemTypeSetRoleType.FIELD_OWNERS)
+                                .name("Field Owner for FieldConfiguration " + dto.fieldConfigurationId())
+                                .description("Field Owner role")
+                                .itemTypeSet(itemTypeSet)
+                                .relatedEntityType("FieldConfiguration")
+                                .relatedEntityId(dto.fieldConfigurationId())
+                                .tenant(tenant)
+                                .build();
+                        return itemTypeSetRoleRepository.save(newRole);
+                    });
+                break;
+                
+            case CREATORS:
+                if (dto.workflowId() == null) {
+                    throw new ApiException("workflowId is required for CREATORS permission type");
+                }
+                role = itemTypeSetRoleRepository
+                    .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
+                        dto.itemTypeSetId(), "Workflow", dto.workflowId(), ItemTypeSetRoleType.CREATORS, tenant.getId()
+                    )
+                    .orElseGet(() -> {
+                        ItemTypeSetRole newRole = ItemTypeSetRole.builder()
+                                .roleType(ItemTypeSetRoleType.CREATORS)
+                                .name("Creator for Workflow " + dto.workflowId())
+                                .description("Creator role")
+                                .itemTypeSet(itemTypeSet)
+                                .relatedEntityType("Workflow")
+                                .relatedEntityId(dto.workflowId())
+                                .tenant(tenant)
+                                .build();
+                        return itemTypeSetRoleRepository.save(newRole);
+                    });
+                break;
+                
+            case EXECUTORS:
+                if (dto.transitionId() == null) {
+                    throw new ApiException("transitionId is required for EXECUTORS permission type");
+                }
+                role = itemTypeSetRoleRepository
+                    .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
+                        dto.itemTypeSetId(), "Transition", dto.transitionId(), ItemTypeSetRoleType.EXECUTORS, tenant.getId()
+                    )
+                    .orElseGet(() -> {
+                        ItemTypeSetRole newRole = ItemTypeSetRole.builder()
+                                .roleType(ItemTypeSetRoleType.EXECUTORS)
+                                .name("Executor for Transition " + dto.transitionId())
+                                .description("Executor role")
+                                .itemTypeSet(itemTypeSet)
+                                .relatedEntityType("Transition")
+                                .relatedEntityId(dto.transitionId())
+                                .tenant(tenant)
+                                .build();
+                        return itemTypeSetRoleRepository.save(newRole);
+                    });
+                break;
+                
+            case EDITORS:
+            case VIEWERS:
+                // Per EDITORS e VIEWERS, dobbiamo trovare l'ItemTypeConfiguration che corrisponde
+                if (dto.fieldConfigurationId() == null || dto.workflowStatusId() == null) {
+                    throw new ApiException("fieldConfigurationId and workflowStatusId are required for " + dto.permissionType() + " permission type");
+                }
+                // Trovare ItemTypeConfiguration che contiene questo fieldConfiguration e workflowStatus
+                Set<ItemTypeConfiguration> configs = itemTypeSet.getItemTypeConfigurations();
+                final ItemTypeConfiguration matchingConfig = configs.stream()
+                    .filter(config -> {
+                        // Verifica se il FieldSet contiene questo FieldConfiguration
+                        boolean hasField = config.getFieldSet() != null && 
+                            config.getFieldSet().getFieldSetEntries().stream()
+                                .anyMatch(e -> e.getFieldConfiguration().getId().equals(dto.fieldConfigurationId()));
+                        // Verifica se il Workflow contiene questo WorkflowStatus
+                        boolean hasStatus = config.getWorkflow() != null &&
+                            config.getWorkflow().getStatuses().stream()
+                                .anyMatch(s -> s.getId().equals(dto.workflowStatusId()));
+                        return hasField && hasStatus;
+                    })
+                    .findFirst()
+                    .orElseThrow(() -> new ApiException("No ItemTypeConfiguration found matching fieldConfigurationId " + 
+                        dto.fieldConfigurationId() + " and workflowStatusId " + dto.workflowStatusId()));
+                
+                // Cerca ruolo esistente - per EDITORS/VIEWERS dobbiamo cercare manualmente perché
+                // dobbiamo verificare anche il secondaryEntityId
+                List<ItemTypeSetRole> existingRoles = itemTypeSetRoleRepository
+                    .findRolesByItemTypeSetAndType(dto.itemTypeSetId(), dto.permissionType(), tenant.getId());
+                
+                Optional<ItemTypeSetRole> existingRole = existingRoles.stream()
+                    .filter(r -> {
+                        // Verifica che corrisponda all'ItemTypeConfiguration e al FieldConfiguration
+                        return r.getRelatedEntityType() != null &&
+                               r.getRelatedEntityType().equals("ItemTypeConfiguration") &&
+                               r.getRelatedEntityId() != null &&
+                               r.getRelatedEntityId().equals(matchingConfig.getId()) &&
+                               r.getSecondaryEntityType() != null && 
+                               r.getSecondaryEntityType().equals("FieldConfiguration") &&
+                               r.getSecondaryEntityId() != null &&
+                               r.getSecondaryEntityId().equals(dto.fieldConfigurationId());
+                    })
+                    .findFirst();
+                
+                if (existingRole.isPresent()) {
+                    role = existingRole.get();
+                } else {
+                    role = ItemTypeSetRole.builder()
+                            .roleType(dto.permissionType())
+                            .name(dto.permissionType().name() + " for FieldConfiguration " + dto.fieldConfigurationId() + " in WorkflowStatus " + dto.workflowStatusId())
+                            .description(dto.permissionType().name() + " role")
+                            .itemTypeSet(itemTypeSet)
+                            .relatedEntityType("ItemTypeConfiguration")
+                            .relatedEntityId(matchingConfig.getId())
+                            .secondaryEntityType("FieldConfiguration")
+                            .secondaryEntityId(dto.fieldConfigurationId())
+                            .tenant(tenant)
+                            .build();
+                    role = itemTypeSetRoleRepository.save(role);
+                }
+                break;
+                
+            default:
+                throw new ApiException("Unsupported permission type: " + dto.permissionType());
+        }
+        
+        return role;
+    }
+    
+    /**
      * Crea un Grant e lo assegna direttamente a un ItemTypeSetRole.
      * Il Grant viene creato al momento dell'assegnazione con gli utenti/gruppi specificati.
      */
     public ItemTypeSetRoleDTO createAndAssignGrant(ItemTypeSetRoleGrantCreateDto dto, Tenant tenant) {
-        // Verifica che l'ItemTypeSetRole esista
-        Optional<ItemTypeSetRole> roleOpt = itemTypeSetRoleRepository.findByIdAndTenant(dto.itemTypeSetRoleId(), tenant);
-        
-        if (roleOpt.isEmpty()) {
-            // Log per debugging
+        // Trova o crea l'ItemTypeSetRole
+        ItemTypeSetRole role;
+        try {
+            role = findOrCreateItemTypeSetRole(dto, tenant);
+        } catch (ApiException e) {
+            // Se non possiamo crearlo, verifica se esiste per un altro tenant
             Optional<ItemTypeSetRole> roleById = itemTypeSetRoleRepository.findById(dto.itemTypeSetRoleId());
             if (roleById.isPresent()) {
                 ItemTypeSetRole foundRole = roleById.get();
@@ -284,17 +508,9 @@ public class ItemTypeSetRoleService {
                     foundRole.getItemTypeSet().getId()
                 ));
             } else {
-                throw new ApiException(String.format(
-                    "ItemTypeSetRole with id %d not found for tenant %d. " +
-                    "This might happen if the permissions were not fully loaded. " +
-                    "Please reload the permissions page to ensure all ItemTypeSetRoles are created.",
-                    dto.itemTypeSetRoleId(), 
-                    tenant.getId()
-                ));
+                throw e;
             }
         }
-        
-        ItemTypeSetRole role = roleOpt.get();
         
         // Crea il nuovo Grant
         Grant grant = new Grant();
