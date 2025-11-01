@@ -13,3 +13,4 @@ public record GrantDetailsDto (
     List<GroupSimpleDto> negatedGroups
 ) {}
 
+

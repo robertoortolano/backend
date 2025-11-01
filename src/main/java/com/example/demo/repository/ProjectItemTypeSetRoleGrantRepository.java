@@ -54,3 +54,4 @@ public interface ProjectItemTypeSetRoleGrantRepository extends JpaRepository<Pro
         Long tenantId
     );
 }
+

@@ -35,3 +35,4 @@ public class ProjectItemTypeSetRoleGrant {
     @JoinColumn(name = "tenant_id", nullable = false)
     private Tenant tenant;
 }
+
