@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
+import com.example.demo.enums.ItemTypeSetRoleType;
 import com.example.demo.exception.ApiException;
 import com.example.demo.repository.*;
 import jakarta.persistence.EntityManager;
@@ -27,6 +28,8 @@ public class ItemTypeSetPermissionService {
     private final ItemTypePermissionService itemTypePermissionService;
     private final RoleRepository roleRepository;
     private final EntityManager entityManager;
+    private final ItemTypeSetRoleRepository itemTypeSetRoleRepository;
+    private final ProjectItemTypeSetRoleGrantRepository projectItemTypeSetRoleGrantRepository;
     
     /**
      * Crea automaticamente tutte le permissions per un ItemTypeSet
@@ -42,9 +45,10 @@ public class ItemTypeSetPermissionService {
     }
     
     /**
-     * Ottiene tutte le permissions per un ItemTypeSet, raggruppate per tipo
+     * Ottiene tutte le permissions per un ItemTypeSet, raggruppate per tipo.
+     * Se projectId è specificato, include anche le grant di progetto.
      */
-    public Map<String, List<Map<String, Object>>> getPermissionsByItemTypeSet(Long itemTypeSetId, Tenant tenant) {
+    public Map<String, List<Map<String, Object>>> getPermissionsByItemTypeSet(Long itemTypeSetId, Tenant tenant, Long projectId) {
         try {
             ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdWithAllRelations(itemTypeSetId, tenant)
                     .orElseThrow(() -> new ApiException("ItemTypeSet not found"));
@@ -66,6 +70,44 @@ public class ItemTypeSetPermissionService {
                 itemTypeMap.put("name", config.getItemType().getName());
                 worker.put("itemType", itemTypeMap);
                 worker.put("assignedRolesCount", perm.getAssignedRoles().size());
+                
+                // Trova o crea l'ItemTypeSetRole corrispondente
+                Optional<ItemTypeSetRole> itemTypeSetRoleOpt = itemTypeSetRoleRepository
+                    .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
+                        itemTypeSet.getId(), "ItemType", config.getItemType().getId(), 
+                        ItemTypeSetRoleType.WORKERS, tenant.getId());
+                
+                ItemTypeSetRole itemTypeSetRole;
+                if (itemTypeSetRoleOpt.isPresent()) {
+                    itemTypeSetRole = itemTypeSetRoleOpt.get();
+                } else {
+                    // Crea l'ItemTypeSetRole se non esiste
+                    itemTypeSetRole = ItemTypeSetRole.builder()
+                        .roleType(ItemTypeSetRoleType.WORKERS)
+                        .name("Worker for " + config.getItemType().getName())
+                        .description("Worker role for ItemType: " + config.getItemType().getName())
+                        .itemTypeSet(itemTypeSet)
+                        .relatedEntityType("ItemType")
+                        .relatedEntityId(config.getItemType().getId())
+                        .tenant(tenant)
+                        .build();
+                    itemTypeSetRole = itemTypeSetRoleRepository.save(itemTypeSetRole);
+                }
+                
+                worker.put("itemTypeSetRoleId", itemTypeSetRole.getId());
+                // Aggiungi informazioni su Grant e RoleTemplate se presenti
+                if (itemTypeSetRole.getGrant() != null) {
+                    worker.put("grantId", itemTypeSetRole.getGrant().getId());
+                    worker.put("grantName", "Grant diretto");
+                }
+                if (itemTypeSetRole.getRoleTemplate() != null) {
+                    worker.put("roleTemplateId", itemTypeSetRole.getRoleTemplate().getId());
+                    worker.put("roleTemplateName", itemTypeSetRole.getRoleTemplate().getName());
+                }
+                worker.put("assignmentType", itemTypeSetRole.getAssignmentType());
+                
+                // Aggiungi informazioni su Grant di progetto se disponibile
+                addProjectGrantInfo(worker, itemTypeSetRole.getId(), projectId, tenant.getId());
                 
                 // Calcola se ci sono effettivamente assegnazioni (solo ruoli custom)
                 boolean hasAssignments = !perm.getAssignedRoles().isEmpty();
@@ -155,6 +197,60 @@ public class ItemTypeSetPermissionService {
                 itemTypeMap3.put("name", config.getItemType().getName());
                 fieldOwner.put("itemType", itemTypeMap3);
                 fieldOwner.put("assignedRolesCount", perm.getAssignedRoles().size());
+                
+                // Trova l'ItemTypeSetRole corrispondente
+                // Prima, trova la FieldConfiguration corrispondente al Field nel FieldSet
+                Field field = perm.getField();
+                FieldSet fieldSet = config.getFieldSet();
+                FieldConfiguration fieldConfig = null;
+                if (fieldSet != null && fieldSet.getFieldSetEntries() != null) {
+                    for (FieldSetEntry entry : fieldSet.getFieldSetEntries()) {
+                        if (entry.getFieldConfiguration() != null && 
+                            entry.getFieldConfiguration().getField() != null &&
+                            entry.getFieldConfiguration().getField().getId().equals(field.getId())) {
+                            fieldConfig = entry.getFieldConfiguration();
+                            break;
+                        }
+                    }
+                }
+                
+                if (fieldConfig != null) {
+                    Optional<ItemTypeSetRole> itemTypeSetRoleOpt = itemTypeSetRoleRepository
+                        .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
+                            itemTypeSet.getId(), "FieldConfiguration", fieldConfig.getId(), 
+                            ItemTypeSetRoleType.FIELD_OWNERS, tenant.getId());
+                    
+                    ItemTypeSetRole itemTypeSetRole;
+                    if (itemTypeSetRoleOpt.isPresent()) {
+                        itemTypeSetRole = itemTypeSetRoleOpt.get();
+                    } else {
+                        // Crea l'ItemTypeSetRole se non esiste
+                        itemTypeSetRole = ItemTypeSetRole.builder()
+                            .roleType(ItemTypeSetRoleType.FIELD_OWNERS)
+                            .name("Field Owner for " + fieldConfig.getName())
+                            .description("Field Owner role for FieldConfiguration: " + fieldConfig.getName())
+                            .itemTypeSet(itemTypeSet)
+                            .relatedEntityType("FieldConfiguration")
+                            .relatedEntityId(fieldConfig.getId())
+                            .tenant(tenant)
+                            .build();
+                        itemTypeSetRole = itemTypeSetRoleRepository.save(itemTypeSetRole);
+                    }
+                    
+                    fieldOwner.put("itemTypeSetRoleId", itemTypeSetRole.getId());
+                    if (itemTypeSetRole.getGrant() != null) {
+                        fieldOwner.put("grantId", itemTypeSetRole.getGrant().getId());
+                        fieldOwner.put("grantName", "Grant diretto");
+                    }
+                    if (itemTypeSetRole.getRoleTemplate() != null) {
+                        fieldOwner.put("roleTemplateId", itemTypeSetRole.getRoleTemplate().getId());
+                        fieldOwner.put("roleTemplateName", itemTypeSetRole.getRoleTemplate().getName());
+                    }
+                    fieldOwner.put("assignmentType", itemTypeSetRole.getAssignmentType());
+                    
+                    // Aggiungi informazioni su Grant di progetto se disponibile
+                    addProjectGrantInfo(fieldOwner, itemTypeSetRole.getId(), projectId, tenant.getId());
+                }
                 
                 // Calcola se ci sono effettivamente assegnazioni (solo ruoli custom)
                 boolean hasAssignments = !perm.getAssignedRoles().isEmpty();
@@ -546,5 +642,23 @@ public class ItemTypeSetPermissionService {
         }
         
         throw new ApiException("Permission not found with ID: " + permissionId + " and type: " + permissionType);
+    }
+    
+    /**
+     * Helper method per aggiungere informazioni su Grant di progetto a una permission map
+     */
+    private void addProjectGrantInfo(Map<String, Object> permissionMap, Long itemTypeSetRoleId, Long projectId, Long tenantId) {
+        if (projectId != null) {
+            boolean hasProjectGrant = projectItemTypeSetRoleGrantRepository.existsByItemTypeSetRoleIdAndProjectIdAndTenantId(
+                    itemTypeSetRoleId, projectId, tenantId);
+            permissionMap.put("hasProjectGrant", hasProjectGrant);
+            if (hasProjectGrant) {
+                Optional<ProjectItemTypeSetRoleGrant> projectGrantOpt = projectItemTypeSetRoleGrantRepository
+                        .findByItemTypeSetRoleIdAndProjectIdAndTenantId(itemTypeSetRoleId, projectId, tenantId);
+                if (projectGrantOpt.isPresent()) {
+                    permissionMap.put("projectGrantId", projectGrantOpt.get().getGrant().getId());
+                }
+            }
+        }
     }
 }

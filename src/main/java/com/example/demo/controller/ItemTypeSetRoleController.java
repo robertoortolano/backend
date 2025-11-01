@@ -2,10 +2,12 @@ package com.example.demo.controller;
 
 import com.example.demo.dto.ItemTypeSetRoleDTO;
 import com.example.demo.dto.ItemTypeSetRoleCreateDTO;
+import com.example.demo.dto.ItemTypeSetRoleGrantCreateDto;
 import com.example.demo.entity.Tenant;
 import com.example.demo.enums.ItemTypeSetRoleType;
 import com.example.demo.security.CurrentTenant;
 import com.example.demo.service.ItemTypeSetRoleService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/itemtypeset-roles")
@@ -91,7 +94,7 @@ public class ItemTypeSetRoleController {
     
     
     /**
-     * Assegna un Grant diretto a un ruolo specifico
+     * Assegna un Grant diretto a un ruolo specifico (usando un Grant esistente)
      */
     @PostMapping("/assign-grant-direct")
     @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
@@ -104,6 +107,64 @@ public class ItemTypeSetRoleController {
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+    }
+    
+    /**
+     * Crea un Grant e lo assegna direttamente a un ItemTypeSetRole.
+     * Il Grant viene creato al momento dell'assegnazione con gli utenti/gruppi specificati.
+     */
+    @PostMapping("/create-and-assign-grant")
+    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    public ResponseEntity<?> createAndAssignGrant(
+            @Valid @RequestBody ItemTypeSetRoleGrantCreateDto dto,
+            @CurrentTenant Tenant tenant) {
+        try {
+            ItemTypeSetRoleDTO result = itemTypeSetRoleService.createAndAssignGrant(dto, tenant);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            // Log dell'errore completo per debugging
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", e.getMessage() != null ? e.getMessage() : "Unknown error", 
+                                "error", e.getClass().getSimpleName()));
+        }
+    }
+    
+    /**
+     * Recupera i dettagli di un Grant assegnato a un ItemTypeSetRole
+     */
+    @GetMapping("/{roleId}/grant-details")
+    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    public ResponseEntity<?> getGrantDetails(
+            @PathVariable Long roleId,
+            @CurrentTenant Tenant tenant) {
+        try {
+            com.example.demo.dto.GrantDetailsDto result = itemTypeSetRoleService.getGrantDetails(roleId, tenant);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", e.getMessage() != null ? e.getMessage() : "Unknown error", 
+                                "error", e.getClass().getSimpleName()));
+        }
+    }
+    
+    /**
+     * Aggiorna un Grant esistente assegnato a un ItemTypeSetRole
+     */
+    @PutMapping("/update-grant")
+    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    public ResponseEntity<?> updateGrant(
+            @Valid @RequestBody ItemTypeSetRoleGrantCreateDto dto,
+            @CurrentTenant Tenant tenant) {
+        try {
+            ItemTypeSetRoleDTO result = itemTypeSetRoleService.updateGrant(dto, tenant);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", e.getMessage() != null ? e.getMessage() : "Unknown error", 
+                                "error", e.getClass().getSimpleName()));
         }
     }
     

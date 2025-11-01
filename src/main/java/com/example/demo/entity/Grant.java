@@ -21,8 +21,9 @@ public class Grant {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    private Role role;
+    @ManyToOne(optional = true)
+    @JoinColumn(nullable = true)
+    private Role role; // Può essere null quando assegnato direttamente a ItemTypeSetRole
 
     @ManyToMany(fetch = FetchType.EAGER, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(

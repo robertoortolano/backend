@@ -24,16 +24,18 @@ public class ItemTypeSetPermissionController {
     private final RoleService roleService;
     
     /**
-     * Ottiene tutte le permissions per un ItemTypeSet
+     * Ottiene tutte le permissions per un ItemTypeSet.
+     * Se projectId è specificato come query param, include anche le grant di progetto.
      */
     @GetMapping("/itemtypeset/{itemTypeSetId}")
     @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
     public ResponseEntity<Map<String, List<Map<String, Object>>>> getPermissionsByItemTypeSet(
             @PathVariable Long itemTypeSetId,
+            @RequestParam(required = false) Long projectId,
             @CurrentTenant Tenant tenant) {
         try {
             Map<String, List<Map<String, Object>>> permissions = 
-                itemTypeSetPermissionService.getPermissionsByItemTypeSet(itemTypeSetId, tenant);
+                itemTypeSetPermissionService.getPermissionsByItemTypeSet(itemTypeSetId, tenant, projectId);
             return ResponseEntity.ok(permissions);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();

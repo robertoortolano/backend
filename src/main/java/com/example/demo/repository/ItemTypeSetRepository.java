@@ -114,4 +114,19 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
 """)
     Optional<ItemTypeSet> findByIdWithAllRelations(@Param("id") Long id, @Param("tenant") Tenant tenant);
 
+    /**
+     * Trova tutti gli ItemTypeSet di un progetto specifico
+     */
+    @Query("""
+        SELECT DISTINCT its FROM ItemTypeSet its
+        LEFT JOIN FETCH its.itemTypeConfigurations
+        WHERE its.tenant = :tenant 
+        AND its.scope = 'PROJECT'
+        AND its.project.id = :projectId
+    """)
+    List<ItemTypeSet> findAllByProjectIdAndTenant(
+        @Param("projectId") Long projectId, 
+        @Param("tenant") Tenant tenant
+    );
+
 }

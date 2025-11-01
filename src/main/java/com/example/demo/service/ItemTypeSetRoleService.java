@@ -2,6 +2,7 @@ package com.example.demo.service;
 
 import com.example.demo.dto.ItemTypeSetRoleDTO;
 import com.example.demo.dto.ItemTypeSetRoleCreateDTO;
+import com.example.demo.dto.ItemTypeSetRoleGrantCreateDto;
 import com.example.demo.entity.*;
 import com.example.demo.enums.ItemTypeSetRoleType;
 import com.example.demo.exception.ApiException;
@@ -29,6 +30,12 @@ public class ItemTypeSetRoleService {
     
     @Autowired
     private RoleRepository roleRepository;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private GroupRepository groupRepository;
     
     @Autowired
     private DtoMapperFacade dtoMapper;
@@ -237,7 +244,7 @@ public class ItemTypeSetRoleService {
     }
     
     /**
-     * Assegna un Grant diretto a un ruolo specifico
+     * Assegna un Grant diretto a un ruolo specifico (usando un Grant esistente)
      */
     public ItemTypeSetRoleDTO assignGrantDirect(Long roleId, Long grantId, Tenant tenant) {
         ItemTypeSetRole role = itemTypeSetRoleRepository.findByIdAndTenant(roleId, tenant)
@@ -246,10 +253,190 @@ public class ItemTypeSetRoleService {
         Grant grant = grantRepository.findByIdAndTenant(grantId, tenant)
                 .orElseThrow(() -> new ApiException("Grant not found"));
         
-        // Rimuovi eventuali assegnazioni precedenti
+        // Assegna il Grant senza rimuovere il RoleTemplate (ora sono compatibili)
         role.setGrant(grant);
-        role.setRoleTemplate(null);
         
+        
+        ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
+        return dtoMapper.toItemTypeSetRoleDTO(savedRole);
+    }
+    
+    /**
+     * Crea un Grant e lo assegna direttamente a un ItemTypeSetRole.
+     * Il Grant viene creato al momento dell'assegnazione con gli utenti/gruppi specificati.
+     */
+    public ItemTypeSetRoleDTO createAndAssignGrant(ItemTypeSetRoleGrantCreateDto dto, Tenant tenant) {
+        // Verifica che l'ItemTypeSetRole esista
+        Optional<ItemTypeSetRole> roleOpt = itemTypeSetRoleRepository.findByIdAndTenant(dto.itemTypeSetRoleId(), tenant);
+        
+        if (roleOpt.isEmpty()) {
+            // Log per debugging
+            Optional<ItemTypeSetRole> roleById = itemTypeSetRoleRepository.findById(dto.itemTypeSetRoleId());
+            if (roleById.isPresent()) {
+                ItemTypeSetRole foundRole = roleById.get();
+                throw new ApiException(String.format(
+                    "ItemTypeSetRole with id %d exists but belongs to tenant %d (current tenant: %d). Role details: name=%s, roleType=%s, itemTypeSet=%d",
+                    dto.itemTypeSetRoleId(), 
+                    foundRole.getTenant().getId(), 
+                    tenant.getId(),
+                    foundRole.getName(),
+                    foundRole.getRoleType(),
+                    foundRole.getItemTypeSet().getId()
+                ));
+            } else {
+                throw new ApiException(String.format(
+                    "ItemTypeSetRole with id %d not found for tenant %d. " +
+                    "This might happen if the permissions were not fully loaded. " +
+                    "Please reload the permissions page to ensure all ItemTypeSetRoles are created.",
+                    dto.itemTypeSetRoleId(), 
+                    tenant.getId()
+                ));
+            }
+        }
+        
+        ItemTypeSetRole role = roleOpt.get();
+        
+        // Crea il nuovo Grant
+        Grant grant = new Grant();
+        // Il campo role del Grant è null quando assegnato direttamente a ItemTypeSetRole
+        // Questo è supportato perché Grant.role è annotato come @ManyToOne(optional = true)
+        grant.setRole(null);
+        
+        // Aggiungi utenti
+        if (dto.userIds() != null && !dto.userIds().isEmpty()) {
+            Set<User> users = new HashSet<>();
+            for (Long userId : dto.userIds()) {
+                User user = userRepository.findById(userId)
+                        .orElseThrow(() -> new ApiException("User not found: " + userId));
+                // Nota: La verifica tenant per User è gestita tramite UserRole
+                // Qui assumiamo che se l'utente viene passato, appartiene alla tenant
+                users.add(user);
+            }
+            grant.setUsers(users);
+        }
+        
+        // Aggiungi gruppi
+        if (dto.groupIds() != null && !dto.groupIds().isEmpty()) {
+            Set<Group> groups = new HashSet<>();
+            for (Long groupId : dto.groupIds()) {
+                Group group = groupRepository.findByIdAndTenant(groupId, tenant)
+                        .orElseThrow(() -> new ApiException("Group not found: " + groupId));
+                groups.add(group);
+            }
+            grant.setGroups(groups);
+        }
+        
+        // Aggiungi utenti negati
+        if (dto.negatedUserIds() != null && !dto.negatedUserIds().isEmpty()) {
+            Set<User> negatedUsers = new HashSet<>();
+            for (Long userId : dto.negatedUserIds()) {
+                User user = userRepository.findById(userId)
+                        .orElseThrow(() -> new ApiException("Negated user not found: " + userId));
+                // Nota: La verifica tenant per User è gestita tramite UserRole
+                negatedUsers.add(user);
+            }
+            grant.setNegatedUsers(negatedUsers);
+        }
+        
+        // Aggiungi gruppi negati
+        if (dto.negatedGroupIds() != null && !dto.negatedGroupIds().isEmpty()) {
+            Set<Group> negatedGroups = new HashSet<>();
+            for (Long groupId : dto.negatedGroupIds()) {
+                Group group = groupRepository.findByIdAndTenant(groupId, tenant)
+                        .orElseThrow(() -> new ApiException("Negated group not found: " + groupId));
+                negatedGroups.add(group);
+            }
+            grant.setNegatedGroups(negatedGroups);
+        }
+        
+        // Salva il Grant
+        Grant savedGrant = grantRepository.save(grant);
+        
+        // Assegna il Grant senza rimuovere il RoleTemplate (ora sono compatibili)
+        role.setGrant(savedGrant);
+        
+        ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
+        return dtoMapper.toItemTypeSetRoleDTO(savedRole);
+    }
+    
+    /**
+     * Recupera i dettagli di un Grant assegnato a un ItemTypeSetRole
+     */
+    public com.example.demo.dto.GrantDetailsDto getGrantDetails(Long itemTypeSetRoleId, Tenant tenant) {
+        ItemTypeSetRole role = itemTypeSetRoleRepository.findByIdAndTenant(itemTypeSetRoleId, tenant)
+                .orElseThrow(() -> new ApiException("ItemTypeSetRole not found"));
+        
+        if (role.getGrant() == null) {
+            throw new ApiException("No Grant assigned to this ItemTypeSetRole");
+        }
+        
+        Grant grant = grantRepository.findByIdWithCollections(role.getGrant().getId())
+                .orElseThrow(() -> new ApiException("Grant not found"));
+        
+        return new com.example.demo.dto.GrantDetailsDto(
+            grant.getId(),
+            grant.getUsers().stream().map(dtoMapper::toUserSimpleDto).toList(),
+            grant.getGroups().stream().map(dtoMapper::toGroupSimpleDto).toList(),
+            grant.getNegatedUsers().stream().map(dtoMapper::toUserSimpleDto).toList(),
+            grant.getNegatedGroups().stream().map(dtoMapper::toGroupSimpleDto).toList()
+        );
+    }
+    
+    /**
+     * Aggiorna un Grant esistente assegnato a un ItemTypeSetRole
+     */
+    public ItemTypeSetRoleDTO updateGrant(ItemTypeSetRoleGrantCreateDto dto, Tenant tenant) {
+        ItemTypeSetRole role = itemTypeSetRoleRepository.findByIdAndTenant(dto.itemTypeSetRoleId(), tenant)
+                .orElseThrow(() -> new ApiException("ItemTypeSetRole not found"));
+        
+        if (role.getGrant() == null) {
+            throw new ApiException("No Grant assigned to this ItemTypeSetRole");
+        }
+        
+        Grant grant = grantRepository.findByIdWithCollections(role.getGrant().getId())
+                .orElseThrow(() -> new ApiException("Grant not found"));
+        
+        // Aggiorna utenti
+        grant.getUsers().clear();
+        if (dto.userIds() != null && !dto.userIds().isEmpty()) {
+            for (Long userId : dto.userIds()) {
+                User user = userRepository.findById(userId)
+                        .orElseThrow(() -> new ApiException("User not found: " + userId));
+                grant.getUsers().add(user);
+            }
+        }
+        
+        // Aggiorna gruppi
+        grant.getGroups().clear();
+        if (dto.groupIds() != null && !dto.groupIds().isEmpty()) {
+            for (Long groupId : dto.groupIds()) {
+                Group group = groupRepository.findByIdAndTenant(groupId, tenant)
+                        .orElseThrow(() -> new ApiException("Group not found: " + groupId));
+                grant.getGroups().add(group);
+            }
+        }
+        
+        // Aggiorna utenti negati
+        grant.getNegatedUsers().clear();
+        if (dto.negatedUserIds() != null && !dto.negatedUserIds().isEmpty()) {
+            for (Long userId : dto.negatedUserIds()) {
+                User user = userRepository.findById(userId)
+                        .orElseThrow(() -> new ApiException("Negated user not found: " + userId));
+                grant.getNegatedUsers().add(user);
+            }
+        }
+        
+        // Aggiorna gruppi negati
+        grant.getNegatedGroups().clear();
+        if (dto.negatedGroupIds() != null && !dto.negatedGroupIds().isEmpty()) {
+            for (Long groupId : dto.negatedGroupIds()) {
+                Group group = groupRepository.findByIdAndTenant(groupId, tenant)
+                        .orElseThrow(() -> new ApiException("Negated group not found: " + groupId));
+                grant.getNegatedGroups().add(group);
+            }
+        }
+        
+        grantRepository.save(grant);
         
         ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);
         return dtoMapper.toItemTypeSetRoleDTO(savedRole);
@@ -265,9 +452,8 @@ public class ItemTypeSetRoleService {
         Role roleTemplate = roleRepository.findByIdAndTenant(roleTemplateId, tenant)
                 .orElseThrow(() -> new ApiException("Role template not found"));
         
-        // Rimuovi eventuali assegnazioni precedenti
+        // Assegna il RoleTemplate senza rimuovere il Grant (ora sono compatibili)
         role.setRoleTemplate(roleTemplate);
-        role.setGrant(null);
         
         
         ItemTypeSetRole savedRole = itemTypeSetRoleRepository.save(role);

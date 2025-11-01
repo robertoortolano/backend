@@ -101,4 +101,70 @@ public class ItemTypeSetController {
         itemTypeSetService.deleteItemTypeSet(tenant, id);
         return ResponseEntity.noContent().build();
     }
+
+    // ========================
+    // PROJECT ITEM TYPE SETS
+    // ========================
+
+    @GetMapping("/project/{projectId}")
+    @PreAuthorize("@securityService.canCreateFieldSet(principal, #tenant, #projectId)")
+    public ResponseEntity<List<ItemTypeSetViewDto>> getProjectItemTypeSets(
+            @PathVariable Long projectId,
+            @CurrentTenant Tenant tenant
+    ) {
+        return ResponseEntity.ok(itemTypeSetService.getProjectItemTypeSets(tenant, projectId));
+    }
+
+    @PostMapping("/project/{projectId}")
+    @PreAuthorize("@securityService.canCreateFieldSet(principal, #tenant, #projectId)")
+    public ResponseEntity<ItemTypeSetViewDto> createProjectItemTypeSet(
+            @PathVariable Long projectId,
+            @RequestBody ItemTypeSetCreateDto dto,
+            @CurrentTenant Tenant tenant
+    ) {
+        ItemTypeSetViewDto created = itemTypeSetService.createForProject(tenant, projectId, dto);
+        
+        // Crea automaticamente le permissions per il nuovo ItemTypeSet
+        try {
+            itemTypeSetPermissionService.createPermissionsForItemTypeSet(created.id(), tenant);
+        } catch (Exception e) {
+            log.error("Error creating permissions for ItemTypeSet {}", created.id(), e);
+        }
+        
+        return ResponseEntity.ok(created);
+    }
+
+    @GetMapping("/project/{projectId}/{id}")
+    @PreAuthorize("@securityService.canCreateFieldSet(principal, #tenant, #projectId)")
+    public ResponseEntity<ItemTypeSetViewDto> getProjectItemTypeSetById(
+            @PathVariable Long projectId,
+            @PathVariable Long id,
+            @CurrentTenant Tenant tenant
+    ) {
+        ItemTypeSetViewDto dto = itemTypeSetService.getById(tenant, id);
+        return ResponseEntity.ok(dto);
+    }
+
+    @PutMapping("/project/{projectId}/{id}")
+    @PreAuthorize("@securityService.canCreateFieldSet(principal, #tenant, #projectId)")
+    public ResponseEntity<ItemTypeSetViewDto> updateProjectItemTypeSet(
+            @PathVariable Long projectId,
+            @PathVariable Long id,
+            @RequestBody ItemTypeSetUpdateDto dto,
+            @CurrentTenant Tenant tenant
+    ) {
+        ItemTypeSetViewDto updated = itemTypeSetService.updateProjectItemTypeSet(tenant, projectId, id, dto);
+        return ResponseEntity.ok(updated);
+    }
+
+    @DeleteMapping("/project/{projectId}/{id}")
+    @PreAuthorize("@securityService.canCreateFieldSet(principal, #tenant, #projectId)")
+    public ResponseEntity<Void> deleteProjectItemTypeSet(
+            @PathVariable Long projectId,
+            @PathVariable Long id,
+            @CurrentTenant Tenant tenant
+    ) {
+        itemTypeSetService.deleteItemTypeSet(tenant, id);
+        return ResponseEntity.noContent().build();
+    }
 }

@@ -61,6 +61,7 @@ public class ItemTypeSetService {
 
         if (!scopeType.equals(ScopeType.TENANT)) {
             if (project == null) throw new ApiException("Project must be specified for non-global ItemTypeSet");
+            set.setProject(project);
             set.getProjectsAssociation().add(project);
         }
 
@@ -83,6 +84,10 @@ public class ItemTypeSetService {
             configuration.setCategory(entryDto.category());
             configuration.setWorkflow(workflow);
             configuration.setFieldSet(fieldSet);
+            
+            if (!scopeType.equals(ScopeType.TENANT) && project != null) {
+                configuration.setProject(project);
+            }
 
             /*
             if (!scopeType.equals(ScopeType.TENANT)) {
@@ -249,6 +254,26 @@ public class ItemTypeSetService {
         return sets.stream()
                 .map(dtoMapper::toItemTypeSetViewDto)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ItemTypeSetViewDto> getProjectItemTypeSets(Tenant tenant, Long projectId) {
+        List<ItemTypeSet> sets = itemTypeSetRepository.findAllByProjectIdAndTenant(projectId, tenant);
+        return sets.stream()
+                .map(dtoMapper::toItemTypeSetViewDto)
+                .toList();
+    }
+
+    public ItemTypeSetViewDto updateProjectItemTypeSet(Tenant tenant, Long projectId, Long id, ItemTypeSetUpdateDto dto) {
+        ItemTypeSet set = itemTypeSetRepository.findByIdAndTenant(id, tenant)
+                .orElseThrow(() -> new ApiException("ItemTypeSet non trovato: " + id));
+        
+        // Verifica che l'ItemTypeSet appartenga al progetto
+        if (set.getProject() == null || !set.getProject().getId().equals(projectId)) {
+            throw new ApiException("ItemTypeSet non appartiene al progetto specificato");
+        }
+        
+        return updateItemTypeSet(tenant, id, dto);
     }
 
 

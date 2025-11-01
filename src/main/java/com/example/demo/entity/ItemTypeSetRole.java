@@ -49,7 +49,7 @@ public class ItemTypeSetRole {
     @JoinColumn(name = "tenant_id", nullable = false)
     private Tenant tenant;
     
-    // Assegnazione DUAL: Grant diretto OPPURE Role template
+    // Assegnazione: Grant diretto E/O Role template (possono coesistere)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "grant_id")
     private Grant grant;           // Assegnazione diretta Grant
@@ -104,7 +104,9 @@ public class ItemTypeSetRole {
     }
     
     public String getAssignmentType() {
-        if (hasDirectGrant()) {
+        if (hasDirectGrant() && hasRoleTemplate()) {
+            return "GRANTS";
+        } else if (hasDirectGrant()) {
             return "GRANT";
         } else if (hasRoleTemplate()) {
             return "ROLE";
