@@ -67,6 +67,12 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             @Param("tenantId") Long tenantId
     );
 
+    /**
+     * Conta i progetti che usano un ItemTypeSet
+     */
+    @Query("SELECT COUNT(p) FROM Project p WHERE p.itemTypeSet.id = :itemTypeSetId AND p.tenant.id = :tenantId")
+    long countByItemTypeSetIdAndTenantId(@Param("itemTypeSetId") Long itemTypeSetId, @Param("tenantId") Long tenantId);
+
 
 
 

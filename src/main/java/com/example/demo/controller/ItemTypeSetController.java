@@ -167,4 +167,24 @@ public class ItemTypeSetController {
         itemTypeSetService.deleteItemTypeSet(tenant, id);
         return ResponseEntity.noContent().build();
     }
+
+    // ========================
+    // IMPACT ANALYSIS
+    // ========================
+
+    /**
+     * Analizza gli impatti della rimozione di ItemTypeConfiguration da un ItemTypeSet
+     */
+    @PostMapping("/{itemTypeSetId}/analyze-itemtypeconfiguration-removal-impact")
+    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    public ResponseEntity<com.example.demo.dto.ItemTypeConfigurationRemovalImpactDto> analyzeItemTypeConfigurationRemovalImpact(
+            @PathVariable Long itemTypeSetId,
+            @RequestBody java.util.List<Long> removedItemTypeConfigurationIds,
+            @CurrentTenant Tenant tenant
+    ) {
+        java.util.Set<Long> configIdsSet = new java.util.HashSet<>(removedItemTypeConfigurationIds);
+        com.example.demo.dto.ItemTypeConfigurationRemovalImpactDto impact = itemTypeSetService.analyzeItemTypeConfigurationRemovalImpact(
+                tenant, itemTypeSetId, configIdsSet);
+        return ResponseEntity.ok(impact);
+    }
 }

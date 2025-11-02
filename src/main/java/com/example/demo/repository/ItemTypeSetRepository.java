@@ -29,6 +29,7 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
     @Query("""
         SELECT DISTINCT its FROM ItemTypeSet its
         LEFT JOIN FETCH its.itemTypeConfigurations
+        LEFT JOIN FETCH its.projectsAssociation
         WHERE its.tenant = :tenant AND its.scope = 'TENANT'
     """)
     List<ItemTypeSet> findAllGlobalWithItemTypeConfigurationsByTenant(@Param("tenant") Tenant tenant);
@@ -36,6 +37,7 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
     @Query("""
     SELECT DISTINCT its FROM ItemTypeSet its
     LEFT JOIN FETCH its.itemTypeConfigurations
+    LEFT JOIN FETCH its.projectsAssociation
     WHERE its.tenant = :tenant AND its.scope = 'GLOBAL'
 """)
     List<ItemTypeSet> findAllNonGlobalWithItemTypeConfigurationsByTenant(@Param("tenant") Tenant tenant);
@@ -120,6 +122,7 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
     @Query("""
         SELECT DISTINCT its FROM ItemTypeSet its
         LEFT JOIN FETCH its.itemTypeConfigurations
+        LEFT JOIN FETCH its.projectsAssociation
         WHERE its.tenant = :tenant 
         AND its.scope = 'PROJECT'
         AND its.project.id = :projectId
