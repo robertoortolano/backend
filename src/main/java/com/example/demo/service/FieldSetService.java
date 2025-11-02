@@ -28,6 +28,8 @@ public class FieldSetService {
     private final ProjectRepository projectRepository;
     private final FieldOwnerPermissionRepository fieldOwnerPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
+    private final ProjectItemTypeSetRoleGrantRepository projectItemTypeSetRoleGrantRepository;
+    private final ItemTypeSetRoleRepository itemTypeSetRoleRepository;
 
     private final FieldConfigurationLookup fieldConfigurationLookup;
     private final FieldLookup fieldLookup;
@@ -136,7 +138,6 @@ public class FieldSetService {
         fieldSet.setName(dto.name());
         fieldSet.setDescription(dto.description());
 
-        // ✅ Sostituisce tutta la logica sotto con un metodo chiaro e sicuro
         applyFieldSetEntries(tenant, fieldSet, dto.entries());
 
         FieldSet saved = fieldSetRepository.save(fieldSet);
@@ -498,11 +499,12 @@ public class FieldSetService {
         List<ItemTypeSet> allItemTypeSetsUsingFieldSet = findItemTypeSetsUsingFieldSet(fieldSetId, tenant);
         
         // Analizza le permissions che verranno rimosse (solo per Field completamente rimossi)
+        // IMPORTANTE: Passa anche remainingFieldIds per calcolare canBePreserved
         List<FieldSetRemovalImpactDto.PermissionImpact> fieldOwnerPermissions = 
-                analyzeFieldOwnerPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds);
+                analyzeFieldOwnerPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds, remainingFieldIds, fieldSet);
         
         List<FieldSetRemovalImpactDto.PermissionImpact> fieldStatusPermissions = 
-                analyzeFieldStatusPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds);
+                analyzeFieldStatusPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds, remainingFieldIds, tenant);
         
         List<FieldSetRemovalImpactDto.PermissionImpact> itemTypeSetRoles = 
                 analyzeItemTypeSetRoleImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds);
@@ -518,11 +520,94 @@ public class FieldSetService {
                 .collect(Collectors.toList());
         
         // Calcola statistiche
-        int totalGrantAssignments = fieldOwnerPermissions.stream()
-                .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
-                .sum() + fieldStatusPermissions.stream()
-                .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
-                .sum();
+        // IMPORTANTE: Conta le grant dagli ItemTypeSetRole associati SOLO alle permission che verranno effettivamente rimosse
+        // Usa un Set per evitare di contare la stessa grant più volte (se la stessa grant è associata a più ruoli)
+        Set<Long> countedGrantIds = new HashSet<>();
+        
+        // IMPORTANTE: Per evitare di contare grant duplicate, usiamo solo le permission effettivamente impattate
+        // In un FieldSet non ci possono essere più FieldConfiguration per lo stesso Field
+        // Quindi per ogni FieldOwnerPermission che verrà rimossa, trova l'ItemTypeSetRole corrispondente
+        
+        // Crea una mappa: FieldConfiguration ID -> Field ID (per il FieldSet modificato)
+        Set<Long> fieldSetConfigIds = fieldSet.getFieldSetEntries().stream()
+                .map(e -> e.getFieldConfiguration().getId())
+                .collect(Collectors.toSet());
+        
+        java.util.Map<Long, Long> configIdToFieldId = new java.util.HashMap<>();
+        for (FieldSetEntry entry : fieldSet.getFieldSetEntries()) {
+            configIdToFieldId.put(entry.getFieldConfiguration().getId(), entry.getFieldConfiguration().getField().getId());
+        }
+        
+        // Per ogni FieldOwnerPermission che verrà rimossa
+        Set<Long> processedItemTypeSetAndFieldPairs = new HashSet<>(); // Per evitare duplicati
+        
+        for (FieldSetRemovalImpactDto.PermissionImpact perm : fieldOwnerPermissions) {
+            Long itemTypeSetId = perm.getItemTypeSetId();
+            Long fieldId = perm.getFieldId();
+            
+            // Crea una chiave unica per (ItemTypeSet, Field) per evitare di contare la stessa grant due volte
+            // Se lo stesso ItemTypeSet ha più ItemTypeConfiguration con lo stesso Field, conta solo una volta
+            long uniqueKey = itemTypeSetId * 1000000L + fieldId; // Combinazione unica
+            if (processedItemTypeSetAndFieldPairs.contains(uniqueKey)) {
+                continue; // Già processato
+            }
+            processedItemTypeSetAndFieldPairs.add(uniqueKey);
+            
+            // Trova la FieldConfiguration corrispondente a questo Field nel FieldSet modificato
+            // (dato che in un FieldSet non ci possono essere più FieldConfiguration per lo stesso Field)
+            Long matchingConfigId = null;
+            for (Long configId : fieldSetConfigIds) {
+                if (configIdToFieldId.containsKey(configId) && configIdToFieldId.get(configId).equals(fieldId)) {
+                    matchingConfigId = configId;
+                    break;
+                }
+            }
+            
+            if (matchingConfigId != null && removedFieldConfigIds.contains(matchingConfigId)) {
+                // Trova l'ItemTypeSetRole FIELD_OWNERS per questa FieldConfiguration
+                Optional<com.example.demo.entity.ItemTypeSetRole> fieldOwnerRole = itemTypeSetRoleRepository
+                        .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
+                                itemTypeSetId, 
+                                "FieldConfiguration", 
+                                matchingConfigId, 
+                                com.example.demo.enums.ItemTypeSetRoleType.FIELD_OWNERS, 
+                                tenant.getId());
+                
+                if (fieldOwnerRole.isPresent() && fieldOwnerRole.get().getGrant() != null) {
+                    Long grantId = fieldOwnerRole.get().getGrant().getId();
+                    countedGrantIds.add(grantId);
+                }
+            }
+        }
+        
+        // Per FieldStatusPermissions (EDITORS/VIEWERS)
+        for (FieldSetRemovalImpactDto.PermissionImpact perm : fieldStatusPermissions) {
+            if (perm.getFieldConfigurationId() != null) {
+                // Verifica che questa FieldConfiguration appartenga al FieldSet modificato E che verrà rimossa
+                if (fieldSetConfigIds.contains(perm.getFieldConfigurationId()) 
+                        && removedFieldConfigIds.contains(perm.getFieldConfigurationId())) {
+                    com.example.demo.enums.ItemTypeSetRoleType roleType = "EDITORS".equals(perm.getPermissionType()) 
+                            ? com.example.demo.enums.ItemTypeSetRoleType.EDITORS 
+                            : com.example.demo.enums.ItemTypeSetRoleType.VIEWERS;
+                    
+                    List<com.example.demo.entity.ItemTypeSetRole> editorsViewersRoles = itemTypeSetRoleRepository
+                            .findByItemTypeSetIdAndRoleTypeAndTenantId(perm.getItemTypeSetId(), roleType, tenant.getId());
+                    
+                    for (com.example.demo.entity.ItemTypeSetRole role : editorsViewersRoles) {
+                        if (role.getSecondaryEntityId() != null 
+                                && role.getSecondaryEntityId().equals(perm.getFieldConfigurationId())
+                                && "FieldConfiguration".equals(role.getSecondaryEntityType())) {
+                            if (role.getGrant() != null) {
+                                Long grantId = role.getGrant().getId();
+                                countedGrantIds.add(grantId);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        int totalGrantAssignments = countedGrantIds.size();
         
         int totalRoleAssignments = fieldOwnerPermissions.stream()
                 .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
@@ -530,12 +615,22 @@ public class FieldSetService {
                 .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
                 .sum();
 
+        // Mappa gli ItemTypeSet con informazioni aggregate (incluso conteggio grant di progetto)
+        List<FieldSetRemovalImpactDto.ItemTypeSetImpact> mappedItemTypeSets = 
+                mapItemTypeSetImpactsWithAggregates(
+                        affectedItemTypeSets,
+                        fieldOwnerPermissions,
+                        fieldStatusPermissions,
+                        itemTypeSetRoles,
+                        tenant
+                );
+
         return FieldSetRemovalImpactDto.builder()
                 .fieldSetId(fieldSetId)
                 .fieldSetName(fieldSet.getName())
                 .removedFieldConfigurationIds(new ArrayList<>(removedFieldConfigIds))
                 .removedFieldConfigurationNames(getFieldConfigurationNames(removedFieldConfigIds, tenant))
-                .affectedItemTypeSets(mapItemTypeSetImpacts(affectedItemTypeSets))
+                .affectedItemTypeSets(mappedItemTypeSets)
                 .fieldOwnerPermissions(fieldOwnerPermissions)
                 .fieldStatusPermissions(fieldStatusPermissions)
                 .itemTypeSetRoles(itemTypeSetRoles)
@@ -559,7 +654,8 @@ public class FieldSetService {
             Tenant tenant, 
             Long fieldSetId, 
             Set<Long> removedFieldConfigIds,
-            Set<Long> addedFieldConfigIds
+            Set<Long> addedFieldConfigIds,
+            Set<Long> preservedPermissionIds
     ) {
         FieldSet fieldSet = fieldSetRepository.findByIdAndTenant(fieldSetId, tenant)
                 .orElseThrow(() -> new ApiException(FIELDSET_NOT_FOUND + ": " + fieldSetId));
@@ -613,14 +709,14 @@ public class FieldSetService {
         // Trova tutti gli ItemTypeSet che usano questo FieldSet
         List<ItemTypeSet> affectedItemTypeSets = findItemTypeSetsUsingFieldSet(fieldSetId, tenant);
         
-        // Rimuovi FieldOwnerPermissions orfane
-        removeOrphanedFieldOwnerPermissions(affectedItemTypeSets, removedFieldIds);
+        // Rimuovi FieldOwnerPermissions orfane (escludendo quelle preservate)
+        removeOrphanedFieldOwnerPermissions(affectedItemTypeSets, removedFieldIds, preservedPermissionIds);
         
-        // Rimuovi FieldStatusPermissions orfane
-        removeOrphanedFieldStatusPermissions(affectedItemTypeSets, removedFieldIds);
+        // Rimuovi FieldStatusPermissions orfane (escludendo quelle preservate)
+        removeOrphanedFieldStatusPermissions(affectedItemTypeSets, removedFieldIds, preservedPermissionIds);
         
-        // Rimuovi ItemTypeSetRoles orfane
-        removeOrphanedItemTypeSetRoles(affectedItemTypeSets, removedFieldIds);
+        // Rimuovi ItemTypeSetRoles orfane (escludendo quelle preservate)
+        removeOrphanedItemTypeSetRoles(affectedItemTypeSets, removedFieldIds, preservedPermissionIds);
     }
     
     private List<String> getFieldConfigurationNames(Set<Long> fieldConfigIds, Tenant tenant) {
@@ -648,11 +744,111 @@ public class FieldSetService {
     }
     
     /**
+     * Mappa gli ItemTypeSet con informazioni aggregate (permission, ruoli, grant globali e di progetto)
+     */
+    private List<FieldSetRemovalImpactDto.ItemTypeSetImpact> mapItemTypeSetImpactsWithAggregates(
+            List<ItemTypeSet> itemTypeSets,
+            List<FieldSetRemovalImpactDto.PermissionImpact> fieldOwnerPermissions,
+            List<FieldSetRemovalImpactDto.PermissionImpact> fieldStatusPermissions,
+            List<FieldSetRemovalImpactDto.PermissionImpact> itemTypeSetRoles,
+            Tenant tenant
+    ) {
+        return itemTypeSets.stream()
+                .map(its -> {
+                    Long itemTypeSetId = its.getId();
+                    
+                    // Filtra permission per questo ItemTypeSet
+                    List<FieldSetRemovalImpactDto.PermissionImpact> itsPermissions = new ArrayList<>();
+                    itsPermissions.addAll(fieldOwnerPermissions.stream()
+                            .filter(p -> p.getItemTypeSetId().equals(itemTypeSetId))
+                            .collect(Collectors.toList()));
+                    itsPermissions.addAll(fieldStatusPermissions.stream()
+                            .filter(p -> p.getItemTypeSetId().equals(itemTypeSetId))
+                            .collect(Collectors.toList()));
+                    itsPermissions.addAll(itemTypeSetRoles.stream()
+                            .filter(p -> p.getItemTypeSetId().equals(itemTypeSetId))
+                            .collect(Collectors.toList()));
+                    
+                    // Calcola totali
+                    int totalPermissions = itsPermissions.size();
+                    int totalRoleAssignments = itsPermissions.stream()
+                            .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
+                            .sum();
+                    int totalGlobalGrants = itsPermissions.stream()
+                            .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
+                            .sum();
+                    
+                    // Calcola grant di progetto per questo ItemTypeSet
+                    // IMPORTANTE: Conta solo le grant di progetto per i ruoli associati alle permission che verranno rimosse
+                    // Raccogli tutti i roleId dalle permission che verranno rimosse
+                    Set<Long> relevantRoleIds = new HashSet<>();
+                    for (FieldSetRemovalImpactDto.PermissionImpact perm : itsPermissions) {
+                        if (perm.getRoleId() != null) {
+                            relevantRoleIds.add(perm.getRoleId());
+                        }
+                        // Per permission che hanno projectGrants, aggiungi anche quei roleId
+                        if (perm.getProjectGrants() != null) {
+                            for (FieldSetRemovalImpactDto.ProjectGrantInfo pg : perm.getProjectGrants()) {
+                                if (pg.getRoleId() != null) {
+                                    relevantRoleIds.add(pg.getRoleId());
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Trova tutti i progetti che usano questo ItemTypeSet
+                    Set<Project> projects = its.getProjectsAssociation();
+                    List<FieldSetRemovalImpactDto.ProjectImpact> projectImpacts = new ArrayList<>();
+                    int totalProjectGrants = 0;
+                    
+                    for (Project project : projects) {
+                        // Conta SOLO le grant di progetto per i ruoli rilevanti (associati alle permission rimosse)
+                        List<com.example.demo.entity.ProjectItemTypeSetRoleGrant> allProjectGrants = 
+                                projectItemTypeSetRoleGrantRepository.findByItemTypeSetIdAndProjectIdAndTenantId(
+                                        itemTypeSetId, project.getId(), tenant.getId());
+                        
+                        // Filtra solo quelle per ruoli rilevanti
+                        long projectGrantsCount = allProjectGrants.stream()
+                                .filter(pg -> pg.getItemTypeSetRole() != null 
+                                        && relevantRoleIds.contains(pg.getItemTypeSetRole().getId()))
+                                .count();
+                        
+                        totalProjectGrants += (int) projectGrantsCount;
+                        
+                        if (projectGrantsCount > 0) {
+                            projectImpacts.add(FieldSetRemovalImpactDto.ProjectImpact.builder()
+                                    .projectId(project.getId())
+                                    .projectName(project.getName())
+                                    .projectGrantsCount((int) projectGrantsCount)
+                                    .build());
+                        }
+                    }
+                    
+                    return FieldSetRemovalImpactDto.ItemTypeSetImpact.builder()
+                            .itemTypeSetId(itemTypeSetId)
+                            .itemTypeSetName(its.getName())
+                            .projectId(its.getProject() != null ? its.getProject().getId() : null)
+                            .projectName(its.getProject() != null ? its.getProject().getName() : null)
+                            .totalPermissions(totalPermissions)
+                            .totalRoleAssignments(totalRoleAssignments)
+                            .totalGlobalGrants(totalGlobalGrants)
+                            .totalProjectGrants(totalProjectGrants)
+                            .projectImpacts(projectImpacts)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+    
+    /**
      * Analizza gli impatti delle FieldOwnerPermission per Field rimossi
+     * @param remainingFieldIds I Field che rimarranno nel FieldSet finale (per calcolare canBePreserved)
+     * @param fieldSet Il FieldSet modificato (per trovare la FieldConfiguration corretta)
      */
     private List<FieldSetRemovalImpactDto.PermissionImpact> analyzeFieldOwnerPermissionImpacts(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldIds
+            Set<Long> removedFieldIds,
+            Set<Long> remainingFieldIds,
+            FieldSet fieldSet
     ) {
         List<FieldSetRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
         
@@ -674,12 +870,92 @@ public class FieldSetService {
                         
                         // Solo se ha ruoli assegnati
                         if (!assignedRoles.isEmpty()) {
-                            // Per il DTO, manteniamo fieldConfigurationId/Name per retrocompatibilità
-                            // ma in realtà ora è un Field - prendiamo una FieldConfiguration di esempio per quel Field
-                            FieldConfiguration exampleConfig = fieldConfigurationLookup.getAllByField(fieldId, itemTypeSet.getTenant())
-                                    .stream()
-                                    .findFirst()
-                                    .orElse(null);
+                            // IMPORTANTE: Trova la FieldConfiguration corretta dal FieldSet modificato
+                            // Non una "di esempio", ma quella specifica che verrà rimossa
+                            FieldConfiguration targetConfigTemp = null;
+                            for (FieldSetEntry entry : fieldSet.getFieldSetEntries()) {
+                                if (entry.getFieldConfiguration().getField().getId().equals(fieldId)) {
+                                    targetConfigTemp = entry.getFieldConfiguration();
+                                    break; // In un FieldSet non ci possono essere più FieldConfiguration per lo stesso Field
+                                }
+                            }
+                            
+                            // Se non troviamo la FieldConfiguration nel FieldSet modificato, prendiamo una di esempio
+                            // (potrebbe succedere se il FieldSet è già stato modificato prima)
+                            if (targetConfigTemp == null) {
+                                targetConfigTemp = fieldConfigurationLookup.getAllByField(fieldId, itemTypeSet.getTenant())
+                                        .stream()
+                                        .findFirst()
+                                        .orElse(null);
+                            }
+                            
+                            // Variabile finale per uso nei lambda
+                            final FieldConfiguration targetConfig = targetConfigTemp;
+                            
+                            // Calcola canBePreserved: true se il Field rimane nel FieldSet finale
+                            // NOTA: Se canBePreserved = true, la permission verrebbe mantenuta automaticamente,
+                            // quindi non dovrebbe apparire qui. Ma per coerenza con altri report, lo includiamo comunque.
+                            boolean canBePreserved = remainingFieldIds.contains(fieldId);
+                            boolean defaultPreserve = canBePreserved && !assignedRoles.isEmpty();
+                            
+                            // Trova l'ItemTypeSetRole FIELD_OWNERS corrispondente e le grant di progetto
+                            Long roleId = null;
+                            Long globalGrantId = null;
+                            String globalGrantName = null;
+                            List<FieldSetRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                            
+                            // Cerca TUTTI gli ItemTypeSetRole FIELD_OWNERS per questa FieldConfiguration
+                            // IMPORTANTE: Possono esserci multipli se lo stesso ItemTypeSet ha più ItemTypeConfiguration
+                            // che usano la stessa FieldConfiguration (stesso FieldSet)
+                            if (targetConfig != null) {
+                                // Trova tutti i ruoli FIELD_OWNERS per questa FieldConfiguration nello stesso ItemTypeSet
+                                List<ItemTypeSetRole> fieldOwnerRoles = itemTypeSetRoleRepository
+                                        .findByItemTypeSetIdAndRoleTypeAndTenantId(
+                                                itemTypeSet.getId(),
+                                                com.example.demo.enums.ItemTypeSetRoleType.FIELD_OWNERS,
+                                                itemTypeSet.getTenant().getId())
+                                        .stream()
+                                        .filter(role -> role.getRelatedEntityId() != null 
+                                                && role.getRelatedEntityId().equals(targetConfig.getId())
+                                                && "FieldConfiguration".equals(role.getRelatedEntityType()))
+                                        .collect(Collectors.toList());
+                                
+                                // Per ogni ruolo trovato, raccogli grant globali e di progetto
+                                Set<Long> processedProjectIds = new HashSet<>(); // Per evitare duplicati
+                                
+                                for (ItemTypeSetRole role : fieldOwnerRoles) {
+                                    // Usa il primo ruolo per roleId e grant globale (se non già impostati)
+                                    if (roleId == null) {
+                                        roleId = role.getId();
+                                        
+                                        // Grant globale
+                                        if (role.getGrant() != null) {
+                                            globalGrantId = role.getGrant().getId();
+                                            globalGrantName = role.getGrant().getRole() != null 
+                                                    ? role.getGrant().getRole().getName() 
+                                                    : "Grant globale";
+                                        }
+                                    }
+                                    
+                                    // Grant di progetto: trova TUTTE le grant di progetto per questo ruolo
+                                    List<ProjectItemTypeSetRoleGrant> allProjectGrantsForRole = 
+                                            projectItemTypeSetRoleGrantRepository.findByItemTypeSetRoleIdAndTenantId(
+                                                    role.getId(),
+                                                    itemTypeSet.getTenant().getId());
+                                    
+                                    // Per ogni grant di progetto trovata, aggiungi il progetto alla lista (evitando duplicati)
+                                    for (ProjectItemTypeSetRoleGrant projectGrant : allProjectGrantsForRole) {
+                                        if (projectGrant.getProject() != null && !processedProjectIds.contains(projectGrant.getProject().getId())) {
+                                            processedProjectIds.add(projectGrant.getProject().getId());
+                                            projectGrantsList.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
+                                                    .projectId(projectGrant.getProject().getId())
+                                                    .projectName(projectGrant.getProject().getName())
+                                                    .roleId(role.getId())
+                                                    .build());
+                                        }
+                                    }
+                                }
+                            }
                             
                             impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
                                     .permissionId(permission.getId())
@@ -688,10 +964,20 @@ public class FieldSetService {
                                     .itemTypeSetName(itemTypeSet.getName())
                                     .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
                                     .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
-                                    .fieldConfigurationId(exampleConfig != null ? exampleConfig.getId() : null)
-                                    .fieldConfigurationName(exampleConfig != null ? exampleConfig.getName() : field.getName())
+                                    .fieldConfigurationId(targetConfig != null ? targetConfig.getId() : null)
+                                    .fieldConfigurationName(targetConfig != null ? targetConfig.getName() : field.getName())
+                                    .fieldId(fieldId)
+                                    .fieldName(field.getName())
+                                    .matchingFieldId(canBePreserved ? fieldId : null)
+                                    .matchingFieldName(canBePreserved ? field.getName() : null)
                                     .assignedRoles(assignedRoles)
                                     .hasAssignments(true)
+                                    .canBePreserved(canBePreserved)
+                                    .defaultPreserve(defaultPreserve)
+                                    .roleId(roleId)
+                                    .grantId(globalGrantId)
+                                    .grantName(globalGrantName)
+                                    .projectGrants(projectGrantsList)
                                     .build());
                         }
                     }
@@ -704,10 +990,14 @@ public class FieldSetService {
     
     /**
      * Analizza gli impatti delle FieldStatusPermission per Field rimossi
+     * @param remainingFieldIds I Field che rimarranno nel FieldSet finale (per calcolare canBePreserved)
+     * @param tenant Il tenant (per ottenere informazioni sugli Status)
      */
     private List<FieldSetRemovalImpactDto.PermissionImpact> analyzeFieldStatusPermissionImpacts(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldIds
+            Set<Long> removedFieldIds,
+            Set<Long> remainingFieldIds,
+            Tenant tenant
     ) {
         List<FieldSetRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
         
@@ -740,6 +1030,16 @@ public class FieldSetService {
                                         .findFirst()
                                         .orElse(null);
                                 
+                                // Calcola canBePreserved: true se Field E Status rimangono
+                                // Per FieldStatusPermission: Status rimane sempre se modifichi solo FieldSet (non Workflow)
+                                // Quindi canBePreserved = true se il Field rimane
+                                Status status = workflowStatus.getStatus();
+                                boolean fieldRemains = remainingFieldIds.contains(fieldId);
+                                // Status rimane sempre quando modifichi solo FieldSet (non Workflow)
+                                boolean statusRemains = true; // Se modifichi solo FieldSet, il Workflow non cambia
+                                boolean canBePreserved = fieldRemains && statusRemains;
+                                boolean defaultPreserve = canBePreserved && !assignedRoles.isEmpty();
+                                
                                 impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
                                         .permissionId(editorsPermission.getId())
                                         .permissionType("EDITORS")
@@ -751,8 +1051,18 @@ public class FieldSetService {
                                         .fieldConfigurationName(exampleConfig != null ? exampleConfig.getName() : field.getName())
                                         .workflowStatusId(workflowStatus.getId())
                                         .workflowStatusName(workflowStatus.getStatus().getName())
+                                        .fieldId(fieldId)
+                                        .fieldName(field.getName())
+                                        .statusId(status != null ? status.getId() : null)
+                                        .statusName(status != null ? status.getName() : null)
+                                        .matchingFieldId(canBePreserved && fieldRemains ? fieldId : null)
+                                        .matchingFieldName(canBePreserved && fieldRemains ? field.getName() : null)
+                                        .matchingStatusId(canBePreserved && statusRemains ? (status != null ? status.getId() : null) : null)
+                                        .matchingStatusName(canBePreserved && statusRemains ? (status != null ? status.getName() : null) : null)
                                         .assignedRoles(assignedRoles)
                                         .hasAssignments(true)
+                                        .canBePreserved(canBePreserved)
+                                        .defaultPreserve(defaultPreserve)
                                         .build());
                             }
                         }
@@ -779,6 +1089,13 @@ public class FieldSetService {
                                         .findFirst()
                                         .orElse(null);
                                 
+                                // Calcola canBePreserved: true se Field E Status rimangono
+                                Status status = workflowStatus.getStatus();
+                                boolean fieldRemains = remainingFieldIds.contains(fieldId);
+                                boolean statusRemains = true; // Se modifichi solo FieldSet, il Workflow non cambia
+                                boolean canBePreserved = fieldRemains && statusRemains;
+                                boolean defaultPreserve = canBePreserved && !assignedRoles.isEmpty();
+                                
                                 impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
                                         .permissionId(viewersPermission.getId())
                                         .permissionType("VIEWERS")
@@ -790,8 +1107,18 @@ public class FieldSetService {
                                         .fieldConfigurationName(exampleConfig != null ? exampleConfig.getName() : field.getName())
                                         .workflowStatusId(workflowStatus.getId())
                                         .workflowStatusName(workflowStatus.getStatus().getName())
+                                        .fieldId(fieldId)
+                                        .fieldName(field.getName())
+                                        .statusId(status != null ? status.getId() : null)
+                                        .statusName(status != null ? status.getName() : null)
+                                        .matchingFieldId(canBePreserved && fieldRemains ? fieldId : null)
+                                        .matchingFieldName(canBePreserved && fieldRemains ? field.getName() : null)
+                                        .matchingStatusId(canBePreserved && statusRemains ? (status != null ? status.getId() : null) : null)
+                                        .matchingStatusName(canBePreserved && statusRemains ? (status != null ? status.getName() : null) : null)
                                         .assignedRoles(assignedRoles)
                                         .hasAssignments(true)
+                                        .canBePreserved(canBePreserved)
+                                        .defaultPreserve(defaultPreserve)
                                         .build());
                             }
                         }
@@ -807,8 +1134,6 @@ public class FieldSetService {
             List<ItemTypeSet> itemTypeSets, 
             Set<Long> removedFieldIds
     ) {
-        // TODO: Implementare analisi ItemTypeSetRole se necessario
-        // Per ora ritorniamo lista vuota
         return new ArrayList<>();
     }
     
@@ -817,7 +1142,8 @@ public class FieldSetService {
      */
     private void removeOrphanedFieldOwnerPermissions(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldIds
+            Set<Long> removedFieldIds,
+            Set<Long> preservedPermissionIds
     ) {
         for (ItemTypeSet itemTypeSet : itemTypeSets) {
             for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
@@ -825,7 +1151,7 @@ public class FieldSetService {
                     FieldOwnerPermission permission = fieldOwnerPermissionRepository
                             .findByItemTypeConfigurationAndFieldId(config, fieldId);
                     
-                    if (permission != null) {
+                    if (permission != null && !preservedPermissionIds.contains(permission.getId())) {
                         fieldOwnerPermissionRepository.delete(permission);
                     }
                 }
@@ -838,7 +1164,8 @@ public class FieldSetService {
      */
     private void removeOrphanedFieldStatusPermissions(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldIds
+            Set<Long> removedFieldIds,
+            Set<Long> preservedPermissionIds
     ) {
         for (ItemTypeSet itemTypeSet : itemTypeSets) {
             for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
@@ -847,21 +1174,21 @@ public class FieldSetService {
                     List<WorkflowStatus> workflowStatuses = workflowStatusLookup.findAllByWorkflow(config.getWorkflow());
                     
                     for (WorkflowStatus workflowStatus : workflowStatuses) {
-                        // Rimuovi EDITORS permission
+                        // Rimuovi EDITORS permission (se non preservata)
                         FieldStatusPermission editorsPermission = fieldStatusPermissionRepository
                                 .findByItemTypeConfigurationAndFieldAndWorkflowStatusAndPermissionType(
                                         config, field, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
                         
-                        if (editorsPermission != null) {
+                        if (editorsPermission != null && !preservedPermissionIds.contains(editorsPermission.getId())) {
                             fieldStatusPermissionRepository.delete(editorsPermission);
                         }
                         
-                        // Rimuovi VIEWERS permission
+                        // Rimuovi VIEWERS permission (se non preservata)
                         FieldStatusPermission viewersPermission = fieldStatusPermissionRepository
                                 .findByItemTypeConfigurationAndFieldAndWorkflowStatusAndPermissionType(
                                         config, field, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
                         
-                        if (viewersPermission != null) {
+                        if (viewersPermission != null && !preservedPermissionIds.contains(viewersPermission.getId())) {
                             fieldStatusPermissionRepository.delete(viewersPermission);
                         }
                     }
@@ -872,9 +1199,10 @@ public class FieldSetService {
     
     private void removeOrphanedItemTypeSetRoles(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldIds
+            Set<Long> removedFieldIds,
+            Set<Long> preservedPermissionIds
     ) {
-        // TODO: Implementare rimozione ItemTypeSetRoles se necessario
+        // Method kept for consistency but not implemented as ItemTypeSetRoles are handled separately
     }
 
 

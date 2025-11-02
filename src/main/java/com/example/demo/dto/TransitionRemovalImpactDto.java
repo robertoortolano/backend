@@ -23,6 +23,7 @@ public class TransitionRemovalImpactDto {
     // Statistiche
     private int totalAffectedItemTypeSets;
     private int totalExecutorPermissions;
+    private int totalGrantAssignments;
     private int totalRoleAssignments;
     
     @Data
@@ -32,8 +33,23 @@ public class TransitionRemovalImpactDto {
         private String itemTypeSetName;
         private Long projectId;
         private String projectName;
+        
+        // Informazioni aggregate per questo ItemTypeSet
+        private int totalPermissions;
+        private int totalRoleAssignments;
+        private int totalGlobalGrants;
+        private int totalProjectGrants;
+        private List<ProjectImpact> projectImpacts;
     }
     
+    @Data
+    @Builder
+    public static class ProjectImpact {
+        private Long projectId;
+        private String projectName;
+        private int projectGrantsCount;
+    }
+
     @Data
     @Builder
     public static class PermissionImpact {
@@ -49,7 +65,26 @@ public class TransitionRemovalImpactDto {
         private String toStatusName;
         private Long roleId;
         private String roleName;
+        private Long grantId; // Grant globale (se presente)
+        private String grantName; // Nome grant globale
         private List<String> assignedRoles;
-        private boolean hasAssignments; // true se ha ruoli assegnati
+        private boolean hasAssignments; // true se ha ruoli o grant assegnati
+        
+        // Info per preservazione
+        private Long transitionIdMatch; // ID della Transition corrispondente nel nuovo stato (se preservabile)
+        private String transitionNameMatch; // Nome della Transition corrispondente
+        private boolean canBePreserved; // true se esiste entity equivalente nel nuovo stato
+        private boolean defaultPreserve; // true se dovrebbe essere preservata di default
+        
+        // Grant di progetto per questa permission
+        private List<ProjectGrantInfo> projectGrants;
+    }
+    
+    @Data
+    @Builder
+    public static class ProjectGrantInfo {
+        private Long projectId;
+        private String projectName;
+        private Long roleId; // ID dell'ItemTypeSetRole associato
     }
 }

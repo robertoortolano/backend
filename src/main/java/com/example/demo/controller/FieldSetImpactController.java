@@ -198,8 +198,11 @@ public class FieldSetImpactController {
         Set<Long> addedFieldConfigIds = request.addedFieldConfigIds() != null 
                 ? request.addedFieldConfigIds() 
                 : new java.util.HashSet<>();
+        Set<Long> preservedPermissionIds = request.preservedPermissionIds() != null 
+                ? request.preservedPermissionIds() 
+                : new java.util.HashSet<>();
         
-        fieldSetService.removeOrphanedPermissions(tenant, fieldSetId, removedFieldConfigIds, addedFieldConfigIds);
+        fieldSetService.removeOrphanedPermissions(tenant, fieldSetId, removedFieldConfigIds, addedFieldConfigIds, preservedPermissionIds);
         
         return ResponseEntity.ok("Permissions orfane rimosse con successo");
     }
@@ -209,7 +212,8 @@ public class FieldSetImpactController {
      */
     public record RemoveOrphanedPermissionsRequest(
             Set<Long> removedFieldConfigIds,
-            Set<Long> addedFieldConfigIds
+            Set<Long> addedFieldConfigIds,
+            Set<Long> preservedPermissionIds // Lista di permission IDs da preservare (non rimuovere)
     ) {}
     
     /**

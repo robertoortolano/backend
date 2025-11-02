@@ -41,8 +41,23 @@ public class ItemTypeConfigurationRemovalImpactDto {
         private String itemTypeSetName;
         private Long projectId;
         private String projectName;
+        
+        // Informazioni aggregate per questo ItemTypeSet
+        private int totalPermissions;
+        private int totalRoleAssignments;
+        private int totalGlobalGrants;
+        private int totalProjectGrants;
+        private List<ProjectImpact> projectImpacts;
     }
     
+    @Data
+    @Builder
+    public static class ProjectImpact {
+        private Long projectId;
+        private String projectName;
+        private int projectGrantsCount;
+    }
+
     @Data
     @Builder
     public static class PermissionImpact {
@@ -70,6 +85,30 @@ public class ItemTypeConfigurationRemovalImpactDto {
         private List<String> assignedRoles;
         private List<String> assignedGrants;
         private boolean hasAssignments; // true se ha ruoli o grant assegnati
+        
+        // Info per preservazione
+        private Long fieldId;
+        private String fieldName;
+        private Long statusId;
+        private String statusName;
+        private Long matchingFieldId;
+        private String matchingFieldName;
+        private Long matchingStatusId;
+        private String matchingStatusName;
+        private boolean canBePreserved;
+        private boolean defaultPreserve;
+        
+        // Grant di progetto per questa permission
+        private List<ProjectGrantInfo> projectGrants;
+    }
+    
+    @Data
+    @Builder
+    public static class ProjectGrantInfo {
+        private Long projectId;
+        private String projectName;
+        private Long roleId;
     }
 }
+
 

@@ -53,5 +53,20 @@ public interface ProjectItemTypeSetRoleGrantRepository extends JpaRepository<Pro
         Long projectId,
         Long tenantId
     );
+    
+    /**
+     * Trova tutte le grant di progetto per un ItemTypeSetRole specifico
+     */
+    @Query("""
+        SELECT pig FROM ProjectItemTypeSetRoleGrant pig
+        JOIN FETCH pig.project
+        WHERE pig.itemTypeSetRole.id = :roleId
+          AND pig.tenant.id = :tenantId
+    """)
+    List<ProjectItemTypeSetRoleGrant> findByItemTypeSetRoleIdAndTenantId(
+        @Param("roleId") Long roleId,
+        @Param("tenantId") Long tenantId
+    );
 }
+
 

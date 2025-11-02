@@ -37,6 +37,21 @@ public class FieldSetRemovalImpactDto {
         private String itemTypeSetName;
         private Long projectId;
         private String projectName;
+        
+        // Informazioni aggregate per questo ItemTypeSet
+        private int totalPermissions; // Totale permission che verranno rimosse
+        private int totalRoleAssignments; // Totale ruoli assegnati
+        private int totalGlobalGrants; // Totale grant globali
+        private int totalProjectGrants; // Totale grant di progetto
+        private List<ProjectImpact> projectImpacts; // Dettaglio per ogni progetto che usa questo ItemTypeSet
+    }
+    
+    @Data
+    @Builder
+    public static class ProjectImpact {
+        private Long projectId;
+        private String projectName;
+        private int projectGrantsCount; // Numero di grant di progetto per questo ItemTypeSet in questo progetto
     }
     
     @Data
@@ -54,10 +69,33 @@ public class FieldSetRemovalImpactDto {
         private String workflowStatusName;
         private Long roleId;
         private String roleName;
-        private Long grantId;
-        private String grantName;
+        private Long grantId; // Grant globale (se presente)
+        private String grantName; // Nome grant globale
         private List<String> assignedRoles;
         private List<String> assignedGrants;
         private boolean hasAssignments; // true se ha ruoli o grant assegnati
+        
+        // Info per preservazione (simile a ItemTypeConfigurationMigrationImpactDto)
+        private Long fieldId; // ID del Field (per FieldOwnerPermission e FieldStatusPermission)
+        private String fieldName; // Nome del Field
+        private Long statusId; // ID dello Status (per FieldStatusPermission e StatusOwnerPermission)
+        private String statusName; // Nome dello Status
+        private Long matchingFieldId; // ID del Field corrispondente nel nuovo stato (se preservabile)
+        private String matchingFieldName; // Nome del Field corrispondente nel nuovo stato
+        private Long matchingStatusId; // ID dello Status corrispondente nel nuovo stato (se preservabile)
+        private String matchingStatusName; // Nome dello Status corrispondente nel nuovo stato
+        private boolean canBePreserved; // true se esiste entity equivalente nel nuovo stato
+        private boolean defaultPreserve; // true se dovrebbe essere preservata di default (canBePreserved && hasAssignments)
+        
+        // Grant di progetto per questa permission (solo info minime - i dettagli vengono recuperati on-demand)
+        private List<ProjectGrantInfo> projectGrants; // Lista di progetti che hanno grant per questa permission
+    }
+    
+    @Data
+    @Builder
+    public static class ProjectGrantInfo {
+        private Long projectId;
+        private String projectName;
+        private Long roleId; // ID dell'ItemTypeSetRole associato (per recuperare i dettagli via API)
     }
 }
