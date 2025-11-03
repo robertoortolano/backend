@@ -17,9 +17,16 @@ public class StatusRemovalImpactDto {
     private List<ItemTypeSetImpact> affectedItemTypeSets;
 
     private List<PermissionImpact> statusOwnerPermissions;
+    
+    // Executor permissions per le transizioni che verranno rimosse insieme agli stati
+    private List<ExecutorPermissionImpact> executorPermissions;
+    
+    private List<Long> removedTransitionIds;
+    private List<String> removedTransitionNames;
 
     private int totalAffectedItemTypeSets;
     private int totalStatusOwnerPermissions;
+    private int totalExecutorPermissions; // Permissions per transizioni rimosse
     private int totalGrantAssignments;
     private int totalRoleAssignments;
 
@@ -84,6 +91,36 @@ public class StatusRemovalImpactDto {
         private Long projectId;
         private String projectName;
         private Long roleId; // ID dell'ItemTypeSetRole associato
+    }
+    
+    @Data
+    @Builder
+    public static class ExecutorPermissionImpact {
+        private Long permissionId;
+        private String permissionType; // "EXECUTORS"
+        private Long itemTypeSetId;
+        private String itemTypeSetName;
+        private Long projectId;
+        private String projectName;
+        private Long transitionId;
+        private String transitionName;
+        private String fromStatusName;
+        private String toStatusName;
+        private Long roleId;
+        private String roleName;
+        private Long grantId; // Grant globale (se presente)
+        private String grantName; // Nome grant globale
+        private List<String> assignedRoles;
+        private boolean hasAssignments; // true se ha ruoli o grant assegnati
+        
+        // Info per preservazione
+        private Long transitionIdMatch; // ID della Transition corrispondente nel nuovo stato (se preservabile)
+        private String transitionNameMatch; // Nome della Transition corrispondente
+        private boolean canBePreserved; // true se esiste entity equivalente nel nuovo stato
+        private boolean defaultPreserve; // true se dovrebbe essere preservata di default
+        
+        // Grant di progetto per questa permission
+        private List<ProjectGrantInfo> projectGrants;
     }
 }
 

@@ -721,5 +721,69 @@ public class ItemTypeSetService {
                 })
                 .collect(Collectors.toList());
     }
+    
+    /**
+     * Rimuove le permissions orfane per le ItemTypeConfiguration rimosse
+     * Rimuove tutte le permission associate alle configurazioni rimosse, tranne quelle preservate
+     */
+    @Transactional
+    public void removeOrphanedPermissionsForItemTypeConfigurations(
+            Tenant tenant,
+            Long itemTypeSetId,
+            Set<Long> removedItemTypeConfigurationIds,
+            Set<Long> preservedPermissionIds
+    ) {
+        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdAndTenant(itemTypeSetId, tenant)
+                .orElseThrow(() -> new ApiException(ITEMTYPESET_NOT_FOUND + ": " + itemTypeSetId));
+        
+        // Trova tutte le ItemTypeConfiguration da rimuovere
+        List<ItemTypeConfiguration> configsToRemove = itemTypeSet.getItemTypeConfigurations().stream()
+                .filter(config -> removedItemTypeConfigurationIds.contains(config.getId()))
+                .collect(Collectors.toList());
+        
+        if (configsToRemove.isEmpty()) {
+            return; // Nessuna configurazione da rimuovere
+        }
+        
+        // Rimuovi tutte le permission per ogni configurazione rimossa (tranne quelle preservate)
+        for (ItemTypeConfiguration config : configsToRemove) {
+            // Rimuovi FieldOwnerPermissions
+            List<FieldOwnerPermission> fieldOwnerPermissions = fieldOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
+            for (FieldOwnerPermission perm : fieldOwnerPermissions) {
+                if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
+                    fieldOwnerPermissionRepository.delete(perm);
+                }
+            }
+            
+            // Rimuovi StatusOwnerPermissions
+            List<StatusOwnerPermission> statusOwnerPermissions = statusOwnerPermissionRepository.findByItemTypeConfigurationId(config.getId());
+            for (StatusOwnerPermission perm : statusOwnerPermissions) {
+                if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
+                    statusOwnerPermissionRepository.delete(perm);
+                }
+            }
+            
+            // Rimuovi FieldStatusPermissions
+            List<FieldStatusPermission> fieldStatusPermissions = fieldStatusPermissionRepository.findByItemTypeConfigurationId(config.getId());
+            for (FieldStatusPermission perm : fieldStatusPermissions) {
+                if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
+                    fieldStatusPermissionRepository.delete(perm);
+                }
+            }
+            
+            // Rimuovi ExecutorPermissions
+            List<ExecutorPermission> executorPermissions = executorPermissionRepository.findAllByItemTypeConfiguration(config);
+            for (ExecutorPermission perm : executorPermissions) {
+                if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
+                    executorPermissionRepository.delete(perm);
+                }
+            }
+            
+            // Rimuovi anche gli ItemTypeSetRole associati a questa configurazione
+            // Cerca tutti gli ItemTypeSetRole che referenziano questa configurazione
+            // (non direttamente, ma tramite le permission)
+            // TODO: Potrebbe essere necessario rimuovere anche gli ItemTypeSetRole se non ci sono più permission
+        }
+    }
 
 }

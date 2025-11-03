@@ -187,4 +187,35 @@ public class ItemTypeSetController {
                 tenant, itemTypeSetId, configIdsSet);
         return ResponseEntity.ok(impact);
     }
+    
+    /**
+     * Rimuove le permission orfane per le ItemTypeConfiguration rimosse
+     */
+    @PostMapping("/{itemTypeSetId}/remove-itemtypeconfiguration-permissions")
+    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    public ResponseEntity<String> removeItemTypeConfigurationPermissions(
+            @PathVariable Long itemTypeSetId,
+            @RequestBody RemoveItemTypeConfigurationPermissionsRequest request,
+            @CurrentTenant Tenant tenant
+    ) {
+        java.util.Set<Long> removedConfigIds = request.removedItemTypeConfigurationIds() != null
+                ? new java.util.HashSet<>(request.removedItemTypeConfigurationIds())
+                : new java.util.HashSet<>();
+        java.util.Set<Long> preservedPermissionIds = request.preservedPermissionIds() != null
+                ? new java.util.HashSet<>(request.preservedPermissionIds())
+                : new java.util.HashSet<>();
+        
+        itemTypeSetService.removeOrphanedPermissionsForItemTypeConfigurations(
+                tenant, itemTypeSetId, removedConfigIds, preservedPermissionIds);
+        
+        return ResponseEntity.ok("Permissions orfane rimosse con successo");
+    }
+    
+    /**
+     * Request DTO per la rimozione delle permission orfane
+     */
+    public record RemoveItemTypeConfigurationPermissionsRequest(
+            java.util.List<Long> removedItemTypeConfigurationIds,
+            java.util.List<Long> preservedPermissionIds // Lista di permission IDs da preservare (non rimuovere)
+    ) {}
 }

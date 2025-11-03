@@ -1028,6 +1028,12 @@ public class WorkflowService {
                         boolean canBePreserved = false;
                         boolean defaultPreserve = false;
                         
+                        // Salva solo il nome della transition (senza formattazione)
+                        // La formattazione verrà fatta nel frontend
+                        String transitionNameOnly = transition.getName() != null && !transition.getName().trim().isEmpty()
+                                ? transition.getName().trim()
+                                : null;
+                        
                         impacts.add(TransitionRemovalImpactDto.PermissionImpact.builder()
                                 .permissionId(permission.getId())
                                 .permissionType("EXECUTORS")
@@ -1036,7 +1042,7 @@ public class WorkflowService {
                                 .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
                                 .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
                                 .transitionId(transition.getId())
-                                .transitionName(formatTransitionName(transition))
+                                .transitionName(transitionNameOnly)
                                 .fromStatusName(transition.getFromStatus().getStatus().getName())
                                 .toStatusName(transition.getToStatus().getStatus().getName())
                                 .roleId(roleId)
@@ -1177,6 +1183,7 @@ public class WorkflowService {
     
     /**
      * Analizza gli impatti della rimozione di Status da un Workflow
+     * Include anche le transizioni che verranno rimosse (entranti e uscenti dagli stati rimossi)
      */
     @Transactional(readOnly = true)
     public StatusRemovalImpactDto analyzeStatusRemovalImpact(
@@ -1194,14 +1201,80 @@ public class WorkflowService {
         // Trova tutti gli ItemTypeSet che usano questo Workflow
         List<ItemTypeSet> allItemTypeSetsUsingWorkflow = findItemTypeSetsUsingWorkflow(workflowId, tenant);
         
+        // Trova tutti gli WorkflowStatus che verranno rimossi
+        List<WorkflowStatus> removedWorkflowStatuses = workflow.getStatuses().stream()
+                .filter(ws -> removedStatusIds.contains(ws.getId()))
+                .collect(Collectors.toList());
+        
+        // Trova tutte le transizioni che verranno rimosse (entranti e uscenti dagli stati rimossi)
+        Set<Long> removedTransitionIds = new HashSet<>();
+        for (WorkflowStatus workflowStatus : removedWorkflowStatuses) {
+            // Transizioni uscenti (fromStatus)
+            List<Transition> outgoingTransitions = transitionRepository.findByFromStatus(workflowStatus);
+            removedTransitionIds.addAll(outgoingTransitions.stream()
+                    .map(Transition::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet()));
+            
+            // Transizioni entranti (toStatus)
+            List<Transition> incomingTransitions = transitionRepository.findByToStatus(workflowStatus);
+            removedTransitionIds.addAll(incomingTransitions.stream()
+                    .map(Transition::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet()));
+        }
+        
         // Analizza le StatusOwnerPermissions che verranno rimosse
         List<StatusRemovalImpactDto.PermissionImpact> statusOwnerPermissions = 
                 analyzeStatusOwnerPermissionImpacts(allItemTypeSetsUsingWorkflow, removedStatusIds);
         
-        // Calcola solo gli ItemTypeSet che hanno effettivamente impatti (permissions con ruoli assegnati)
-        Set<Long> itemTypeSetIdsWithImpact = statusOwnerPermissions.stream()
+        // Analizza le ExecutorPermissions per le transizioni che verranno rimosse
+        List<TransitionRemovalImpactDto.PermissionImpact> executorPermissionImpacts = 
+                !removedTransitionIds.isEmpty() 
+                    ? analyzeExecutorPermissionImpacts(allItemTypeSetsUsingWorkflow, removedTransitionIds)
+                    : new ArrayList<>();
+        
+        // Converti TransitionRemovalImpactDto.PermissionImpact in StatusRemovalImpactDto.ExecutorPermissionImpact
+        List<StatusRemovalImpactDto.ExecutorPermissionImpact> executorPermissions = executorPermissionImpacts.stream()
+                .map(transitionImpact -> StatusRemovalImpactDto.ExecutorPermissionImpact.builder()
+                        .permissionId(transitionImpact.getPermissionId())
+                        .permissionType(transitionImpact.getPermissionType())
+                        .itemTypeSetId(transitionImpact.getItemTypeSetId())
+                        .itemTypeSetName(transitionImpact.getItemTypeSetName())
+                        .projectId(transitionImpact.getProjectId())
+                        .projectName(transitionImpact.getProjectName())
+                        .transitionId(transitionImpact.getTransitionId())
+                        .transitionName(transitionImpact.getTransitionName())
+                        .fromStatusName(transitionImpact.getFromStatusName())
+                        .toStatusName(transitionImpact.getToStatusName())
+                        .roleId(transitionImpact.getRoleId())
+                        .roleName(transitionImpact.getRoleName())
+                        .grantId(transitionImpact.getGrantId())
+                        .grantName(transitionImpact.getGrantName())
+                        .assignedRoles(transitionImpact.getAssignedRoles())
+                        .hasAssignments(transitionImpact.isHasAssignments())
+                        .transitionIdMatch(transitionImpact.getTransitionIdMatch())
+                        .transitionNameMatch(transitionImpact.getTransitionNameMatch())
+                        .canBePreserved(transitionImpact.isCanBePreserved())
+                        .defaultPreserve(transitionImpact.isDefaultPreserve())
+                        .projectGrants(transitionImpact.getProjectGrants().stream()
+                                .map(pg -> StatusRemovalImpactDto.ProjectGrantInfo.builder()
+                                        .projectId(pg.getProjectId())
+                                        .projectName(pg.getProjectName())
+                                        .roleId(pg.getRoleId())
+                                        .build())
+                                .collect(Collectors.toList()))
+                        .build())
+                .collect(Collectors.toList());
+        
+        // Calcola gli ItemTypeSet che hanno effettivamente impatti (status owner o executor permissions)
+        Set<Long> itemTypeSetIdsWithImpact = new HashSet<>();
+        itemTypeSetIdsWithImpact.addAll(statusOwnerPermissions.stream()
                 .map(StatusRemovalImpactDto.PermissionImpact::getItemTypeSetId)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toSet()));
+        itemTypeSetIdsWithImpact.addAll(executorPermissions.stream()
+                .map(StatusRemovalImpactDto.ExecutorPermissionImpact::getItemTypeSetId)
+                .collect(Collectors.toSet()));
         
         List<ItemTypeSet> affectedItemTypeSets = allItemTypeSetsUsingWorkflow.stream()
                 .filter(its -> itemTypeSetIdsWithImpact.contains(its.getId()))
@@ -1209,26 +1282,38 @@ public class WorkflowService {
         
         // Calcola le statistiche
         int totalStatusOwnerPermissions = statusOwnerPermissions.size();
+        int totalExecutorPermissions = executorPermissions.size();
         int totalRoleAssignments = statusOwnerPermissions.stream()
+                .mapToInt(perm -> perm.getAssignedRoles() != null ? perm.getAssignedRoles().size() : 0)
+                .sum() + executorPermissions.stream()
                 .mapToInt(perm -> perm.getAssignedRoles() != null ? perm.getAssignedRoles().size() : 0)
                 .sum();
         // Calcola totalGrantAssignments: conta i grant globali (solo se hanno assegnazioni)
         int totalGrantAssignments = (int) statusOwnerPermissions.stream()
+                .filter(perm -> perm.getGrantId() != null)
+                .count() + (int) executorPermissions.stream()
                 .filter(perm -> perm.getGrantId() != null)
                 .count();
         
         // Ottieni i nomi degli Status rimossi
         List<String> removedStatusNames = getStatusNames(removedStatusIds, tenant);
         
+        // Ottieni i nomi delle Transizioni rimosse
+        List<String> removedTransitionNames = getTransitionNames(removedTransitionIds, tenant);
+        
         return StatusRemovalImpactDto.builder()
                 .workflowId(workflowId)
                 .workflowName(workflow.getName())
                 .removedStatusIds(new ArrayList<>(removedStatusIds))
                 .removedStatusNames(removedStatusNames)
+                .removedTransitionIds(new ArrayList<>(removedTransitionIds))
+                .removedTransitionNames(removedTransitionNames)
                 .affectedItemTypeSets(mapItemTypeSetImpactsForStatus(affectedItemTypeSets))
                 .statusOwnerPermissions(statusOwnerPermissions)
+                .executorPermissions(executorPermissions)
                 .totalAffectedItemTypeSets(affectedItemTypeSets.size()) // Solo quelli con impatti effettivi
                 .totalStatusOwnerPermissions(totalStatusOwnerPermissions)
+                .totalExecutorPermissions(totalExecutorPermissions)
                 .totalGrantAssignments(totalGrantAssignments)
                 .totalRoleAssignments(totalRoleAssignments)
                 .build();
@@ -1331,22 +1416,49 @@ public class WorkflowService {
                 }
             }
             
-            // Rimuovi anche le Transition obsolete che partono o arrivano agli Status rimossi
-            List<Transition> obsoleteTransitions = transitionRepository.findByWorkflow(workflow)
-                    .stream()
-                    .filter(t -> removedStatusIds.contains(t.getFromStatus().getId()) || 
-                                removedStatusIds.contains(t.getToStatus().getId()))
-                    .collect(Collectors.toList());
-            
-            for (Transition obsoleteTransition : obsoleteTransitions) {
-                // Rimuovi le ExecutorPermissions associate direttamente dal database
-                List<ExecutorPermission> permissions = executorPermissionRepository
-                        .findByTransitionId(obsoleteTransition.getId());
-                for (ExecutorPermission permission : permissions) {
-                    executorPermissionRepository.delete(permission);
+            // Trova tutte le Transition che verranno rimosse (entranti e uscenti dagli stati rimossi)
+            Set<Long> removedTransitionIds = new HashSet<>();
+            for (Long statusId : removedStatusIds) {
+                WorkflowStatus workflowStatus = workflowStatusRepository.findById(statusId).orElse(null);
+                if (workflowStatus != null) {
+                    // Transizioni uscenti (fromStatus)
+                    List<Transition> outgoingTransitions = transitionRepository.findByFromStatus(workflowStatus);
+                    removedTransitionIds.addAll(outgoingTransitions.stream()
+                            .map(Transition::getId)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toSet()));
+                    
+                    // Transizioni entranti (toStatus)
+                    List<Transition> incomingTransitions = transitionRepository.findByToStatus(workflowStatus);
+                    removedTransitionIds.addAll(incomingTransitions.stream()
+                            .map(Transition::getId)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toSet()));
                 }
-                // Rimuovi la Transition
-                transitionRepository.delete(obsoleteTransition);
+            }
+            
+            // Rimuovi le ExecutorPermissions orfane per le Transition rimosse
+            if (!removedTransitionIds.isEmpty()) {
+                removeOrphanedExecutorPermissions(tenant, workflowId, removedTransitionIds);
+                
+                // Rimuovi le Transition obsolete
+                for (Long transitionId : removedTransitionIds) {
+                    transitionRepository.deleteById(transitionId);
+                }
+            }
+            
+            // Rimuovi fisicamente gli Status dal database
+            for (Long statusId : removedStatusIds) {
+                WorkflowStatus workflowStatus = workflowStatusRepository.findById(statusId).orElse(null);
+                if (workflowStatus != null) {
+                    // Rimuovi prima le relazioni
+                    workflowStatus.getOutgoingTransitions().clear();
+                    workflowStatus.getIncomingTransitions().clear();
+                    workflowStatus.getOwners().clear();
+                    
+                    // Rimuovi il WorkflowStatus
+                    workflowStatusRepository.delete(workflowStatus);
+                }
             }
         }
 

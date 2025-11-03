@@ -35,6 +35,9 @@ public class ItemTypeConfigurationMigrationService {
     private final WorkflowLookup workflowLookup;
     private final FieldSetLookup fieldSetLookup;
     private final ItemTypeSetRepository itemTypeSetRepository;
+    private final ProjectItemTypeSetRoleGrantRepository projectItemTypeSetRoleGrantRepository;
+    private final ItemTypeSetRoleRepository itemTypeSetRoleRepository;
+    private final FieldConfigurationLookup fieldConfigurationLookup;
     
     /**
      * Analizza l'impatto della migrazione quando cambiano FieldSet e/o Workflow
@@ -313,6 +316,10 @@ public class ItemTypeConfigurationMigrationService {
                         java.util.function.Function.identity()
                 ));
         
+        Long itemTypeSetId = getItemTypeSetIdForConfiguration(config);
+        Tenant tenant = config.getTenant();
+        FieldSet oldFieldSet = config.getFieldSet();
+        
         return existingPermissions.stream()
                 .map(perm -> {
                     Long fieldId = perm.getField().getId();
@@ -328,6 +335,71 @@ public class ItemTypeConfigurationMigrationService {
                     boolean hasAssignments = !assignedRoles.isEmpty();
                     boolean defaultPreserve = canPreserve && hasAssignments;
                     
+                    // Trova grant globali e di progetto
+                    Long roleId = null;
+                    String roleName = null;
+                    Long grantId = null;
+                    String grantName = null;
+                    List<ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    
+                    if (hasAssignments && itemTypeSetId != null) {
+                        // Trova la FieldConfiguration nel vecchio FieldSet per questo Field
+                        FieldConfiguration fieldConfig = oldFieldSet.getFieldSetEntries().stream()
+                                .map(FieldSetEntry::getFieldConfiguration)
+                                .filter(fc -> fc.getField().getId().equals(fieldId))
+                                .findFirst()
+                                .orElse(null);
+                        
+                        if (fieldConfig != null) {
+                            // Trova l'ItemTypeSetRole FIELD_OWNERS per questa FieldConfiguration
+                            List<ItemTypeSetRole> fieldOwnerRoles = itemTypeSetRoleRepository
+                                    .findByItemTypeSetIdAndRoleTypeAndTenantId(
+                                            itemTypeSetId,
+                                            com.example.demo.enums.ItemTypeSetRoleType.FIELD_OWNERS,
+                                            tenant.getId())
+                                    .stream()
+                                    .filter(role -> role.getRelatedEntityId() != null 
+                                            && role.getRelatedEntityId().equals(fieldConfig.getId())
+                                            && "FieldConfiguration".equals(role.getRelatedEntityType()))
+                                    .collect(Collectors.toList());
+                            
+                            if (!fieldOwnerRoles.isEmpty()) {
+                                ItemTypeSetRole role = fieldOwnerRoles.get(0);
+                                roleId = role.getId();
+                                roleName = role.getRoleTemplate() != null ? role.getRoleTemplate().getName() : null;
+                                
+                                // Grant globale
+                                if (role.getGrant() != null) {
+                                    grantId = role.getGrant().getId();
+                                    grantName = role.getGrant().getRole() != null 
+                                            ? role.getGrant().getRole().getName() 
+                                            : "Grant globale";
+                                }
+                                
+                                // Grant di progetto
+                                Set<Long> processedProjectIds = new HashSet<>();
+                                for (ItemTypeSetRole r : fieldOwnerRoles) {
+                                    List<ProjectItemTypeSetRoleGrant> projectGrants = 
+                                            projectItemTypeSetRoleGrantRepository.findByItemTypeSetRoleIdAndTenantId(
+                                                    r.getId(),
+                                                    tenant.getId());
+                                    
+                                    for (ProjectItemTypeSetRoleGrant projectGrant : projectGrants) {
+                                        if (projectGrant.getProject() != null 
+                                                && !processedProjectIds.contains(projectGrant.getProject().getId())) {
+                                            processedProjectIds.add(projectGrant.getProject().getId());
+                                            projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
+                                                    .projectId(projectGrant.getProject().getId())
+                                                    .projectName(projectGrant.getProject().getName())
+                                                    .roleId(r.getId())
+                                                    .build());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
                     return ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact.builder()
                             .permissionId(perm.getId())
                             .permissionType("FIELD_OWNERS")
@@ -340,10 +412,15 @@ public class ItemTypeConfigurationMigrationService {
                             .canBePreserved(canPreserve)
                             .defaultPreserve(defaultPreserve)
                             .suggestedAction(canPreserve ? "PRESERVE" : "REMOVE")
-                            .itemTypeSetId(getItemTypeSetIdForConfiguration(config))
+                            .itemTypeSetId(itemTypeSetId)
                             .itemTypeSetName(getItemTypeSetNameForConfiguration(config))
                             .projectId(config.getProject() != null ? config.getProject().getId() : null)
                             .projectName(config.getProject() != null ? config.getProject().getName() : null)
+                            .roleId(roleId)
+                            .roleName(roleName)
+                            .grantId(grantId)
+                            .grantName(grantName)
+                            .projectGrants(projectGrantsList)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -380,6 +457,9 @@ public class ItemTypeConfigurationMigrationService {
                         (existing, replacement) -> existing // In caso di duplicati, mantieni il primo
                 ));
         
+        Long itemTypeSetId = getItemTypeSetIdForConfiguration(config);
+        Tenant tenant = config.getTenant();
+        
         return existingPermissions.stream()
                 .map(perm -> {
                     // Usa Status.id (non WorkflowStatus.id) per il matching
@@ -387,6 +467,7 @@ public class ItemTypeConfigurationMigrationService {
                     Status status = perm.getWorkflowStatus().getStatus();
                     Long statusId = status.getId();
                     String statusName = status.getName();
+                    WorkflowStatus workflowStatus = perm.getWorkflowStatus();
                     
                     boolean canPreserve = newStatusIds.contains(statusId);
                     ItemTypeConfigurationMigrationImpactDto.WorkflowStatusInfo matchingStatus = canPreserve 
@@ -400,6 +481,62 @@ public class ItemTypeConfigurationMigrationService {
                     boolean hasAssignments = !assignedRoles.isEmpty();
                     boolean defaultPreserve = canPreserve && hasAssignments;
                     
+                    // Trova grant globali e di progetto
+                    Long roleId = null;
+                    String roleName = null;
+                    Long grantId = null;
+                    String grantName = null;
+                    List<ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    
+                    if (hasAssignments && itemTypeSetId != null && workflowStatus != null) {
+                        // Trova l'ItemTypeSetRole STATUS_OWNERS per questo WorkflowStatus
+                        List<ItemTypeSetRole> statusOwnerRoles = itemTypeSetRoleRepository
+                                .findByItemTypeSetIdAndRoleTypeAndTenantId(
+                                        itemTypeSetId,
+                                        com.example.demo.enums.ItemTypeSetRoleType.STATUS_OWNERS,
+                                        tenant.getId())
+                                .stream()
+                                .filter(role -> role.getRelatedEntityId() != null 
+                                        && role.getRelatedEntityId().equals(workflowStatus.getId())
+                                        && "WorkflowStatus".equals(role.getRelatedEntityType()))
+                                .collect(Collectors.toList());
+                        
+                        if (!statusOwnerRoles.isEmpty()) {
+                            ItemTypeSetRole role = statusOwnerRoles.get(0);
+                            roleId = role.getId();
+                            roleName = role.getRoleTemplate() != null ? role.getRoleTemplate().getName() : null;
+                            
+                            // Grant globale
+                            if (role.getGrant() != null) {
+                                grantId = role.getGrant().getId();
+                                grantName = role.getGrant().getRole() != null 
+                                        ? role.getGrant().getRole().getName() 
+                                        : "Grant globale";
+                            }
+                            
+                            // Grant di progetto
+                            Set<Long> processedProjectIds = new HashSet<>();
+                            for (ItemTypeSetRole r : statusOwnerRoles) {
+                                List<ProjectItemTypeSetRoleGrant> projectGrants = 
+                                        projectItemTypeSetRoleGrantRepository.findByItemTypeSetRoleIdAndTenantId(
+                                                r.getId(),
+                                                tenant.getId());
+                                
+                                for (ProjectItemTypeSetRoleGrant projectGrant : projectGrants) {
+                                    if (projectGrant.getProject() != null 
+                                            && !processedProjectIds.contains(projectGrant.getProject().getId())) {
+                                        processedProjectIds.add(projectGrant.getProject().getId());
+                                        projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
+                                                .projectId(projectGrant.getProject().getId())
+                                                .projectName(projectGrant.getProject().getName())
+                                                .roleId(r.getId())
+                                                .build());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
                     return ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact.builder()
                             .permissionId(perm.getId())
                             .permissionType("STATUS_OWNERS")
@@ -412,10 +549,15 @@ public class ItemTypeConfigurationMigrationService {
                             .canBePreserved(canPreserve)
                             .defaultPreserve(defaultPreserve)
                             .suggestedAction(canPreserve ? "PRESERVE" : "REMOVE")
-                            .itemTypeSetId(getItemTypeSetIdForConfiguration(config))
+                            .itemTypeSetId(itemTypeSetId)
                             .itemTypeSetName(getItemTypeSetNameForConfiguration(config))
                             .projectId(config.getProject() != null ? config.getProject().getId() : null)
                             .projectName(config.getProject() != null ? config.getProject().getName() : null)
+                            .roleId(roleId)
+                            .roleName(roleName)
+                            .grantId(grantId)
+                            .grantName(grantName)
+                            .projectGrants(projectGrantsList)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -543,9 +685,13 @@ public class ItemTypeConfigurationMigrationService {
                         java.util.function.Function.identity()
                 ));
         
+        Long itemTypeSetId = getItemTypeSetIdForConfiguration(config);
+        Tenant tenant = config.getTenant();
+        
         return existingPermissions.stream()
                 .map(perm -> {
-                    Long transitionId = perm.getTransition().getId();
+                    Transition transition = perm.getTransition();
+                    Long transitionId = transition.getId();
                     // Matching conservativo: solo se stesso ID (stessa Transition)
                     // Le Transition sono specifiche del workflow, quindi il matching per ID è corretto
                     boolean canPreserve = newTransitionIds.contains(transitionId);
@@ -560,11 +706,78 @@ public class ItemTypeConfigurationMigrationService {
                     boolean hasAssignments = !assignedRoles.isEmpty();
                     boolean defaultPreserve = canPreserve && hasAssignments;
                     
+                    // Trova grant globali e di progetto
+                    Long roleId = null;
+                    String roleName = null;
+                    Long grantId = null;
+                    String grantName = null;
+                    List<ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    
+                    if (hasAssignments && itemTypeSetId != null) {
+                        // Trova l'ItemTypeSetRole EXECUTORS per questa Transition
+                        List<ItemTypeSetRole> executorRoles = itemTypeSetRoleRepository
+                                .findByItemTypeSetIdAndRoleTypeAndTenantId(
+                                        itemTypeSetId,
+                                        com.example.demo.enums.ItemTypeSetRoleType.EXECUTORS,
+                                        tenant.getId())
+                                .stream()
+                                .filter(role -> role.getRelatedEntityId() != null 
+                                        && role.getRelatedEntityId().equals(transitionId)
+                                        && "Transition".equals(role.getRelatedEntityType()))
+                                .collect(Collectors.toList());
+                        
+                        if (!executorRoles.isEmpty()) {
+                            ItemTypeSetRole role = executorRoles.get(0);
+                            roleId = role.getId();
+                            roleName = role.getRoleTemplate() != null ? role.getRoleTemplate().getName() : null;
+                            
+                            // Grant globale
+                            if (role.getGrant() != null) {
+                                grantId = role.getGrant().getId();
+                                grantName = role.getGrant().getRole() != null 
+                                        ? role.getGrant().getRole().getName() 
+                                        : "Grant globale";
+                            }
+                            
+                            // Grant di progetto
+                            Set<Long> processedProjectIds = new HashSet<>();
+                            for (ItemTypeSetRole r : executorRoles) {
+                                List<ProjectItemTypeSetRoleGrant> projectGrants = 
+                                        projectItemTypeSetRoleGrantRepository.findByItemTypeSetRoleIdAndTenantId(
+                                                r.getId(),
+                                                tenant.getId());
+                                
+                                for (ProjectItemTypeSetRoleGrant projectGrant : projectGrants) {
+                                    if (projectGrant.getProject() != null 
+                                            && !processedProjectIds.contains(projectGrant.getProject().getId())) {
+                                        processedProjectIds.add(projectGrant.getProject().getId());
+                                        projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
+                                                .projectId(projectGrant.getProject().getId())
+                                                .projectName(projectGrant.getProject().getName())
+                                                .roleId(r.getId())
+                                                .build());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Estrai informazioni sulla Transition
+                    String transitionName = transition.getName() != null && !transition.getName().isEmpty() 
+                            ? transition.getName() 
+                            : null;
+                    String fromStatusName = transition.getFromStatus() != null && transition.getFromStatus().getStatus() != null
+                            ? transition.getFromStatus().getStatus().getName()
+                            : null;
+                    String toStatusName = transition.getToStatus() != null && transition.getToStatus().getStatus() != null
+                            ? transition.getToStatus().getStatus().getName()
+                            : null;
+                    
                     return ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact.builder()
                             .permissionId(perm.getId())
                             .permissionType("EXECUTORS")
                             .entityId(transitionId)
-                            .entityName(perm.getTransition().getName())
+                            .entityName(transitionName != null ? transitionName : (fromStatusName + " -> " + toStatusName))
                             .matchingEntityId(canPreserve && matchingTransition != null ? matchingTransition.getTransitionId() : null)
                             .matchingEntityName(canPreserve && matchingTransition != null ? matchingTransition.getTransitionName() : null)
                             .assignedRoles(assignedRoles)
@@ -572,10 +785,18 @@ public class ItemTypeConfigurationMigrationService {
                             .canBePreserved(canPreserve)
                             .defaultPreserve(defaultPreserve)
                             .suggestedAction(canPreserve ? "PRESERVE" : "REMOVE")
-                            .itemTypeSetId(getItemTypeSetIdForConfiguration(config))
+                            .itemTypeSetId(itemTypeSetId)
                             .itemTypeSetName(getItemTypeSetNameForConfiguration(config))
                             .projectId(config.getProject() != null ? config.getProject().getId() : null)
                             .projectName(config.getProject() != null ? config.getProject().getName() : null)
+                            .roleId(roleId)
+                            .roleName(roleName)
+                            .grantId(grantId)
+                            .grantName(grantName)
+                            .projectGrants(projectGrantsList)
+                            .fromStatusName(fromStatusName)
+                            .toStatusName(toStatusName)
+                            .transitionName(transitionName)
                             .build();
                 })
                 .collect(Collectors.toList());

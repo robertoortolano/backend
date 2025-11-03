@@ -122,10 +122,31 @@ public class ItemTypeConfigurationMigrationImpactDto {
         private Long projectId;
         private String projectName;
         
+        // Grant information
+        private Long roleId; // ID dell'ItemTypeSetRole associato
+        private String roleName; // Nome del ruolo
+        private Long grantId; // Grant globale (se presente)
+        private String grantName; // Nome grant globale
+        private List<ProjectGrantInfo> projectGrants; // Lista di progetti che hanno grant per questa permission
+        
+        // Per EXECUTORS: informazioni sulla Transition
+        private String fromStatusName; // Nome dello stato di partenza
+        private String toStatusName; // Nome dello stato di arrivo
+        private String transitionName; // Nome della transizione (se presente)
+        
         // Suggerimento azione
         private String suggestedAction; // "PRESERVE", "REMOVE", "NEW"
     }
+    
+    @Data
+    @Builder
+    public static class ProjectGrantInfo {
+        private Long projectId;
+        private String projectName;
+        private Long roleId; // ID dell'ItemTypeSetRole associato (per recuperare i dettagli via API)
+    }
 }
+
 
 
 
