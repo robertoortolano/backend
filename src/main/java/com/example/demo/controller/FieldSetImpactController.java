@@ -208,6 +208,29 @@ public class FieldSetImpactController {
     }
     
     /**
+     * Rimuove automaticamente le permissions orfane senza assegnazioni (chiamato quando non ci sono impatti)
+     * IMPORTANTE: Accetta anche le nuove configurazioni che verranno aggiunte per calcolare correttamente quali Field rimarranno
+     */
+    @PostMapping("/{fieldSetId}/remove-orphaned-permissions-without-assignments")
+    @PreAuthorize("@securityService.canEditFieldSet(principal, #tenant, #fieldSetId)")
+    public ResponseEntity<String> removeOrphanedPermissionsWithoutAssignments(
+            @PathVariable Long fieldSetId,
+            @RequestBody AnalyzeRemovalImpactRequest request,
+            @CurrentTenant Tenant tenant
+    ) {
+        Set<Long> removedFieldConfigIds = request.removedFieldConfigIds() != null 
+                ? request.removedFieldConfigIds() 
+                : new java.util.HashSet<>();
+        Set<Long> addedFieldConfigIds = request.addedFieldConfigIds() != null 
+                ? request.addedFieldConfigIds() 
+                : new java.util.HashSet<>();
+        
+        fieldSetService.removeOrphanedPermissionsWithoutAssignments(tenant, fieldSetId, removedFieldConfigIds, addedFieldConfigIds);
+        
+        return ResponseEntity.ok("Permissions orfane senza assegnazioni rimosse con successo");
+    }
+    
+    /**
      * Request DTO per la rimozione delle permission orfane
      */
     public record RemoveOrphanedPermissionsRequest(

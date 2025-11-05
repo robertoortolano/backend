@@ -136,18 +136,39 @@ public class ItemTypeSetRoleService {
                 for (FieldSetEntry entry : entries) {
                     FieldConfiguration fieldConfig = entry.getFieldConfiguration();
                     
-                    // Ruolo FIELD_EDITOR
-                    ItemTypeSetRole fieldOwnerRole = ItemTypeSetRole.builder()
-                            .roleType(ItemTypeSetRoleType.FIELD_OWNERS)
-                            .name("Field Owner for " + fieldConfig.getName())
-                            .description("Field Owner role for FieldConfiguration: " + fieldConfig.getName())
-                            .itemTypeSet(itemTypeSet)
-                            .relatedEntityType("FieldConfiguration")
-                            .relatedEntityId(fieldConfig.getId())
-                            .tenant(tenant)
-                            .build();
+                    // Verifica se il ruolo esiste già
+                    Optional<ItemTypeSetRole> existingRoleOpt = itemTypeSetRoleRepository
+                            .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
+                                    itemTypeSet.getId(),
+                                    "FieldConfiguration",
+                                    fieldConfig.getId(),
+                                    ItemTypeSetRoleType.FIELD_OWNERS,
+                                    tenant.getId()
+                            );
                     
-                    itemTypeSetRoleRepository.save(fieldOwnerRole);
+                    if (existingRoleOpt.isPresent()) {
+                        // IMPORTANTE: Se il ruolo esiste già (ad esempio quando si riaggiunge una FieldConfiguration),
+                        // rimuovi la grant per evitare che venga preservata. I ruoli nelle permission vengono gestiti
+                        // separatamente, ma le grant sugli ItemTypeSetRole devono essere rimosse.
+                        ItemTypeSetRole existingRole = existingRoleOpt.get();
+                        if (existingRole.getGrant() != null) {
+                            existingRole.setGrant(null);
+                            itemTypeSetRoleRepository.save(existingRole);
+                        }
+                    } else {
+                        // Crea nuovo ruolo solo se non esiste
+                        ItemTypeSetRole fieldOwnerRole = ItemTypeSetRole.builder()
+                                .roleType(ItemTypeSetRoleType.FIELD_OWNERS)
+                                .name("Field Owner for " + fieldConfig.getName())
+                                .description("Field Owner role for FieldConfiguration: " + fieldConfig.getName())
+                                .itemTypeSet(itemTypeSet)
+                                .relatedEntityType("FieldConfiguration")
+                                .relatedEntityId(fieldConfig.getId())
+                                .tenant(tenant)
+                                .build();
+                        
+                        itemTypeSetRoleRepository.save(fieldOwnerRole);
+                    }
                 }
             }
         }
@@ -166,34 +187,69 @@ public class ItemTypeSetRoleService {
                     FieldConfiguration fieldConfig = entry.getFieldConfiguration();
                     
                     for (WorkflowStatus status : statuses) {
-                        // Ruolo EDITOR per la coppia
-                        ItemTypeSetRole editorRole = ItemTypeSetRole.builder()
-                                .roleType(ItemTypeSetRoleType.EDITORS)
-                                .name("Editor for " + fieldConfig.getName() + " in " + status.getStatus().getName())
-                                .description("Editor role for FieldConfiguration " + fieldConfig.getName() + " in WorkflowStatus " + status.getStatus().getName())
-                                .itemTypeSet(itemTypeSet)
-                                .relatedEntityType("ItemTypeConfiguration")
-                                .relatedEntityId(config.getId())
-                                .secondaryEntityType("FieldConfiguration")
-                                .secondaryEntityId(fieldConfig.getId())
-                                .tenant(tenant)
-                                .build();
+                        // Verifica se il ruolo EDITOR esiste già
+                        Optional<ItemTypeSetRole> existingEditorRoleOpt = itemTypeSetRoleRepository
+                                .findByItemTypeSetIdAndRoleTypeAndTenantId(itemTypeSet.getId(), ItemTypeSetRoleType.EDITORS, tenant.getId())
+                                .stream()
+                                .filter(role -> role.getRelatedEntityId() != null && role.getRelatedEntityId().equals(config.getId()))
+                                .filter(role -> role.getSecondaryEntityId() != null && role.getSecondaryEntityId().equals(fieldConfig.getId()))
+                                .findFirst();
                         
-                        // Ruolo VIEWER per la coppia
-                        ItemTypeSetRole viewerRole = ItemTypeSetRole.builder()
-                                .roleType(ItemTypeSetRoleType.VIEWERS)
-                                .name("Viewer for " + fieldConfig.getName() + " in " + status.getStatus().getName())
-                                .description("Viewer role for FieldConfiguration " + fieldConfig.getName() + " in WorkflowStatus " + status.getStatus().getName())
-                                .itemTypeSet(itemTypeSet)
-                                .relatedEntityType("ItemTypeConfiguration")
-                                .relatedEntityId(config.getId())
-                                .secondaryEntityType("FieldConfiguration")
-                                .secondaryEntityId(fieldConfig.getId())
-                                .tenant(tenant)
-                                .build();
+                        if (existingEditorRoleOpt.isPresent()) {
+                            // IMPORTANTE: Se il ruolo esiste già, rimuovi la grant per evitare che venga preservata
+                            ItemTypeSetRole existingEditorRole = existingEditorRoleOpt.get();
+                            if (existingEditorRole.getGrant() != null) {
+                                existingEditorRole.setGrant(null);
+                                itemTypeSetRoleRepository.save(existingEditorRole);
+                            }
+                        } else {
+                            // Crea nuovo ruolo EDITOR solo se non esiste
+                            ItemTypeSetRole editorRole = ItemTypeSetRole.builder()
+                                    .roleType(ItemTypeSetRoleType.EDITORS)
+                                    .name("Editor for " + fieldConfig.getName() + " in " + status.getStatus().getName())
+                                    .description("Editor role for FieldConfiguration " + fieldConfig.getName() + " in WorkflowStatus " + status.getStatus().getName())
+                                    .itemTypeSet(itemTypeSet)
+                                    .relatedEntityType("ItemTypeConfiguration")
+                                    .relatedEntityId(config.getId())
+                                    .secondaryEntityType("FieldConfiguration")
+                                    .secondaryEntityId(fieldConfig.getId())
+                                    .tenant(tenant)
+                                    .build();
+                            
+                            itemTypeSetRoleRepository.save(editorRole);
+                        }
                         
-                        itemTypeSetRoleRepository.save(editorRole);
-                        itemTypeSetRoleRepository.save(viewerRole);
+                        // Verifica se il ruolo VIEWER esiste già
+                        Optional<ItemTypeSetRole> existingViewerRoleOpt = itemTypeSetRoleRepository
+                                .findByItemTypeSetIdAndRoleTypeAndTenantId(itemTypeSet.getId(), ItemTypeSetRoleType.VIEWERS, tenant.getId())
+                                .stream()
+                                .filter(role -> role.getRelatedEntityId() != null && role.getRelatedEntityId().equals(config.getId()))
+                                .filter(role -> role.getSecondaryEntityId() != null && role.getSecondaryEntityId().equals(fieldConfig.getId()))
+                                .findFirst();
+                        
+                        if (existingViewerRoleOpt.isPresent()) {
+                            // IMPORTANTE: Se il ruolo esiste già, rimuovi la grant per evitare che venga preservata
+                            ItemTypeSetRole existingViewerRole = existingViewerRoleOpt.get();
+                            if (existingViewerRole.getGrant() != null) {
+                                existingViewerRole.setGrant(null);
+                                itemTypeSetRoleRepository.save(existingViewerRole);
+                            }
+                        } else {
+                            // Crea nuovo ruolo VIEWER solo se non esiste
+                            ItemTypeSetRole viewerRole = ItemTypeSetRole.builder()
+                                    .roleType(ItemTypeSetRoleType.VIEWERS)
+                                    .name("Viewer for " + fieldConfig.getName() + " in " + status.getStatus().getName())
+                                    .description("Viewer role for FieldConfiguration " + fieldConfig.getName() + " in WorkflowStatus " + status.getStatus().getName())
+                                    .itemTypeSet(itemTypeSet)
+                                    .relatedEntityType("ItemTypeConfiguration")
+                                    .relatedEntityId(config.getId())
+                                    .secondaryEntityType("FieldConfiguration")
+                                    .secondaryEntityId(fieldConfig.getId())
+                                    .tenant(tenant)
+                                    .build();
+                            
+                            itemTypeSetRoleRepository.save(viewerRole);
+                        }
                     }
                 }
             }

@@ -38,7 +38,7 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
     SELECT DISTINCT its FROM ItemTypeSet its
     LEFT JOIN FETCH its.itemTypeConfigurations
     LEFT JOIN FETCH its.projectsAssociation
-    WHERE its.tenant = :tenant AND its.scope = 'GLOBAL'
+    WHERE its.tenant = :tenant AND its.scope = 'PROJECT'
 """)
     List<ItemTypeSet> findAllNonGlobalWithItemTypeConfigurationsByTenant(@Param("tenant") Tenant tenant);
 
