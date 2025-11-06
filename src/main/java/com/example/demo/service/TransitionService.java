@@ -58,19 +58,13 @@ public class TransitionService {
     @Transactional(readOnly = true)
     public List<Transition> getOutgoingTransitions(Tenant tenant, Long statusId) {
         WorkflowStatus status = workflowStatusLookup.getById(statusId, tenant);
-
-        if (!status.getStatus().getTenant().equals(tenant)) throw new ApiException("Illegal tenant");
-
-        return transitionRepository.findByFromStatus(status);
+        return transitionRepository.findByFromStatusAndTenant(status, tenant);
     }
 
     @Transactional(readOnly = true)
     public List<Transition> getIncomingTransitions(Tenant tenant, Long statusId) {
         WorkflowStatus status = workflowStatusLookup.getById(statusId, tenant);
-
-        if (!status.getStatus().getTenant().equals(tenant)) throw new ApiException("Illegal tenant");
-
-        return transitionRepository.findByToStatus(status);
+        return transitionRepository.findByToStatusAndTenant(status, tenant);
     }
 
     public void deleteTransition(Tenant tenant, Long id) {

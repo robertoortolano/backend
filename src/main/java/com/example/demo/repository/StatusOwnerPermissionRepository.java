@@ -15,6 +15,12 @@ public interface StatusOwnerPermissionRepository extends JpaRepository<StatusOwn
     List<StatusOwnerPermission> findByItemTypeConfigurationId(Long itemTypeConfigurationId);
     
     /**
+     * Trova tutte le StatusOwnerPermission per una ItemTypeConfiguration, filtrate per Tenant (sicurezza)
+     */
+    @Query("SELECT p FROM StatusOwnerPermission p WHERE p.itemTypeConfiguration.id = :itemTypeConfigurationId AND p.itemTypeConfiguration.tenant = :tenant")
+    List<StatusOwnerPermission> findByItemTypeConfigurationIdAndTenant(@Param("itemTypeConfigurationId") Long itemTypeConfigurationId, @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
+    /**
      * Trova tutte le StatusOwnerPermission per una ItemTypeConfiguration
      * IMPORTANTE: Carica anche i ruoli associati (JOIN FETCH) per evitare problemi di lazy loading
      */
@@ -25,8 +31,25 @@ public interface StatusOwnerPermissionRepository extends JpaRepository<StatusOwn
            "WHERE p.itemTypeConfiguration = :config")
     List<StatusOwnerPermission> findAllByItemTypeConfiguration(@Param("config") ItemTypeConfiguration itemTypeConfiguration);
     
+    /**
+     * Trova tutte le StatusOwnerPermission per una ItemTypeConfiguration, filtrate per Tenant (sicurezza)
+     * IMPORTANTE: Carica anche i ruoli associati (JOIN FETCH) per evitare problemi di lazy loading
+     */
+    @Query("SELECT p FROM StatusOwnerPermission p " +
+           "LEFT JOIN FETCH p.assignedRoles " +
+           "LEFT JOIN FETCH p.workflowStatus ws " +
+           "LEFT JOIN FETCH ws.status " +
+           "WHERE p.itemTypeConfiguration = :config AND p.itemTypeConfiguration.tenant = :tenant")
+    List<StatusOwnerPermission> findAllByItemTypeConfigurationAndTenant(@Param("config") ItemTypeConfiguration itemTypeConfiguration, @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
     boolean existsByItemTypeConfigurationIdAndWorkflowStatusId(Long itemTypeConfigurationId, Long workflowStatusId);
     StatusOwnerPermission findByItemTypeConfigurationAndWorkflowStatusId(ItemTypeConfiguration itemTypeConfiguration, Long workflowStatusId);
     List<StatusOwnerPermission> findByItemTypeConfigurationAndWorkflowStatusIdIn(ItemTypeConfiguration itemTypeConfiguration, Set<Long> workflowStatusIds);
     List<StatusOwnerPermission> findByWorkflowStatusId(Long workflowStatusId);
+    
+    /**
+     * Trova StatusOwnerPermission per WorkflowStatus ID, filtrato per Tenant (sicurezza)
+     */
+    @Query("SELECT p FROM StatusOwnerPermission p JOIN p.workflowStatus ws JOIN ws.workflow w WHERE ws.id = :workflowStatusId AND w.tenant = :tenant")
+    List<StatusOwnerPermission> findByWorkflowStatusIdAndTenant(@Param("workflowStatusId") Long workflowStatusId, @Param("tenant") com.example.demo.entity.Tenant tenant);
 }

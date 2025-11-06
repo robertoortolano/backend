@@ -33,12 +33,26 @@ public interface FieldSetRepository extends JpaRepository<FieldSet, Long> {
     })
     List<FieldSet> findByTenantAndProjectIdAndScope(Tenant tenant, Long projectId, ScopeType scope);
 
+    /**
+     * Trova tutti i FieldSet che usano le FieldConfiguration specificate
+     * NOTA: Questo metodo non filtra per tenant - usare findByFieldConfigurationsAndTenant per sicurezza
+     */
     @Query("""
     SELECT DISTINCT fse.fieldSet
     FROM FieldSetEntry fse
     WHERE fse.fieldConfiguration IN :configs
 """)
-    List<FieldSet> findByFieldConfigurationsAndTenant(@Param("configs") List<FieldConfiguration> configs);
+    List<FieldSet> findByFieldConfigurations(@Param("configs") List<FieldConfiguration> configs);
+
+    /**
+     * Trova tutti i FieldSet che usano le FieldConfiguration specificate, filtrati per Tenant (sicurezza)
+     */
+    @Query("""
+    SELECT DISTINCT fse.fieldSet
+    FROM FieldSetEntry fse
+    WHERE fse.fieldConfiguration IN :configs AND fse.fieldSet.tenant = :tenant
+""")
+    List<FieldSet> findByFieldConfigurationsAndTenant(@Param("configs") List<FieldConfiguration> configs, @Param("tenant") Tenant tenant);
 
     Optional<FieldSet> findByIdAndTenant(Long id, Tenant tenant);
 

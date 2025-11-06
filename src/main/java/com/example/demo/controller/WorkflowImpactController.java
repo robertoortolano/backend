@@ -138,7 +138,7 @@ public class WorkflowImpactController {
                     .body(csv.toString().getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.error("Error generating CSV export", e);
-            throw new IOException("Error generating CSV export: " + e.getMessage(), e);
+            throw new com.example.demo.exception.ApiException("Error generating CSV export: " + e.getMessage(), e);
         }
     }
     
@@ -285,7 +285,7 @@ public class WorkflowImpactController {
                     .body(csv.toString().getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.error("Error generating Status CSV export", e);
-            throw new IOException("Error generating Status CSV export: " + e.getMessage(), e);
+            throw new com.example.demo.exception.ApiException("Error generating Status CSV export: " + e.getMessage(), e);
         }
     }
     

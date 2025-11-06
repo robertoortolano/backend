@@ -74,10 +74,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 
                 // Imposta il tenant nel contesto PRIMA di caricare UserDetails
                 if (tenantId != null) {
-                    log.debug("Impostato tenant ID: {}", tenantId);
                     TenantContext.setCurrentTenantId(tenantId);
                 } else {
-                    log.debug("Nessun tenant ID trovato nel token");
                     TenantContext.clear();
                 }
                 

@@ -33,13 +33,9 @@ public class ItemTypeSetPermissionController {
             @PathVariable Long itemTypeSetId,
             @RequestParam(required = false) Long projectId,
             @CurrentTenant Tenant tenant) {
-        try {
-            Map<String, List<Map<String, Object>>> permissions = 
-                itemTypeSetPermissionService.getPermissionsByItemTypeSet(itemTypeSetId, tenant, projectId);
-            return ResponseEntity.ok(permissions);
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
+        Map<String, List<Map<String, Object>>> permissions = 
+            itemTypeSetPermissionService.getPermissionsByItemTypeSet(itemTypeSetId, tenant, projectId);
+        return ResponseEntity.ok(permissions);
     }
     
     /**
@@ -50,13 +46,8 @@ public class ItemTypeSetPermissionController {
     public ResponseEntity<String> createPermissionsForItemTypeSet(
             @PathVariable Long itemTypeSetId,
             @CurrentTenant Tenant tenant) {
-        try {
-            itemTypeSetPermissionService.createPermissionsForItemTypeSet(itemTypeSetId, tenant);
-            return ResponseEntity.ok("Permissions created successfully for ItemTypeSet: " + itemTypeSetId);
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                    .body("Error creating permissions: " + e.getMessage());
-        }
+        itemTypeSetPermissionService.createPermissionsForItemTypeSet(itemTypeSetId, tenant);
+        return ResponseEntity.ok("Permissions created successfully for ItemTypeSet: " + itemTypeSetId);
     }
     
     
@@ -70,13 +61,8 @@ public class ItemTypeSetPermissionController {
             @RequestParam Long roleId,
             @RequestParam(required = false) String permissionType,
             @CurrentTenant Tenant tenant) {
-        try {
-            itemTypeSetPermissionService.assignRoleToPermission(permissionId, roleId, permissionType);
-            return ResponseEntity.ok("Role assigned successfully to permission");
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                    .body("Error assigning role: " + e.getMessage());
-        }
+        itemTypeSetPermissionService.assignRoleToPermission(permissionId, roleId, permissionType);
+        return ResponseEntity.ok("Role assigned successfully to permission");
     }
     
     
@@ -87,12 +73,8 @@ public class ItemTypeSetPermissionController {
     @GetMapping("/roles")
     @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
     public ResponseEntity<List<RoleViewDto>> getAvailableRoles(@CurrentTenant Tenant tenant) {
-        try {
-            List<RoleViewDto> roles = roleService.getAllTenantRoles(tenant);
-            return ResponseEntity.ok(roles);
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
+        List<RoleViewDto> roles = roleService.getAllTenantRoles(tenant);
+        return ResponseEntity.ok(roles);
     }
     
     /**
@@ -105,12 +87,7 @@ public class ItemTypeSetPermissionController {
             @RequestParam Long roleId,
             @RequestParam(required = false) String permissionType,
             @CurrentTenant Tenant tenant) {
-        try {
-            itemTypeSetPermissionService.removeRoleFromPermission(permissionId, roleId, permissionType);
-            return ResponseEntity.ok("Role removed successfully from permission");
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                    .body("Error removing role: " + e.getMessage());
-        }
+        itemTypeSetPermissionService.removeRoleFromPermission(permissionId, roleId, permissionType);
+        return ResponseEntity.ok("Role removed successfully from permission");
     }
 }

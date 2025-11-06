@@ -133,8 +133,8 @@ public class ItemTypePermissionService {
             return;
         }
         
-        // Carica ESPLICITAMENTE tutte le Transitions per questo workflow dal repository
-        var transitions = transitionRepository.findByWorkflow(itemTypeConfiguration.getWorkflow());
+        // Carica ESPLICITAMENTE tutte le Transitions per questo workflow dal repository, filtrate per Tenant (sicurezza)
+        var transitions = transitionRepository.findByWorkflowAndTenant(itemTypeConfiguration.getWorkflow(), itemTypeConfiguration.getTenant());
         
         for (Transition transition : transitions) {
             if (!executorPermissionRepository.existsByItemTypeConfigurationIdAndTransitionId(

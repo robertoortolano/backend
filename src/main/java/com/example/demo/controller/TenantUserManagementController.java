@@ -137,35 +137,6 @@ public class TenantUserManagementController {
         }
     }
     
-    /**
-     * @deprecated Usa updateUserRoles() invece.
-     * PUT /api/tenant/users/change-role - Cambia il ruolo di un utente esistente
-     * Accessibile solo agli ADMIN
-     */
-    @Deprecated
-    @PutMapping("/change-role")
-    @PreAuthorize("hasRole('TENANT_ADMIN')")
-    public ResponseEntity<ApiResponse> changeUserRole(
-            @Valid @RequestBody ChangeUserRoleRequest request,
-            @CurrentTenant Tenant tenant,
-            @CurrentUser User currentUser) {
-        try {
-            tenantUserManagementService.changeUserRole(request.userId(), request.newRoleName(), tenant, currentUser);
-            return ResponseEntity.ok(new ApiResponse(
-                    "User role changed successfully to " + request.newRoleName(),
-                    HttpStatus.OK.value()
-            ));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.NOT_FOUND.value()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.CONFLICT.value()));
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.FORBIDDEN.value()));
-        }
-    }
 
     /**
      * DELETE /api/tenant/users/revoke - Revoca accesso di un utente

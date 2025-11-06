@@ -33,13 +33,8 @@ public class ItemTypeSetRoleController {
     public ResponseEntity<String> createRolesForItemTypeSet(
             @PathVariable Long itemTypeSetId,
             @CurrentTenant Tenant tenant) {
-        try {
-            itemTypeSetRoleService.createRolesForItemTypeSet(itemTypeSetId, tenant);
-            return ResponseEntity.ok("Roles created successfully for ItemTypeSet: " + itemTypeSetId);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error creating roles: " + e.getMessage());
-        }
+        itemTypeSetRoleService.createRolesForItemTypeSet(itemTypeSetId, tenant);
+        return ResponseEntity.ok("Roles created successfully for ItemTypeSet: " + itemTypeSetId);
     }
     
     /**
@@ -50,12 +45,8 @@ public class ItemTypeSetRoleController {
     public ResponseEntity<ItemTypeSetRoleDTO> createRole(
             @RequestBody ItemTypeSetRoleCreateDTO createDTO,
             @CurrentTenant Tenant tenant) {
-        try {
-            ItemTypeSetRoleDTO role = itemTypeSetRoleService.createRole(createDTO, tenant);
-            return ResponseEntity.ok(role);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        ItemTypeSetRoleDTO role = itemTypeSetRoleService.createRole(createDTO, tenant);
+        return ResponseEntity.ok(role);
     }
     
     /**
@@ -66,12 +57,8 @@ public class ItemTypeSetRoleController {
     public ResponseEntity<List<ItemTypeSetRoleDTO>> getRolesByItemTypeSet(
             @PathVariable Long itemTypeSetId,
             @CurrentTenant Tenant tenant) {
-        try {
-            List<ItemTypeSetRoleDTO> roles = itemTypeSetRoleService.getRolesByItemTypeSet(itemTypeSetId, tenant);
-            return ResponseEntity.ok(roles);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        List<ItemTypeSetRoleDTO> roles = itemTypeSetRoleService.getRolesByItemTypeSet(itemTypeSetId, tenant);
+        return ResponseEntity.ok(roles);
     }
     
     /**
@@ -83,12 +70,8 @@ public class ItemTypeSetRoleController {
             @PathVariable Long itemTypeSetId,
             @PathVariable ItemTypeSetRoleType roleType,
             @CurrentTenant Tenant tenant) {
-        try {
-            List<ItemTypeSetRoleDTO> roles = itemTypeSetRoleService.getRolesByType(itemTypeSetId, roleType, tenant);
-            return ResponseEntity.ok(roles);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        List<ItemTypeSetRoleDTO> roles = itemTypeSetRoleService.getRolesByType(itemTypeSetId, roleType, tenant);
+        return ResponseEntity.ok(roles);
     }
     
     
@@ -102,12 +85,8 @@ public class ItemTypeSetRoleController {
             @RequestParam Long roleId,
             @RequestParam Long grantId,
             @CurrentTenant Tenant tenant) {
-        try {
-            ItemTypeSetRoleDTO result = itemTypeSetRoleService.assignGrantDirect(roleId, grantId, tenant);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        }
+        ItemTypeSetRoleDTO result = itemTypeSetRoleService.assignGrantDirect(roleId, grantId, tenant);
+        return ResponseEntity.ok(result);
     }
     
     /**
@@ -116,19 +95,11 @@ public class ItemTypeSetRoleController {
      */
     @PostMapping("/create-and-assign-grant")
     @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
-    public ResponseEntity<?> createAndAssignGrant(
+    public ResponseEntity<ItemTypeSetRoleDTO> createAndAssignGrant(
             @Valid @RequestBody ItemTypeSetRoleGrantCreateDto dto,
             @CurrentTenant Tenant tenant) {
-        try {
-            ItemTypeSetRoleDTO result = itemTypeSetRoleService.createAndAssignGrant(dto, tenant);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            // Log dell'errore completo per debugging
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("message", e.getMessage() != null ? e.getMessage() : "Unknown error", 
-                                "error", e.getClass().getSimpleName()));
-        }
+        ItemTypeSetRoleDTO result = itemTypeSetRoleService.createAndAssignGrant(dto, tenant);
+        return ResponseEntity.ok(result);
     }
     
     /**
@@ -136,17 +107,11 @@ public class ItemTypeSetRoleController {
      */
     @GetMapping("/{roleId}/grant-details")
     @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
-    public ResponseEntity<?> getGrantDetails(
+    public ResponseEntity<com.example.demo.dto.GrantDetailsDto> getGrantDetails(
             @PathVariable Long roleId,
             @CurrentTenant Tenant tenant) {
-        try {
-            com.example.demo.dto.GrantDetailsDto result = itemTypeSetRoleService.getGrantDetails(roleId, tenant);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("message", e.getMessage() != null ? e.getMessage() : "Unknown error", 
-                                "error", e.getClass().getSimpleName()));
-        }
+        com.example.demo.dto.GrantDetailsDto result = itemTypeSetRoleService.getGrantDetails(roleId, tenant);
+        return ResponseEntity.ok(result);
     }
     
     /**
@@ -154,18 +119,11 @@ public class ItemTypeSetRoleController {
      */
     @PutMapping("/update-grant")
     @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
-    public ResponseEntity<?> updateGrant(
+    public ResponseEntity<ItemTypeSetRoleDTO> updateGrant(
             @Valid @RequestBody ItemTypeSetRoleGrantCreateDto dto,
             @CurrentTenant Tenant tenant) {
-        try {
-            ItemTypeSetRoleDTO result = itemTypeSetRoleService.updateGrant(dto, tenant);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("message", e.getMessage() != null ? e.getMessage() : "Unknown error", 
-                                "error", e.getClass().getSimpleName()));
-        }
+        ItemTypeSetRoleDTO result = itemTypeSetRoleService.updateGrant(dto, tenant);
+        return ResponseEntity.ok(result);
     }
     
     /**
@@ -177,12 +135,8 @@ public class ItemTypeSetRoleController {
             @RequestParam Long roleId,
             @RequestParam Long roleTemplateId,
             @CurrentTenant Tenant tenant) {
-        try {
-            ItemTypeSetRoleDTO result = itemTypeSetRoleService.assignRoleTemplate(roleId, roleTemplateId, tenant);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        }
+        ItemTypeSetRoleDTO result = itemTypeSetRoleService.assignRoleTemplate(roleId, roleTemplateId, tenant);
+        return ResponseEntity.ok(result);
     }
     
     /**
@@ -193,13 +147,8 @@ public class ItemTypeSetRoleController {
     public ResponseEntity<String> removeAssignment(
             @RequestParam Long roleId,
             @CurrentTenant Tenant tenant) {
-        try {
-            itemTypeSetRoleService.removeAssignment(roleId, tenant);
-            return ResponseEntity.ok("Assignment removed successfully from role");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error removing assignment: " + e.getMessage());
-        }
+        itemTypeSetRoleService.removeAssignment(roleId, tenant);
+        return ResponseEntity.ok("Assignment removed successfully from role");
     }
     
     /**
@@ -210,13 +159,8 @@ public class ItemTypeSetRoleController {
     public ResponseEntity<String> deleteAllRolesForItemTypeSet(
             @PathVariable Long itemTypeSetId,
             @CurrentTenant Tenant tenant) {
-        try {
-            itemTypeSetRoleService.deleteAllRolesForItemTypeSet(itemTypeSetId, tenant);
-            return ResponseEntity.ok("All roles deleted successfully for ItemTypeSet: " + itemTypeSetId);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error deleting roles: " + e.getMessage());
-        }
+        itemTypeSetRoleService.deleteAllRolesForItemTypeSet(itemTypeSetId, tenant);
+        return ResponseEntity.ok("All roles deleted successfully for ItemTypeSet: " + itemTypeSetId);
     }
     
     /**
@@ -228,12 +172,8 @@ public class ItemTypeSetRoleController {
             @PathVariable Long itemTypeSetId,
             @PathVariable String entityType,
             @CurrentTenant Tenant tenant) {
-        try {
-            // Implementazione per ottenere ruoli per tipo di entità specifico
-            // Questo richiederebbe un metodo aggiuntivo nel service
-            return ResponseEntity.ok(List.of());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        // Implementazione per ottenere ruoli per tipo di entità specifico
+        // Questo richiederebbe un metodo aggiuntivo nel service
+        return ResponseEntity.ok(List.of());
     }
 }

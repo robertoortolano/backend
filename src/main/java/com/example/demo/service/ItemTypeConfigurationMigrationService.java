@@ -269,7 +269,7 @@ public class ItemTypeConfigurationMigrationService {
                 .filter(java.util.Objects::nonNull) // Rimuovi eventuali null
                 .collect(Collectors.toList());
         
-        List<Transition> transitions = transitionRepository.findByWorkflow(workflow);
+        List<Transition> transitions = transitionRepository.findByWorkflowAndTenant(workflow, workflow.getTenant());
         List<ItemTypeConfigurationMigrationImpactDto.TransitionInfo> transitionInfos = transitions.stream()
                 .map(t -> ItemTypeConfigurationMigrationImpactDto.TransitionInfo.builder()
                         .transitionId(t.getId())
@@ -1032,10 +1032,10 @@ public class ItemTypeConfigurationMigrationService {
     // ========== METODI DI UTILITÀ AGGIUNTIVI ==========
     
     /**
-     * Trova l'ItemTypeSet che contiene questa ItemTypeConfiguration
+     * Trova l'ItemTypeSet che contiene questa ItemTypeConfiguration, filtrato per Tenant (sicurezza)
      */
     private Long getItemTypeSetIdForConfiguration(ItemTypeConfiguration config) {
-        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByItemTypeConfigurations_Id(config.getId())
+        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByItemTypeConfigurations_IdAndTenant(config.getId(), config.getTenant())
                 .stream()
                 .findFirst()
                 .orElse(null);
@@ -1043,7 +1043,7 @@ public class ItemTypeConfigurationMigrationService {
     }
     
     private String getItemTypeSetNameForConfiguration(ItemTypeConfiguration config) {
-        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByItemTypeConfigurations_Id(config.getId())
+        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByItemTypeConfigurations_IdAndTenant(config.getId(), config.getTenant())
                 .stream()
                 .findFirst()
                 .orElse(null);

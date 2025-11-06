@@ -27,4 +27,28 @@ public interface TransitionRepository extends JpaRepository<Transition, Long> {
     @Query("SELECT t FROM Transition t JOIN t.workflow w WHERE t.id = :id AND w.tenant = :tenant")
     Optional<Transition> findByIdAndTenant(@Param("id") Long id, @Param("tenant") com.example.demo.entity.Tenant tenant);
 
+    /**
+     * Trova tutte le Transition che partono da un WorkflowStatus, filtrate per Tenant (sicurezza)
+     */
+    @Query("SELECT t FROM Transition t JOIN t.fromStatus fs JOIN fs.workflow w WHERE fs = :status AND w.tenant = :tenant")
+    List<Transition> findByFromStatusAndTenant(@Param("status") WorkflowStatus status, @Param("tenant") com.example.demo.entity.Tenant tenant);
+
+    /**
+     * Trova tutte le Transition che arrivano a un WorkflowStatus, filtrate per Tenant (sicurezza)
+     */
+    @Query("SELECT t FROM Transition t JOIN t.toStatus ts JOIN ts.workflow w WHERE ts = :status AND w.tenant = :tenant")
+    List<Transition> findByToStatusAndTenant(@Param("status") WorkflowStatus status, @Param("tenant") com.example.demo.entity.Tenant tenant);
+
+    /**
+     * Trova tutte le Transition di un Workflow, filtrate per Tenant (sicurezza)
+     */
+    @Query("SELECT t FROM Transition t WHERE t.workflow = :workflow AND t.workflow.tenant = :tenant")
+    List<Transition> findByWorkflowAndTenant(@Param("workflow") Workflow workflow, @Param("tenant") com.example.demo.entity.Tenant tenant);
+
+    /**
+     * Trova Transition per ID, filtrata per Tenant (sicurezza)
+     */
+    @Query("SELECT t FROM Transition t JOIN t.workflow w WHERE t.id = :transitionId AND w.tenant = :tenant")
+    Optional<Transition> findByTransitionIdAndTenant(@Param("transitionId") Long transitionId, @Param("tenant") com.example.demo.entity.Tenant tenant);
+
 }

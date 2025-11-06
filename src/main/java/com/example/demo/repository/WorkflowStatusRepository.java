@@ -46,9 +46,26 @@ public interface WorkflowStatusRepository extends JpaRepository<WorkflowStatus, 
     List<WorkflowStatus> findAllByWorkflowId(@Param("workflowId") Long workflowId);
 
     /**
+     * Trova tutti gli WorkflowStatus di un Workflow, filtrati per Tenant (sicurezza)
+     * IMPORTANTE: Carica anche lo Status associato (JOIN FETCH) per evitare problemi di lazy loading
+     */
+    @Query("""
+        SELECT ws FROM WorkflowStatus ws
+        LEFT JOIN FETCH ws.status
+        WHERE ws.workflow.id = :workflowId AND ws.workflow.tenant = :tenant
+    """)
+    List<WorkflowStatus> findAllByWorkflowIdAndTenant(@Param("workflowId") Long workflowId, @Param("tenant") Tenant tenant);
+
+    /**
      * Trova tutti gli WorkflowStatus di un Workflow
      */
     List<WorkflowStatus> findByWorkflow(Workflow workflow);
+    
+    /**
+     * Trova tutti gli WorkflowStatus di un Workflow, filtrati per Tenant (sicurezza)
+     */
+    @Query("SELECT ws FROM WorkflowStatus ws WHERE ws.workflow = :workflow AND ws.workflow.tenant = :tenant")
+    List<WorkflowStatus> findByWorkflowAndTenant(@Param("workflow") Workflow workflow, @Param("tenant") Tenant tenant);
     
     /**
      * Trova un WorkflowStatus per ID e Tenant (sicurezza)
@@ -56,5 +73,11 @@ public interface WorkflowStatusRepository extends JpaRepository<WorkflowStatus, 
      */
     @Query("SELECT ws FROM WorkflowStatus ws JOIN ws.workflow w WHERE ws.id = :id AND w.tenant = :tenant")
     Optional<WorkflowStatus> findByIdAndTenant(@Param("id") Long id, @Param("tenant") com.example.demo.entity.Tenant tenant);
+
+    /**
+     * Trova WorkflowStatus per ID, filtrato per Tenant (sicurezza)
+     */
+    @Query("SELECT ws FROM WorkflowStatus ws JOIN ws.workflow w WHERE ws.id = :workflowStatusId AND w.tenant = :tenant")
+    Optional<WorkflowStatus> findByWorkflowStatusIdAndTenant(@Param("workflowStatusId") Long workflowStatusId, @Param("tenant") Tenant tenant);
 
 }

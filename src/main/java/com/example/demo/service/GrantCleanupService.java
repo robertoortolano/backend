@@ -2,10 +2,12 @@ package com.example.demo.service;
 
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class GrantCleanupService {
@@ -21,7 +23,6 @@ public class GrantCleanupService {
         if (grantId == null) {
             return;
         }
-        
         
         // Elimina dalle tabelle di join ManyToMany
         // Hibernate genera i nomi delle colonne come: [entity_field]_[id] e [target_entity]_id
@@ -46,7 +47,7 @@ public class GrantCleanupService {
                 entityManager.createNativeQuery("DELETE FROM grant_assignment_groups WHERE grant_id = :grantId")
                     .setParameter("grantId", grantId).executeUpdate();
             } catch (Exception e2) {
-                System.out.println("WARN: Could not delete from grant_assignment_groups: " + e2.getMessage());
+                log.warn("Could not delete from grant_assignment_groups: {}", e2.getMessage());
             }
         }
         
@@ -58,7 +59,7 @@ public class GrantCleanupService {
                 entityManager.createNativeQuery("DELETE FROM grant_negated_users WHERE grant_id = :grantId")
                     .setParameter("grantId", grantId).executeUpdate();
             } catch (Exception e2) {
-                System.out.println("WARN: Could not delete from grant_negated_users: " + e2.getMessage());
+                log.warn("Could not delete from grant_negated_users: {}", e2.getMessage());
             }
         }
         
@@ -70,7 +71,7 @@ public class GrantCleanupService {
                 entityManager.createNativeQuery("DELETE FROM grant_negated_groups WHERE grant_id = :grantId")
                     .setParameter("grantId", grantId).executeUpdate();
             } catch (Exception e2) {
-                System.out.println("WARN: Could not delete from grant_negated_groups: " + e2.getMessage());
+                log.warn("Could not delete from grant_negated_groups: {}", e2.getMessage());
             }
         }
         

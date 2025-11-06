@@ -427,9 +427,9 @@ public class WorkflowService {
 
         // Cancella transizioni obsolete
         for (Transition obsolete : existingTransitions.values()) {
-            // Prima rimuovi le ExecutorPermissions associate direttamente dal database
+            // Prima rimuovi le ExecutorPermissions associate direttamente dal database, filtrate per Tenant (sicurezza)
             List<ExecutorPermission> permissions = executorPermissionRepository
-                    .findByTransitionId(obsolete.getId());
+                    .findByTransitionIdAndTenant(obsolete.getId(), tenant);
             for (ExecutorPermission permission : permissions) {
                 executorPermissionRepository.delete(permission);
             }
@@ -794,7 +794,7 @@ public class WorkflowService {
         // Identifica le Transition esistenti per coppia (fromStatusId, toStatusId)
         Set<String> existingTransitionKeys = existingTransitionIds.stream()
                 .map(id -> {
-                    Transition t = transitionRepository.findById(id).orElse(null);
+                    Transition t = transitionRepository.findByTransitionIdAndTenant(id, tenant).orElse(null);
                     if (t != null && t.getFromStatus() != null && t.getToStatus() != null) {
                         return t.getFromStatus().getStatus().getId() + "->" + t.getToStatus().getStatus().getId();
                     }
@@ -1086,9 +1086,9 @@ public class WorkflowService {
      * Rimuove le ExecutorPermissions per una singola Transition
      */
     public void removeExecutorPermissionsForTransition(Tenant tenant, Long transitionId) {
-        // Trova tutte le ExecutorPermissions per questa Transition
+        // Trova tutte le ExecutorPermissions per questa Transition, filtrate per Tenant (sicurezza)
         List<ExecutorPermission> permissions = executorPermissionRepository
-                .findByTransitionId(transitionId);
+                .findByTransitionIdAndTenant(transitionId, tenant);
         
         // Rimuovi tutte le permission
         for (ExecutorPermission permission : permissions) {
@@ -1152,7 +1152,7 @@ public class WorkflowService {
         return transitionIds.stream()
                 .map(id -> {
                     try {
-                        Transition transition = transitionRepository.findById(id).orElse(null);
+                        Transition transition = transitionRepository.findByTransitionIdAndTenant(id, tenant).orElse(null);
                         if (transition == null) {
                             return "Transition " + id;
                         }
@@ -1191,12 +1191,8 @@ public class WorkflowService {
             Long workflowId,
             Set<Long> removedStatusIds
     ) {
-        Workflow workflow = workflowRepository.findById(workflowId)
+        Workflow workflow = workflowRepository.findByIdAndTenant(workflowId, tenant)
                 .orElseThrow(() -> new ApiException("Workflow not found: " + workflowId));
-
-        if (!workflow.getTenant().equals(tenant)) {
-            throw new ApiException("Workflow does not belong to tenant");
-        }
 
         // Trova tutti gli ItemTypeSet che usano questo Workflow
         List<ItemTypeSet> allItemTypeSetsUsingWorkflow = findItemTypeSetsUsingWorkflow(workflowId, tenant);
@@ -1236,7 +1232,7 @@ public class WorkflowService {
         
         // Analizza le FieldStatusPermissions (EDITORS/VIEWERS) per i WorkflowStatus rimossi
         List<StatusRemovalImpactDto.FieldStatusPermissionImpact> fieldStatusPermissions = 
-                analyzeFieldStatusPermissionImpacts(allItemTypeSetsUsingWorkflow, removedStatusIds);
+                analyzeFieldStatusPermissionImpacts(allItemTypeSetsUsingWorkflow, removedStatusIds, tenant);
         
         // Converti TransitionRemovalImpactDto.PermissionImpact in StatusRemovalImpactDto.ExecutorPermissionImpact
         List<StatusRemovalImpactDto.ExecutorPermissionImpact> executorPermissions = executorPermissionImpacts.stream()
@@ -1362,9 +1358,9 @@ public class WorkflowService {
      * Rimuove le StatusOwnerPermissions per un singolo Status
      */
     public void removeStatusOwnerPermissionsForStatus(Tenant tenant, Long workflowStatusId) {
-        // Trova tutte le StatusOwnerPermissions per questo WorkflowStatus
+        // Trova tutte le StatusOwnerPermissions per questo WorkflowStatus, filtrate per Tenant (sicurezza)
         List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository
-                .findByWorkflowStatusId(workflowStatusId);
+                .findByWorkflowStatusIdAndTenant(workflowStatusId, tenant);
         
         // Rimuovi tutte le permission
         for (StatusOwnerPermission permission : permissions) {
@@ -1418,7 +1414,7 @@ public class WorkflowService {
             
             // Rimuovi fisicamente gli Status dal database
             for (Long statusId : removedStatusIds) {
-                WorkflowStatus workflowStatus = workflowStatusRepository.findById(statusId).orElse(null);
+                WorkflowStatus workflowStatus = workflowStatusRepository.findByWorkflowStatusIdAndTenant(statusId, tenant).orElse(null);
                 if (workflowStatus != null) {
                     // Rimuovi prima le relazioni
                     workflowStatus.getOutgoingTransitions().clear();
@@ -1433,17 +1429,17 @@ public class WorkflowService {
             // Trova tutte le Transition che verranno rimosse (entranti e uscenti dagli stati rimossi)
             Set<Long> removedTransitionIds = new HashSet<>();
             for (Long statusId : removedStatusIds) {
-                WorkflowStatus workflowStatus = workflowStatusRepository.findById(statusId).orElse(null);
+                WorkflowStatus workflowStatus = workflowStatusRepository.findByWorkflowStatusIdAndTenant(statusId, tenant).orElse(null);
                 if (workflowStatus != null) {
                     // Transizioni uscenti (fromStatus)
-                    List<Transition> outgoingTransitions = transitionRepository.findByFromStatus(workflowStatus);
+                    List<Transition> outgoingTransitions = transitionRepository.findByFromStatusAndTenant(workflowStatus, tenant);
                     removedTransitionIds.addAll(outgoingTransitions.stream()
                             .map(Transition::getId)
                             .filter(Objects::nonNull)
                             .collect(Collectors.toSet()));
                     
                     // Transizioni entranti (toStatus)
-                    List<Transition> incomingTransitions = transitionRepository.findByToStatus(workflowStatus);
+                    List<Transition> incomingTransitions = transitionRepository.findByToStatusAndTenant(workflowStatus, tenant);
                     removedTransitionIds.addAll(incomingTransitions.stream()
                             .map(Transition::getId)
                             .filter(Objects::nonNull)
@@ -1463,7 +1459,7 @@ public class WorkflowService {
             
             // Rimuovi fisicamente gli Status dal database
             for (Long statusId : removedStatusIds) {
-                WorkflowStatus workflowStatus = workflowStatusRepository.findById(statusId).orElse(null);
+                WorkflowStatus workflowStatus = workflowStatusRepository.findByWorkflowStatusIdAndTenant(statusId, tenant).orElse(null);
                 if (workflowStatus != null) {
                     // Rimuovi prima le relazioni
                     workflowStatus.getOutgoingTransitions().clear();
@@ -1599,7 +1595,8 @@ public class WorkflowService {
      */
     private List<StatusRemovalImpactDto.FieldStatusPermissionImpact> analyzeFieldStatusPermissionImpacts(
             List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedStatusIds
+            Set<Long> removedStatusIds,
+            Tenant tenant
     ) {
         List<StatusRemovalImpactDto.FieldStatusPermissionImpact> impacts = new ArrayList<>();
         
@@ -1608,7 +1605,7 @@ public class WorkflowService {
         Set<Long> removedStatusEntityIds = new HashSet<>();
         // Carica direttamente i WorkflowStatus rimossi dal repository
         for (Long workflowStatusId : removedStatusIds) {
-            WorkflowStatus ws = workflowStatusRepository.findById(workflowStatusId).orElse(null);
+            WorkflowStatus ws = workflowStatusRepository.findByWorkflowStatusIdAndTenant(workflowStatusId, tenant).orElse(null);
             if (ws != null && ws.getStatus() != null) {
                 removedStatusEntityIds.add(ws.getStatus().getId());
             }

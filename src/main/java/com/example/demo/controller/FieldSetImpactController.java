@@ -71,7 +71,7 @@ public class FieldSetImpactController {
             @PathVariable Long fieldSetId,
             @RequestBody Set<Long> removedFieldConfigIds,
             @CurrentTenant Tenant tenant
-    ) throws IOException {
+    ) {
         FieldSetRemovalImpactDto impact = fieldSetService.analyzeFieldSetRemovalImpact(
                 tenant, fieldSetId, removedFieldConfigIds, new java.util.HashSet<>());
         
@@ -80,7 +80,11 @@ public class FieldSetImpactController {
         
         // Converti in JSON
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        objectMapper.writeValue(outputStream, impact);
+        try {
+            objectMapper.writeValue(outputStream, impact);
+        } catch (java.io.IOException e) {
+            throw new com.example.demo.exception.ApiException("Error serializing impact to JSON: " + e.getMessage(), e);
+        }
         byte[] jsonBytes = outputStream.toByteArray();
         
         // Genera nome file con timestamp
@@ -106,7 +110,7 @@ public class FieldSetImpactController {
             @PathVariable Long fieldSetId,
             @RequestBody Set<Long> removedFieldConfigIds,
             @CurrentTenant Tenant tenant
-    ) throws IOException {
+    ) {
         try {
             FieldSetRemovalImpactDto impact = fieldSetService.analyzeFieldSetRemovalImpact(
                     tenant, fieldSetId, removedFieldConfigIds, new java.util.HashSet<>());
@@ -177,7 +181,7 @@ public class FieldSetImpactController {
                     .body(csv.toString().getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.error("Error generating CSV export", e);
-            throw new IOException("Error generating CSV export: " + e.getMessage(), e);
+            throw new com.example.demo.exception.ApiException("Error generating CSV export: " + e.getMessage(), e);
         }
     }
     

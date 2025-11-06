@@ -121,37 +121,5 @@ public class TenantService {
         return jwtTokenUtil.generateAccessTokenWithTenantId(userDetails, tenantId);
     }
 
-    /**
-     * @deprecated Usa TenantUserManagementService.assignRole() invece.
-     * Mantenuto per backward compatibility con vecchi controller.
-     */
-    @Deprecated
-    @Transactional
-    public void assignUserToTenant(String username, Tenant tenant, User currentUser) {
-        // Check if current user has access to the tenant
-        if (!userRoleRepository.hasAccessToTenant(currentUser.getId(), tenant.getId())) {
-            throw new ApiException("You don't have access to this tenant");
-        }
-        
-        // Find the user to assign
-        User userToAssign = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ApiException("User not found"));
-
-        // Check if user already has USER role in this tenant
-        if (userRoleRepository.existsByUserIdAndTenantIdAndRoleName(
-                userToAssign.getId(), tenant.getId(), "USER")) {
-            return; // User already has access
-        }
-
-        // Assign USER role to the user
-        UserRole newUserRole = UserRole.builder()
-                .user(userToAssign)
-                .tenant(tenant)
-                .roleName("USER")
-                .scope(ScopeType.TENANT)
-                .project(null)
-                .build();
-        userRoleRepository.save(newUserRole);
-    }
 
 }

@@ -28,13 +28,8 @@ public class ProjectItemTypeSetRoleGrantController {
             @PathVariable Long projectId,
             @Valid @RequestBody ItemTypeSetRoleGrantCreateDto dto,
             @CurrentTenant Tenant tenant) {
-        try {
-            projectItemTypeSetRoleGrantService.createOrUpdateProjectGrant(dto, projectId, tenant);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(e.getMessage());
-        }
+        projectItemTypeSetRoleGrantService.createOrUpdateProjectGrant(dto, projectId, tenant);
+        return ResponseEntity.ok().build();
     }
     
     /**
@@ -46,12 +41,8 @@ public class ProjectItemTypeSetRoleGrantController {
             @PathVariable Long projectId,
             @PathVariable Long roleId,
             @CurrentTenant Tenant tenant) {
-        try {
-            GrantDetailsDto details = projectItemTypeSetRoleGrantService.getProjectGrantDetails(roleId, projectId, tenant);
-            return ResponseEntity.ok(details);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+        GrantDetailsDto details = projectItemTypeSetRoleGrantService.getProjectGrantDetails(roleId, projectId, tenant);
+        return ResponseEntity.ok(details);
     }
     
     /**
@@ -63,13 +54,8 @@ public class ProjectItemTypeSetRoleGrantController {
             @PathVariable Long projectId,
             @PathVariable Long roleId,
             @CurrentTenant Tenant tenant) {
-        try {
-            projectItemTypeSetRoleGrantService.removeProjectGrant(roleId, projectId, tenant);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(e.getMessage());
-        }
+        projectItemTypeSetRoleGrantService.removeProjectGrant(roleId, projectId, tenant);
+        return ResponseEntity.ok().build();
     }
     
     /**

@@ -498,7 +498,7 @@ public class ItemTypeSetService {
         List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
         
         for (ItemTypeConfiguration config : configsToRemove) {
-            List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository.findByItemTypeConfigurationId(config.getId());
+            List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
             
             for (StatusOwnerPermission permission : permissions) {
                 List<String> assignedRoles = permission.getAssignedRoles() != null
@@ -541,7 +541,7 @@ public class ItemTypeSetService {
         List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
         
         for (ItemTypeConfiguration config : configsToRemove) {
-            List<FieldStatusPermission> permissions = fieldStatusPermissionRepository.findByItemTypeConfigurationId(config.getId());
+            List<FieldStatusPermission> permissions = fieldStatusPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
             
             for (FieldStatusPermission permission : permissions) {
                 List<String> assignedRoles = permission.getAssignedRoles() != null
@@ -756,7 +756,7 @@ public class ItemTypeSetService {
             }
             
             // Rimuovi StatusOwnerPermissions
-            List<StatusOwnerPermission> statusOwnerPermissions = statusOwnerPermissionRepository.findByItemTypeConfigurationId(config.getId());
+            List<StatusOwnerPermission> statusOwnerPermissions = statusOwnerPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
             for (StatusOwnerPermission perm : statusOwnerPermissions) {
                 if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
                     statusOwnerPermissionRepository.delete(perm);
@@ -764,7 +764,7 @@ public class ItemTypeSetService {
             }
             
             // Rimuovi FieldStatusPermissions
-            List<FieldStatusPermission> fieldStatusPermissions = fieldStatusPermissionRepository.findByItemTypeConfigurationId(config.getId());
+            List<FieldStatusPermission> fieldStatusPermissions = fieldStatusPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
             for (FieldStatusPermission perm : fieldStatusPermissions) {
                 if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
                     fieldStatusPermissionRepository.delete(perm);

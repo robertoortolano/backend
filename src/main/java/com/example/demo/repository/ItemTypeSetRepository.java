@@ -70,6 +70,16 @@ public interface ItemTypeSetRepository extends JpaRepository<ItemTypeSet, Long> 
     List<ItemTypeSet> findByItemTypeConfigurations_Id(@Param("itemTypeConfigurationId") Long itemTypeConfigurationId);
 
     /**
+     * Trova l'ItemTypeSet che contiene una specifica ItemTypeConfiguration, filtrato per Tenant (sicurezza)
+     */
+    @Query("""
+        SELECT DISTINCT its FROM ItemTypeSet its
+        JOIN its.itemTypeConfigurations itc
+        WHERE itc.id = :itemTypeConfigurationId AND its.tenant = :tenant
+    """)
+    List<ItemTypeSet> findByItemTypeConfigurations_IdAndTenant(@Param("itemTypeConfigurationId") Long itemTypeConfigurationId, @Param("tenant") Tenant tenant);
+
+    /**
      * Trova tutti gli ItemTypeSet che usano un FieldSet specifico
      */
     @Query("""

@@ -22,8 +22,11 @@ public interface FieldMapper {
     @Mapping(target = "tenant", ignore = true)
     Field toEntity(FieldCreateDto dto);
 
-    @Mapping(target = "fieldConfigurations", source = "fieldConfigurations")
-    @Mapping(target = "fieldSets", source = "fieldSets")
+    @Mapping(source = "field.id", target = "id")
+    @Mapping(source = "field.name", target = "name")
+    @Mapping(source = "field.defaultField", target = "defaultField")
+    @Mapping(source = "fieldConfigurations", target = "fieldConfigurations")
+    @Mapping(source = "fieldSets", target = "fieldSets")
     FieldDetailDto toDetailDto(Field field, List<FieldConfiguration> fieldConfigurations, List<FieldSet> fieldSets);
 
 }

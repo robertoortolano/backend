@@ -142,14 +142,6 @@ public class TenantUserManagementService {
         }
     }
     
-    /**
-     * @deprecated Usa updateUserRoles() per maggiore flessibilità.
-     * Cambia il ruolo di un utente esistente (da USER ad ADMIN o viceversa)
-     */
-    @Deprecated
-    public void changeUserRole(Long userId, String newRoleName, Tenant tenant, User currentUser) {
-        updateUserRoles(userId, List.of(newRoleName), tenant, currentUser);
-    }
 
     /**
      * Revoca completamente l'accesso di un utente da una tenant

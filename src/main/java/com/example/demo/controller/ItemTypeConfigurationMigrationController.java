@@ -95,7 +95,7 @@ public class ItemTypeConfigurationMigrationController {
             @RequestParam(required = false) Long newFieldSetId,
             @RequestParam(required = false) Long newWorkflowId,
             @CurrentTenant Tenant tenant
-    ) throws IOException {
+    ) {
         try {
             ItemTypeConfigurationMigrationImpactDto impact = migrationService.analyzeMigrationImpact(
                     tenant,
@@ -219,7 +219,7 @@ public class ItemTypeConfigurationMigrationController {
                     .body(csv.toString().getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.error("Error generating CSV export", e);
-            throw new IOException("Error generating CSV export: " + e.getMessage(), e);
+            throw new com.example.demo.exception.ApiException("Error generating CSV export: " + e.getMessage(), e);
         }
     }
     

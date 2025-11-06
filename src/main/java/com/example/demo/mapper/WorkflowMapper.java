@@ -3,7 +3,6 @@ package com.example.demo.mapper;
 import com.example.demo.dto.*;
 import com.example.demo.entity.ItemTypeConfiguration;
 import com.example.demo.entity.ItemTypeSet;
-import com.example.demo.entity.Transition;
 import com.example.demo.entity.Workflow;
 import com.example.demo.enums.ItemTypeCategory;
 import com.example.demo.enums.ScopeType;
@@ -18,7 +17,7 @@ import java.util.stream.Collectors;
 @Mapper(componentModel = "spring", uses = {
         WorkflowStatusMapper.class,
         StatusMapper.class,
-        Transition.class
+        TransitionMapper.class
 })
 public interface WorkflowMapper {
 

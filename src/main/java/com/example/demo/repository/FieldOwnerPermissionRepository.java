@@ -12,7 +12,21 @@ import java.util.List;
 @Repository
 public interface FieldOwnerPermissionRepository extends JpaRepository<FieldOwnerPermission, Long> {
     List<FieldOwnerPermission> findByItemTypeConfigurationId(Long itemTypeConfigurationId);
+    
+    /**
+     * Trova tutte le FieldOwnerPermission per una ItemTypeConfiguration, filtrate per Tenant (sicurezza)
+     */
+    @Query("SELECT p FROM FieldOwnerPermission p WHERE p.itemTypeConfiguration.id = :itemTypeConfigurationId AND p.itemTypeConfiguration.tenant = :tenant")
+    List<FieldOwnerPermission> findByItemTypeConfigurationIdAndTenant(@Param("itemTypeConfigurationId") Long itemTypeConfigurationId, @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
     List<FieldOwnerPermission> findAllByItemTypeConfiguration(ItemTypeConfiguration itemTypeConfiguration);
+    
+    /**
+     * Trova tutte le FieldOwnerPermission per una ItemTypeConfiguration, filtrate per Tenant (sicurezza)
+     */
+    @Query("SELECT p FROM FieldOwnerPermission p WHERE p.itemTypeConfiguration = :config AND p.itemTypeConfiguration.tenant = :tenant")
+    List<FieldOwnerPermission> findAllByItemTypeConfigurationAndTenant(@Param("config") ItemTypeConfiguration itemTypeConfiguration, @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
     boolean existsByItemTypeConfigurationIdAndFieldId(Long itemTypeConfigurationId, Long fieldId);
     
     /**

@@ -16,6 +16,12 @@ public interface FieldStatusPermissionRepository extends JpaRepository<FieldStat
     List<FieldStatusPermission> findByItemTypeConfigurationId(Long itemTypeConfigurationId);
     
     /**
+     * Trova tutte le FieldStatusPermission per una ItemTypeConfiguration, filtrate per Tenant (sicurezza)
+     */
+    @Query("SELECT p FROM FieldStatusPermission p WHERE p.itemTypeConfiguration.id = :itemTypeConfigurationId AND p.itemTypeConfiguration.tenant = :tenant")
+    List<FieldStatusPermission> findByItemTypeConfigurationIdAndTenant(@Param("itemTypeConfigurationId") Long itemTypeConfigurationId, @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
+    /**
      * Trova tutte le FieldStatusPermission per una ItemTypeConfiguration
      * IMPORTANTE: Carica anche i ruoli associati e lo Status (JOIN FETCH) per evitare problemi di lazy loading
      */
@@ -25,6 +31,18 @@ public interface FieldStatusPermissionRepository extends JpaRepository<FieldStat
            "LEFT JOIN FETCH ws.status " +
            "WHERE p.itemTypeConfiguration = :config")
     List<FieldStatusPermission> findAllByItemTypeConfiguration(@Param("config") ItemTypeConfiguration itemTypeConfiguration);
+    
+    /**
+     * Trova tutte le FieldStatusPermission per una ItemTypeConfiguration, filtrate per Tenant (sicurezza)
+     * IMPORTANTE: Carica anche i ruoli associati e lo Status (JOIN FETCH) per evitare problemi di lazy loading
+     */
+    @Query("SELECT p FROM FieldStatusPermission p " +
+           "LEFT JOIN FETCH p.assignedRoles " +
+           "LEFT JOIN FETCH p.workflowStatus ws " +
+           "LEFT JOIN FETCH ws.status " +
+           "WHERE p.itemTypeConfiguration = :config AND p.itemTypeConfiguration.tenant = :tenant")
+    List<FieldStatusPermission> findAllByItemTypeConfigurationAndTenant(@Param("config") ItemTypeConfiguration itemTypeConfiguration, @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
     List<FieldStatusPermission> findAllByItemTypeConfigurationAndPermissionType(ItemTypeConfiguration itemTypeConfiguration, FieldStatusPermission.PermissionType permissionType);
     boolean existsByItemTypeConfigurationIdAndFieldIdAndWorkflowStatusIdAndPermissionType(
             Long itemTypeConfigurationId, 

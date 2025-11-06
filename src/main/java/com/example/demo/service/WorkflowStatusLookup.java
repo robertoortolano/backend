@@ -24,10 +24,8 @@ public class WorkflowStatusLookup {
     }
 
     WorkflowStatus getById(Long id, Tenant tenant) {
-        WorkflowStatus workflowStatus = workflowStatusRepository.findById(id)
+        return workflowStatusRepository.findByIdAndTenant(id, tenant)
                 .orElseThrow(() -> new ApiException("Workflow Status not found"));
-        if (!workflowStatus.getStatus().getTenant().equals(tenant)) throw new ApiException("Illegal tenant");
-        return workflowStatus;
     }
 
     /**
@@ -35,5 +33,12 @@ public class WorkflowStatusLookup {
      */
     public List<WorkflowStatus> findAllByWorkflow(Workflow workflow) {
         return workflowStatusRepository.findByWorkflow(workflow);
+    }
+
+    /**
+     * Trova tutti gli WorkflowStatus di un Workflow, filtrati per Tenant (sicurezza)
+     */
+    public List<WorkflowStatus> findAllByWorkflowAndTenant(Workflow workflow, Tenant tenant) {
+        return workflowStatusRepository.findByWorkflowAndTenant(workflow, tenant);
     }
 }
