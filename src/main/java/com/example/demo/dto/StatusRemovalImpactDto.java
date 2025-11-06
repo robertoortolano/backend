@@ -21,12 +21,16 @@ public class StatusRemovalImpactDto {
     // Executor permissions per le transizioni che verranno rimosse insieme agli stati
     private List<ExecutorPermissionImpact> executorPermissions;
     
+    // FieldStatus permissions (EDITORS/VIEWERS) per le coppie (Field, WorkflowStatus) che verranno rimosse
+    private List<FieldStatusPermissionImpact> fieldStatusPermissions;
+    
     private List<Long> removedTransitionIds;
     private List<String> removedTransitionNames;
 
     private int totalAffectedItemTypeSets;
     private int totalStatusOwnerPermissions;
     private int totalExecutorPermissions; // Permissions per transizioni rimosse
+    private int totalFieldStatusPermissions; // Permissions EDITORS/VIEWERS rimosse
     private int totalGrantAssignments;
     private int totalRoleAssignments;
 
@@ -117,6 +121,37 @@ public class StatusRemovalImpactDto {
         private Long transitionIdMatch; // ID della Transition corrispondente nel nuovo stato (se preservabile)
         private String transitionNameMatch; // Nome della Transition corrispondente
         private boolean canBePreserved; // true se esiste entity equivalente nel nuovo stato
+        private boolean defaultPreserve; // true se dovrebbe essere preservata di default
+        
+        // Grant di progetto per questa permission
+        private List<ProjectGrantInfo> projectGrants;
+    }
+    
+    @Data
+    @Builder
+    public static class FieldStatusPermissionImpact {
+        private Long permissionId;
+        private String permissionType; // "EDITORS" o "VIEWERS"
+        private Long itemTypeSetId;
+        private String itemTypeSetName;
+        private Long projectId;
+        private String projectName;
+        private Long fieldId;
+        private String fieldName;
+        private Long workflowStatusId;
+        private String workflowStatusName;
+        private String statusName; // Nome dello Status
+        private Long roleId;
+        private String roleName;
+        private Long grantId; // Grant globale (se presente)
+        private String grantName; // Nome grant globale
+        private List<String> assignedRoles;
+        private boolean hasAssignments; // true se ha ruoli o grant assegnati
+        
+        // Info per preservazione
+        private Long matchingStatusId; // ID dello Status corrispondente nel nuovo workflow (se preservabile)
+        private String matchingStatusName; // Nome dello Status corrispondente
+        private boolean canBePreserved; // true se esiste Status equivalente nel nuovo workflow
         private boolean defaultPreserve; // true se dovrebbe essere preservata di default
         
         // Grant di progetto per questa permission

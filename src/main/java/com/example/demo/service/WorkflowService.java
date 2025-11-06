@@ -1234,6 +1234,10 @@ public class WorkflowService {
                     ? analyzeExecutorPermissionImpacts(allItemTypeSetsUsingWorkflow, removedTransitionIds)
                     : new ArrayList<>();
         
+        // Analizza le FieldStatusPermissions (EDITORS/VIEWERS) per i WorkflowStatus rimossi
+        List<StatusRemovalImpactDto.FieldStatusPermissionImpact> fieldStatusPermissions = 
+                analyzeFieldStatusPermissionImpacts(allItemTypeSetsUsingWorkflow, removedStatusIds);
+        
         // Converti TransitionRemovalImpactDto.PermissionImpact in StatusRemovalImpactDto.ExecutorPermissionImpact
         List<StatusRemovalImpactDto.ExecutorPermissionImpact> executorPermissions = executorPermissionImpacts.stream()
                 .map(transitionImpact -> StatusRemovalImpactDto.ExecutorPermissionImpact.builder()
@@ -1267,13 +1271,16 @@ public class WorkflowService {
                         .build())
                 .collect(Collectors.toList());
         
-        // Calcola gli ItemTypeSet che hanno effettivamente impatti (status owner o executor permissions)
+        // Calcola gli ItemTypeSet che hanno effettivamente impatti (status owner, executor o field status permissions)
         Set<Long> itemTypeSetIdsWithImpact = new HashSet<>();
         itemTypeSetIdsWithImpact.addAll(statusOwnerPermissions.stream()
                 .map(StatusRemovalImpactDto.PermissionImpact::getItemTypeSetId)
                 .collect(Collectors.toSet()));
         itemTypeSetIdsWithImpact.addAll(executorPermissions.stream()
                 .map(StatusRemovalImpactDto.ExecutorPermissionImpact::getItemTypeSetId)
+                .collect(Collectors.toSet()));
+        itemTypeSetIdsWithImpact.addAll(fieldStatusPermissions.stream()
+                .map(StatusRemovalImpactDto.FieldStatusPermissionImpact::getItemTypeSetId)
                 .collect(Collectors.toSet()));
         
         List<ItemTypeSet> affectedItemTypeSets = allItemTypeSetsUsingWorkflow.stream()
@@ -1283,15 +1290,20 @@ public class WorkflowService {
         // Calcola le statistiche
         int totalStatusOwnerPermissions = statusOwnerPermissions.size();
         int totalExecutorPermissions = executorPermissions.size();
+        int totalFieldStatusPermissions = fieldStatusPermissions.size();
         int totalRoleAssignments = statusOwnerPermissions.stream()
                 .mapToInt(perm -> perm.getAssignedRoles() != null ? perm.getAssignedRoles().size() : 0)
                 .sum() + executorPermissions.stream()
+                .mapToInt(perm -> perm.getAssignedRoles() != null ? perm.getAssignedRoles().size() : 0)
+                .sum() + fieldStatusPermissions.stream()
                 .mapToInt(perm -> perm.getAssignedRoles() != null ? perm.getAssignedRoles().size() : 0)
                 .sum();
         // Calcola totalGrantAssignments: conta i grant globali (solo se hanno assegnazioni)
         int totalGrantAssignments = (int) statusOwnerPermissions.stream()
                 .filter(perm -> perm.getGrantId() != null)
                 .count() + (int) executorPermissions.stream()
+                .filter(perm -> perm.getGrantId() != null)
+                .count() + (int) fieldStatusPermissions.stream()
                 .filter(perm -> perm.getGrantId() != null)
                 .count();
         
@@ -1311,9 +1323,11 @@ public class WorkflowService {
                 .affectedItemTypeSets(mapItemTypeSetImpactsForStatus(affectedItemTypeSets))
                 .statusOwnerPermissions(statusOwnerPermissions)
                 .executorPermissions(executorPermissions)
+                .fieldStatusPermissions(fieldStatusPermissions)
                 .totalAffectedItemTypeSets(affectedItemTypeSets.size()) // Solo quelli con impatti effettivi
                 .totalStatusOwnerPermissions(totalStatusOwnerPermissions)
                 .totalExecutorPermissions(totalExecutorPermissions)
+                .totalFieldStatusPermissions(totalFieldStatusPermissions)
                 .totalGrantAssignments(totalGrantAssignments)
                 .totalRoleAssignments(totalRoleAssignments)
                 .build();
@@ -1568,6 +1582,179 @@ public class WorkflowService {
                                 .assignedRoles(assignedRoles)
                                 .hasAssignments(true)
                                 .statusId(workflowStatus.getStatus().getId())
+                                .canBePreserved(canBePreserved)
+                                .defaultPreserve(defaultPreserve)
+                                .projectGrants(projectGrantsList)
+                                .build());
+                    }
+                }
+            }
+        }
+        
+        return impacts;
+    }
+    
+    /**
+     * Analizza le FieldStatusPermissions (EDITORS/VIEWERS) che verranno rimosse quando si rimuovono WorkflowStatus
+     */
+    private List<StatusRemovalImpactDto.FieldStatusPermissionImpact> analyzeFieldStatusPermissionImpacts(
+            List<ItemTypeSet> itemTypeSets, 
+            Set<Long> removedStatusIds
+    ) {
+        List<StatusRemovalImpactDto.FieldStatusPermissionImpact> impacts = new ArrayList<>();
+        
+        // Crea un Set degli ID degli Status (non WorkflowStatus) che verranno rimossi
+        // Per trovare le permission, dobbiamo cercare per Status.id, non WorkflowStatus.id
+        Set<Long> removedStatusEntityIds = new HashSet<>();
+        // Carica direttamente i WorkflowStatus rimossi dal repository
+        for (Long workflowStatusId : removedStatusIds) {
+            WorkflowStatus ws = workflowStatusRepository.findById(workflowStatusId).orElse(null);
+            if (ws != null && ws.getStatus() != null) {
+                removedStatusEntityIds.add(ws.getStatus().getId());
+            }
+        }
+        
+        for (ItemTypeSet itemTypeSet : itemTypeSets) {
+            for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+                // Trova tutte le FieldStatusPermissions per questa configurazione
+                List<FieldStatusPermission> permissions = fieldStatusPermissionRepository
+                        .findAllByItemTypeConfiguration(config);
+                
+                for (FieldStatusPermission permission : permissions) {
+                    WorkflowStatus workflowStatus = permission.getWorkflowStatus();
+                    if (workflowStatus == null || workflowStatus.getStatus() == null) {
+                        continue;
+                    }
+                    
+                    // Verifica se questo WorkflowStatus verrà rimosso
+                    Long statusEntityId = workflowStatus.getStatus().getId();
+                    if (!removedStatusEntityIds.contains(statusEntityId)) {
+                        continue;
+                    }
+                    
+                    // Verifica anche che il WorkflowStatus.id sia nella lista dei rimossi
+                    if (!removedStatusIds.contains(workflowStatus.getId())) {
+                        continue;
+                    }
+                    
+                    // Raccogli ruoli assegnati
+                    List<String> assignedRoles = permission.getAssignedRoles().stream()
+                            .map(Role::getName)
+                            .collect(Collectors.toList());
+                    
+                    // Trova l'ItemTypeSetRole EDITORS/VIEWERS corrispondente
+                    Long roleId = null;
+                    String roleName = null;
+                    Long globalGrantId = null;
+                    String globalGrantName = null;
+                    List<StatusRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    
+                    // Trova la FieldConfiguration nel FieldSet
+                    Field field = permission.getField();
+                    final FieldConfiguration fieldConfig;
+                    if (config.getFieldSet() != null && config.getFieldSet().getFieldSetEntries() != null) {
+                        fieldConfig = config.getFieldSet().getFieldSetEntries().stream()
+                                .map(FieldSetEntry::getFieldConfiguration)
+                                .filter(fc -> fc.getField() != null && fc.getField().getId().equals(field.getId()))
+                                .findFirst()
+                                .orElse(null);
+                    } else {
+                        fieldConfig = null;
+                    }
+                    
+                    if (fieldConfig != null) {
+                        // Determina il tipo di ruolo (EDITORS o VIEWERS)
+                        com.example.demo.enums.ItemTypeSetRoleType roleType = 
+                                permission.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS
+                                ? com.example.demo.enums.ItemTypeSetRoleType.EDITORS
+                                : com.example.demo.enums.ItemTypeSetRoleType.VIEWERS;
+                        
+                        // Trova l'ItemTypeSetRole corrispondente
+                        // Richiede tertiaryEntityId (ruoli creati dopo la modifica)
+                        List<ItemTypeSetRole> fieldStatusRoles = itemTypeSetRoleRepository
+                                .findByItemTypeSetIdAndRoleTypeAndTenantId(
+                                        itemTypeSet.getId(),
+                                        roleType,
+                                        itemTypeSet.getTenant().getId())
+                                .stream()
+                                .filter(role -> role.getRelatedEntityType() != null 
+                                        && role.getRelatedEntityType().equals("ItemTypeConfiguration")
+                                        && role.getRelatedEntityId() != null
+                                        && role.getRelatedEntityId().equals(config.getId())
+                                        && role.getSecondaryEntityType() != null
+                                        && role.getSecondaryEntityType().equals("FieldConfiguration")
+                                        && role.getSecondaryEntityId() != null
+                                        && role.getSecondaryEntityId().equals(fieldConfig.getId())
+                                        && role.getTertiaryEntityType() != null
+                                        && role.getTertiaryEntityType().equals("WorkflowStatus")
+                                        && role.getTertiaryEntityId() != null
+                                        && role.getTertiaryEntityId().equals(workflowStatus.getId()))
+                                .collect(Collectors.toList());
+                        
+                        Set<Long> processedProjectIds = new HashSet<>();
+                        
+                        for (ItemTypeSetRole role : fieldStatusRoles) {
+                            if (roleId == null) {
+                                roleId = role.getId();
+                                roleName = role.getRoleTemplate() != null ? role.getRoleTemplate().getName() : null;
+                                
+                                // Grant globale
+                                if (role.getGrant() != null) {
+                                    globalGrantId = role.getGrant().getId();
+                                    globalGrantName = role.getGrant().getRole() != null 
+                                            ? role.getGrant().getRole().getName() 
+                                            : "Grant globale";
+                                }
+                            }
+                            
+                            // Grant di progetto
+                            List<ProjectItemTypeSetRoleGrant> allProjectGrantsForRole = 
+                                    projectItemTypeSetRoleGrantRepository.findByItemTypeSetRoleIdAndTenantId(
+                                            role.getId(),
+                                            itemTypeSet.getTenant().getId());
+                            
+                            for (ProjectItemTypeSetRoleGrant projectGrant : allProjectGrantsForRole) {
+                                if (projectGrant.getProject() != null && !processedProjectIds.contains(projectGrant.getProject().getId())) {
+                                    processedProjectIds.add(projectGrant.getProject().getId());
+                                    projectGrantsList.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
+                                            .projectId(projectGrant.getProject().getId())
+                                            .projectName(projectGrant.getProject().getName())
+                                            .roleId(role.getId())
+                                            .build());
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Calcola hasAssignments: true se ha ruoli O grant
+                    boolean hasRoles = !assignedRoles.isEmpty();
+                    boolean hasGrant = globalGrantId != null || !projectGrantsList.isEmpty();
+                    boolean hasAssignments = hasRoles || hasGrant;
+                    
+                    // Solo se ha assegnazioni (ruoli o grant)
+                    if (hasAssignments) {
+                        // Per FieldStatus, canBePreserved è false perché il WorkflowStatus viene rimosso
+                        boolean canBePreserved = false;
+                        boolean defaultPreserve = false;
+                        
+                        impacts.add(StatusRemovalImpactDto.FieldStatusPermissionImpact.builder()
+                                .permissionId(permission.getId())
+                                .permissionType(permission.getPermissionType().toString()) // "EDITORS" o "VIEWERS"
+                                .itemTypeSetId(itemTypeSet.getId())
+                                .itemTypeSetName(itemTypeSet.getName())
+                                .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
+                                .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
+                                .fieldId(field.getId())
+                                .fieldName(field.getName())
+                                .workflowStatusId(workflowStatus.getId())
+                                .workflowStatusName(workflowStatus.getStatus().getName())
+                                .statusName(workflowStatus.getStatus().getName())
+                                .roleId(roleId)
+                                .roleName(roleName)
+                                .grantId(globalGrantId)
+                                .grantName(globalGrantName)
+                                .assignedRoles(assignedRoles)
+                                .hasAssignments(true)
                                 .canBePreserved(canBePreserved)
                                 .defaultPreserve(defaultPreserve)
                                 .projectGrants(projectGrantsList)

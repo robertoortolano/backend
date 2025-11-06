@@ -187,12 +187,13 @@ public class ItemTypeSetRoleService {
                     FieldConfiguration fieldConfig = entry.getFieldConfiguration();
                     
                     for (WorkflowStatus status : statuses) {
-                        // Verifica se il ruolo EDITOR esiste già
+                        // Verifica se il ruolo EDITOR esiste già (verifica anche WorkflowStatus)
                         Optional<ItemTypeSetRole> existingEditorRoleOpt = itemTypeSetRoleRepository
                                 .findByItemTypeSetIdAndRoleTypeAndTenantId(itemTypeSet.getId(), ItemTypeSetRoleType.EDITORS, tenant.getId())
                                 .stream()
                                 .filter(role -> role.getRelatedEntityId() != null && role.getRelatedEntityId().equals(config.getId()))
                                 .filter(role -> role.getSecondaryEntityId() != null && role.getSecondaryEntityId().equals(fieldConfig.getId()))
+                                .filter(role -> role.getTertiaryEntityId() != null && role.getTertiaryEntityId().equals(status.getId()))
                                 .findFirst();
                         
                         if (existingEditorRoleOpt.isPresent()) {
@@ -213,18 +214,21 @@ public class ItemTypeSetRoleService {
                                     .relatedEntityId(config.getId())
                                     .secondaryEntityType("FieldConfiguration")
                                     .secondaryEntityId(fieldConfig.getId())
+                                    .tertiaryEntityType("WorkflowStatus")
+                                    .tertiaryEntityId(status.getId())
                                     .tenant(tenant)
                                     .build();
                             
                             itemTypeSetRoleRepository.save(editorRole);
                         }
                         
-                        // Verifica se il ruolo VIEWER esiste già
+                        // Verifica se il ruolo VIEWER esiste già (verifica anche WorkflowStatus)
                         Optional<ItemTypeSetRole> existingViewerRoleOpt = itemTypeSetRoleRepository
                                 .findByItemTypeSetIdAndRoleTypeAndTenantId(itemTypeSet.getId(), ItemTypeSetRoleType.VIEWERS, tenant.getId())
                                 .stream()
                                 .filter(role -> role.getRelatedEntityId() != null && role.getRelatedEntityId().equals(config.getId()))
                                 .filter(role -> role.getSecondaryEntityId() != null && role.getSecondaryEntityId().equals(fieldConfig.getId()))
+                                .filter(role -> role.getTertiaryEntityId() != null && role.getTertiaryEntityId().equals(status.getId()))
                                 .findFirst();
                         
                         if (existingViewerRoleOpt.isPresent()) {
@@ -245,6 +249,8 @@ public class ItemTypeSetRoleService {
                                     .relatedEntityId(config.getId())
                                     .secondaryEntityType("FieldConfiguration")
                                     .secondaryEntityId(fieldConfig.getId())
+                                    .tertiaryEntityType("WorkflowStatus")
+                                    .tertiaryEntityId(status.getId())
                                     .tenant(tenant)
                                     .build();
                             
@@ -497,13 +503,13 @@ public class ItemTypeSetRoleService {
                         dto.fieldConfigurationId() + " and workflowStatusId " + dto.workflowStatusId()));
                 
                 // Cerca ruolo esistente - per EDITORS/VIEWERS dobbiamo cercare manualmente perché
-                // dobbiamo verificare anche il secondaryEntityId
+                // dobbiamo verificare anche il secondaryEntityId (FieldConfiguration) e tertiaryEntityId (WorkflowStatus)
                 List<ItemTypeSetRole> existingRoles = itemTypeSetRoleRepository
                     .findRolesByItemTypeSetAndType(dto.itemTypeSetId(), dto.permissionType(), tenant.getId());
                 
                 Optional<ItemTypeSetRole> existingRole = existingRoles.stream()
                     .filter(r -> {
-                        // Verifica che corrisponda all'ItemTypeConfiguration e al FieldConfiguration
+                        // Verifica che corrisponda all'ItemTypeConfiguration, al FieldConfiguration E al WorkflowStatus
                         return r.getRelatedEntityType() != null &&
                                r.getRelatedEntityType().equals("ItemTypeConfiguration") &&
                                r.getRelatedEntityId() != null &&
@@ -511,7 +517,11 @@ public class ItemTypeSetRoleService {
                                r.getSecondaryEntityType() != null && 
                                r.getSecondaryEntityType().equals("FieldConfiguration") &&
                                r.getSecondaryEntityId() != null &&
-                               r.getSecondaryEntityId().equals(dto.fieldConfigurationId());
+                               r.getSecondaryEntityId().equals(dto.fieldConfigurationId()) &&
+                               r.getTertiaryEntityType() != null &&
+                               r.getTertiaryEntityType().equals("WorkflowStatus") &&
+                               r.getTertiaryEntityId() != null &&
+                               r.getTertiaryEntityId().equals(dto.workflowStatusId());
                     })
                     .findFirst();
                 
@@ -527,6 +537,8 @@ public class ItemTypeSetRoleService {
                             .relatedEntityId(matchingConfig.getId())
                             .secondaryEntityType("FieldConfiguration")
                             .secondaryEntityId(dto.fieldConfigurationId())
+                            .tertiaryEntityType("WorkflowStatus")
+                            .tertiaryEntityId(dto.workflowStatusId())
                             .tenant(tenant)
                             .build();
                     role = itemTypeSetRoleRepository.save(role);

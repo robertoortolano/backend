@@ -40,10 +40,17 @@ public class ItemTypeSetRole {
     
     // Per i ruoli EDITOR e VIEWER che sono legati alle coppie (FieldConfiguration, WorkflowStatus)
     @Column(name = "secondary_entity_type")
-    private String secondaryEntityType; // "FieldConfiguration" o "WorkflowStatus" per le coppie
+    private String secondaryEntityType; // "FieldConfiguration" per le coppie
     
     @Column(name = "secondary_entity_id")
     private Long secondaryEntityId;
+    
+    // Per i ruoli EDITOR e VIEWER, memorizza anche il WorkflowStatus
+    @Column(name = "tertiary_entity_type")
+    private String tertiaryEntityType; // "WorkflowStatus" per le coppie EDITORS/VIEWERS
+    
+    @Column(name = "tertiary_entity_id")
+    private Long tertiaryEntityId;
     
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "tenant_id", nullable = false)

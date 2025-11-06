@@ -572,7 +572,7 @@ public class ItemTypeSetPermissionService {
                         .orElse(null) : null;
                 
                 if (fieldConfig != null && perm.getWorkflowStatus() != null) {
-                    // Cerca l'ItemTypeSetRole che corrisponde a ItemTypeConfiguration + FieldConfiguration
+                    // Cerca l'ItemTypeSetRole che corrisponde a ItemTypeConfiguration + FieldConfiguration + WorkflowStatus
                     List<ItemTypeSetRole> roles = itemTypeSetRoleRepository
                         .findRolesByItemTypeSetAndType(itemTypeSet.getId(), ItemTypeSetRoleType.EDITORS, tenant.getId());
                     
@@ -584,7 +584,11 @@ public class ItemTypeSetPermissionService {
                                      r.getSecondaryEntityType() != null &&
                                      r.getSecondaryEntityType().equals("FieldConfiguration") &&
                                      r.getSecondaryEntityId() != null &&
-                                     r.getSecondaryEntityId().equals(fieldConfig.getId()))
+                                     r.getSecondaryEntityId().equals(fieldConfig.getId()) &&
+                                     r.getTertiaryEntityType() != null &&
+                                     r.getTertiaryEntityType().equals("WorkflowStatus") &&
+                                     r.getTertiaryEntityId() != null &&
+                                     r.getTertiaryEntityId().equals(perm.getWorkflowStatus().getId()))
                         .findFirst();
                     
                     ItemTypeSetRole itemTypeSetRole;
@@ -601,6 +605,8 @@ public class ItemTypeSetPermissionService {
                             .relatedEntityId(config.getId())
                             .secondaryEntityType("FieldConfiguration")
                             .secondaryEntityId(fieldConfig.getId())
+                            .tertiaryEntityType("WorkflowStatus")
+                            .tertiaryEntityId(perm.getWorkflowStatus().getId())
                             .tenant(tenant)
                             .build();
                         itemTypeSetRole = itemTypeSetRoleRepository.save(itemTypeSetRole);
@@ -634,7 +640,11 @@ public class ItemTypeSetPermissionService {
                                      r.getSecondaryEntityType() != null &&
                                      r.getSecondaryEntityType().equals("FieldConfiguration") &&
                                      r.getSecondaryEntityId() != null &&
-                                     r.getSecondaryEntityId().equals(fieldConfig.getId()))
+                                     r.getSecondaryEntityId().equals(fieldConfig.getId()) &&
+                                     r.getTertiaryEntityType() != null &&
+                                     r.getTertiaryEntityType().equals("WorkflowStatus") &&
+                                     r.getTertiaryEntityId() != null &&
+                                     r.getTertiaryEntityId().equals(perm.getWorkflowStatus().getId()))
                         .findFirst();
                     if (roleOpt.isPresent() && roleOpt.get().getGrant() != null) {
                         hasAssignments = true;
@@ -699,7 +709,7 @@ public class ItemTypeSetPermissionService {
                         .orElse(null) : null;
                 
                 if (fieldConfig != null && perm.getWorkflowStatus() != null) {
-                    // Cerca l'ItemTypeSetRole che corrisponde a ItemTypeConfiguration + FieldConfiguration
+                    // Cerca l'ItemTypeSetRole che corrisponde a ItemTypeConfiguration + FieldConfiguration + WorkflowStatus
                     List<ItemTypeSetRole> roles = itemTypeSetRoleRepository
                         .findRolesByItemTypeSetAndType(itemTypeSet.getId(), ItemTypeSetRoleType.VIEWERS, tenant.getId());
                     
@@ -711,7 +721,11 @@ public class ItemTypeSetPermissionService {
                                      r.getSecondaryEntityType() != null &&
                                      r.getSecondaryEntityType().equals("FieldConfiguration") &&
                                      r.getSecondaryEntityId() != null &&
-                                     r.getSecondaryEntityId().equals(fieldConfig.getId()))
+                                     r.getSecondaryEntityId().equals(fieldConfig.getId()) &&
+                                     r.getTertiaryEntityType() != null &&
+                                     r.getTertiaryEntityType().equals("WorkflowStatus") &&
+                                     r.getTertiaryEntityId() != null &&
+                                     r.getTertiaryEntityId().equals(perm.getWorkflowStatus().getId()))
                         .findFirst();
                     
                     ItemTypeSetRole itemTypeSetRole;
@@ -728,6 +742,8 @@ public class ItemTypeSetPermissionService {
                             .relatedEntityId(config.getId())
                             .secondaryEntityType("FieldConfiguration")
                             .secondaryEntityId(fieldConfig.getId())
+                            .tertiaryEntityType("WorkflowStatus")
+                            .tertiaryEntityId(perm.getWorkflowStatus().getId())
                             .tenant(tenant)
                             .build();
                         itemTypeSetRole = itemTypeSetRoleRepository.save(itemTypeSetRole);
@@ -761,7 +777,11 @@ public class ItemTypeSetPermissionService {
                                      r.getSecondaryEntityType() != null &&
                                      r.getSecondaryEntityType().equals("FieldConfiguration") &&
                                      r.getSecondaryEntityId() != null &&
-                                     r.getSecondaryEntityId().equals(fieldConfig.getId()))
+                                     r.getSecondaryEntityId().equals(fieldConfig.getId()) &&
+                                     r.getTertiaryEntityType() != null &&
+                                     r.getTertiaryEntityType().equals("WorkflowStatus") &&
+                                     r.getTertiaryEntityId() != null &&
+                                     r.getTertiaryEntityId().equals(perm.getWorkflowStatus().getId()))
                         .findFirst();
                     if (roleOpt.isPresent() && roleOpt.get().getGrant() != null) {
                         hasAssignments = true;

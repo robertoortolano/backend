@@ -28,6 +28,10 @@ public class ItemTypeSetRoleCreateDTO {
     
     private Long secondaryEntityId;
     
+    private String tertiaryEntityType;
+    
+    private Long tertiaryEntityId;
+    
     @Builder.Default
     private Set<Long> grantIds = Set.of();
 }

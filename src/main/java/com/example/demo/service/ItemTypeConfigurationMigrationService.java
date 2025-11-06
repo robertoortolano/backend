@@ -658,7 +658,7 @@ public class ItemTypeConfigurationMigrationService {
                                     ? com.example.demo.enums.ItemTypeSetRoleType.EDITORS
                                     : com.example.demo.enums.ItemTypeSetRoleType.VIEWERS;
                             
-                            // Trova l'ItemTypeSetRole EDITORS/VIEWERS per questa coppia (ItemTypeConfiguration, FieldConfiguration)
+                            // Trova l'ItemTypeSetRole EDITORS/VIEWERS per questa coppia (ItemTypeConfiguration, FieldConfiguration, WorkflowStatus)
                             List<ItemTypeSetRole> fieldStatusRoles = itemTypeSetRoleRepository
                                     .findByItemTypeSetIdAndRoleTypeAndTenantId(
                                             itemTypeSetId,
@@ -671,6 +671,9 @@ public class ItemTypeConfigurationMigrationService {
                                     .filter(role -> role.getSecondaryEntityId() != null 
                                             && role.getSecondaryEntityId().equals(fieldConfig.getId())
                                             && "FieldConfiguration".equals(role.getSecondaryEntityType()))
+                                    .filter(role -> role.getTertiaryEntityId() != null 
+                                            && role.getTertiaryEntityId().equals(statusId)
+                                            && "WorkflowStatus".equals(role.getTertiaryEntityType()))
                                     .collect(Collectors.toList());
                             
                             if (!fieldStatusRoles.isEmpty()) {

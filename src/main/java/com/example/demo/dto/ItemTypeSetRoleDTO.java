@@ -29,6 +29,10 @@ public class ItemTypeSetRoleDTO {
     
     private Long secondaryEntityId;
     
+    private String tertiaryEntityType;
+    
+    private Long tertiaryEntityId;
+    
     private Long tenantId;
     
     // Assegnazione DUAL
