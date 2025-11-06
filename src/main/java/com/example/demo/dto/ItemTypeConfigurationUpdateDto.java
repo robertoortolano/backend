@@ -1,8 +1,6 @@
 package com.example.demo.dto;
 
 import com.example.demo.enums.ItemTypeCategory;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.util.Set;

@@ -4,7 +4,6 @@ import com.example.demo.entity.Field;
 import com.example.demo.entity.Tenant;
 import com.example.demo.enums.FieldType;
 import com.example.demo.enums.ScopeType;
-import jakarta.validation.constraints.NotBlank;
 
 import java.util.List;
 

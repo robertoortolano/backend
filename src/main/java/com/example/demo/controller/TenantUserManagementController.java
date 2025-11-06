@@ -70,13 +70,8 @@ public class TenantUserManagementController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new ApiResponse(e.getMessage(), HttpStatus.NOT_FOUND.value()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.CONFLICT.value()));
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.FORBIDDEN.value()));
         }
+        // IllegalStateException e SecurityException ora gestiti da GlobalExceptionHandler
     }
 
     /**
@@ -98,13 +93,8 @@ public class TenantUserManagementController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new ApiResponse(e.getMessage(), HttpStatus.NOT_FOUND.value()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.CONFLICT.value()));
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.FORBIDDEN.value()));
         }
+        // IllegalStateException e SecurityException ora gestiti da GlobalExceptionHandler
     }
     
     /**
@@ -119,22 +109,12 @@ public class TenantUserManagementController {
             @Valid @RequestBody UpdateUserRolesRequest request,
             @CurrentTenant Tenant tenant,
             @CurrentUser User currentUser) {
-        try {
-            tenantUserManagementService.updateUserRoles(request.userId(), request.roleNames(), tenant, currentUser);
-            return ResponseEntity.ok(new ApiResponse(
-                    "User roles updated successfully",
-                    HttpStatus.OK.value()
-            ));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.BAD_REQUEST.value()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.CONFLICT.value()));
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.FORBIDDEN.value()));
-        }
+        // IllegalStateException e SecurityException ora gestiti da GlobalExceptionHandler
+        tenantUserManagementService.updateUserRoles(request.userId(), request.roleNames(), tenant, currentUser);
+        return ResponseEntity.ok(new ApiResponse(
+                "User roles updated successfully",
+                HttpStatus.OK.value()
+        ));
     }
     
 
@@ -157,13 +137,8 @@ public class TenantUserManagementController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new ApiResponse(e.getMessage(), HttpStatus.NOT_FOUND.value()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.CONFLICT.value()));
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new ApiResponse(e.getMessage(), HttpStatus.FORBIDDEN.value()));
         }
+        // IllegalStateException e SecurityException ora gestiti da GlobalExceptionHandler
     }
 
     /**

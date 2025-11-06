@@ -5,18 +5,13 @@ import com.example.demo.dto.ItemTypeConfigurationMigrationRequest;
 import com.example.demo.entity.Tenant;
 import com.example.demo.security.CurrentTenant;
 import com.example.demo.service.ItemTypeConfigurationMigrationService;
+import com.example.demo.util.CsvUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 
 /**
  * Controller per gestire la migrazione interattiva delle permission
@@ -109,18 +104,18 @@ public class ItemTypeConfigurationMigrationController {
             // Header informativo
             csv.append("ItemTypeConfiguration Migration Impact Report\n");
             csv.append(String.format("ItemTypeConfiguration ID: %d\n", impact.getItemTypeConfigurationId()));
-            csv.append(String.format("ItemTypeConfiguration Name: %s\n", escapeCsv(impact.getItemTypeConfigurationName())));
-            csv.append(String.format("ItemTypeSet: %s\n", escapeCsv(impact.getItemTypeSetName() != null ? impact.getItemTypeSetName() : "N/A")));
-            csv.append(String.format("ItemType: %s\n", escapeCsv(impact.getItemTypeName())));
+            csv.append(String.format("ItemTypeConfiguration Name: %s\n", CsvUtils.escapeCsv(impact.getItemTypeConfigurationName())));
+            csv.append(String.format("ItemTypeSet: %s\n", CsvUtils.escapeCsv(impact.getItemTypeSetName() != null ? impact.getItemTypeSetName() : "N/A")));
+            csv.append(String.format("ItemType: %s\n", CsvUtils.escapeCsv(impact.getItemTypeName())));
             if (impact.isFieldSetChanged()) {
                 csv.append(String.format("FieldSet: %s -> %s\n", 
-                    escapeCsv(impact.getOldFieldSet() != null ? impact.getOldFieldSet().getFieldSetName() : "N/A"),
-                    escapeCsv(impact.getNewFieldSet() != null ? impact.getNewFieldSet().getFieldSetName() : "N/A")));
+                    CsvUtils.escapeCsv(impact.getOldFieldSet() != null ? impact.getOldFieldSet().getFieldSetName() : "N/A"),
+                    CsvUtils.escapeCsv(impact.getNewFieldSet() != null ? impact.getNewFieldSet().getFieldSetName() : "N/A")));
             }
             if (impact.isWorkflowChanged()) {
                 csv.append(String.format("Workflow: %s -> %s\n", 
-                    escapeCsv(impact.getOldWorkflow() != null ? impact.getOldWorkflow().getWorkflowName() : "N/A"),
-                    escapeCsv(impact.getNewWorkflow() != null ? impact.getNewWorkflow().getWorkflowName() : "N/A")));
+                    CsvUtils.escapeCsv(impact.getOldWorkflow() != null ? impact.getOldWorkflow().getWorkflowName() : "N/A"),
+                    CsvUtils.escapeCsv(impact.getNewWorkflow() != null ? impact.getNewWorkflow().getWorkflowName() : "N/A")));
             }
             csv.append("\n");
             
@@ -135,12 +130,12 @@ public class ItemTypeConfigurationMigrationController {
             //         Matching Entity ID,Matching Entity Name,Assigned Roles
             java.util.function.Function<ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact, String> writePermissionRow = perm -> {
                 StringBuilder row = new StringBuilder();
-                row.append(escapeCsv(perm.getPermissionType())).append(",");
+                row.append(CsvUtils.escapeCsv(perm.getPermissionType())).append(",");
                 row.append(perm.getPermissionId()).append(",");
                 row.append(perm.getItemTypeSetId() != null ? perm.getItemTypeSetId().toString() : "").append(",");
-                row.append(escapeCsv(perm.getItemTypeSetName() != null ? perm.getItemTypeSetName() : "")).append(",");
+                row.append(CsvUtils.escapeCsv(perm.getItemTypeSetName() != null ? perm.getItemTypeSetName() : "")).append(",");
                 row.append(perm.getProjectId() != null ? perm.getProjectId().toString() : "").append(",");
-                row.append(escapeCsv(perm.getProjectName() != null ? perm.getProjectName() : "")).append(",");
+                row.append(CsvUtils.escapeCsv(perm.getProjectName() != null ? perm.getProjectName() : "")).append(",");
                 
                 // Entity Type (7)
                 if ("FIELD_OWNERS".equals(perm.getPermissionType())) {
@@ -156,23 +151,23 @@ public class ItemTypeConfigurationMigrationController {
                 // Entity ID (8)
                 row.append(perm.getEntityId() != null ? perm.getEntityId().toString() : "").append(",");
                 // Entity Name (9)
-                row.append(escapeCsv(perm.getEntityName() != null ? perm.getEntityName() : "")).append(",");
+                row.append(CsvUtils.escapeCsv(perm.getEntityName() != null ? perm.getEntityName() : "")).append(",");
                 
                 // Field ID (10) - solo per FieldStatus
                 row.append(perm.getFieldId() != null ? perm.getFieldId().toString() : "").append(",");
                 // Field Name (11) - solo per FieldStatus
-                row.append(escapeCsv(perm.getFieldName() != null ? perm.getFieldName() : "")).append(",");
+                row.append(CsvUtils.escapeCsv(perm.getFieldName() != null ? perm.getFieldName() : "")).append(",");
                 // WorkflowStatus ID (12) - solo per FieldStatus
                 row.append(perm.getWorkflowStatusId() != null ? perm.getWorkflowStatusId().toString() : "").append(",");
                 // WorkflowStatus Name (13) - solo per FieldStatus
-                row.append(escapeCsv(perm.getWorkflowStatusName() != null ? perm.getWorkflowStatusName() : "")).append(",");
+                row.append(CsvUtils.escapeCsv(perm.getWorkflowStatusName() != null ? perm.getWorkflowStatusName() : "")).append(",");
                 
                 // Matching Entity ID (14)
                 row.append(perm.getMatchingEntityId() != null ? perm.getMatchingEntityId().toString() : "").append(",");
                 // Matching Entity Name (15)
-                row.append(escapeCsv(perm.getMatchingEntityName() != null ? perm.getMatchingEntityName() : "")).append(",");
+                row.append(CsvUtils.escapeCsv(perm.getMatchingEntityName() != null ? perm.getMatchingEntityName() : "")).append(",");
                 // Assigned Roles (16)
-                row.append(escapeCsv(String.join(";", perm.getAssignedRoles()))).append("\n");
+                row.append(CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles()))).append("\n");
                 
                 return row.toString();
             };
@@ -205,36 +200,12 @@ public class ItemTypeConfigurationMigrationController {
                 }
             }
             
-            // Genera nome file con timestamp
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String filename = String.format("itemtypeconfiguration_migration_impact_%d_%s.csv", itemTypeConfigurationId, timestamp);
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.TEXT_PLAIN);
-            headers.setContentDispositionFormData("attachment", filename);
-            headers.setContentLength(csv.length());
-            
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .body(csv.toString().getBytes(StandardCharsets.UTF_8));
+            return CsvUtils.createCsvResponse(csv.toString(), "itemtypeconfiguration_migration_impact", itemTypeConfigurationId);
         } catch (Exception e) {
             log.error("Error generating CSV export", e);
             throw new com.example.demo.exception.ApiException("Error generating CSV export: " + e.getMessage(), e);
         }
     }
     
-    /**
-     * Utility method per escape dei valori CSV
-     */
-    private String escapeCsv(String value) {
-        if (value == null) {
-            return "";
-        }
-        // Se il valore contiene virgole, virgolette o newline, lo racchiudiamo tra virgolette
-        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        return value;
-    }
 }
 

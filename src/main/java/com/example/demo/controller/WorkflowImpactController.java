@@ -8,6 +8,7 @@ import com.example.demo.dto.WorkflowViewDto;
 import com.example.demo.entity.Tenant;
 import com.example.demo.security.CurrentTenant;
 import com.example.demo.service.WorkflowService;
+import com.example.demo.util.CsvUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Set;
@@ -110,32 +110,21 @@ public class WorkflowImpactController {
             // Executor Permissions
             for (TransitionRemovalImpactDto.PermissionImpact perm : impact.getExecutorPermissions()) {
                 csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-                    escapeCsv(perm.getPermissionType()),
+                    CsvUtils.escapeCsv(perm.getPermissionType()),
                     perm.getItemTypeSetId(),
-                    escapeCsv(perm.getItemTypeSetName()),
+                    CsvUtils.escapeCsv(perm.getItemTypeSetName()),
                     perm.getProjectId() != null ? perm.getProjectId().toString() : "",
-                    perm.getProjectName() != null ? escapeCsv(perm.getProjectName()) : "",
+                    perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
                     perm.getTransitionId() != null ? perm.getTransitionId().toString() : "",
-                    escapeCsv(perm.getTransitionName() != null ? perm.getTransitionName() : ""),
-                    escapeCsv(perm.getFromStatusName() != null ? perm.getFromStatusName() : ""),
-                    escapeCsv(perm.getToStatusName() != null ? perm.getToStatusName() : ""),
-                    escapeCsv(String.join(";", perm.getAssignedRoles())),
+                    CsvUtils.escapeCsv(perm.getTransitionName() != null ? perm.getTransitionName() : ""),
+                    CsvUtils.escapeCsv(perm.getFromStatusName() != null ? perm.getFromStatusName() : ""),
+                    CsvUtils.escapeCsv(perm.getToStatusName() != null ? perm.getToStatusName() : ""),
+                    CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
                     perm.isHasAssignments()
                 ));
             }
             
-            // Genera nome file con timestamp
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String filename = String.format("workflow_transition_removal_impact_%d_%s.csv", workflowId, timestamp);
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.TEXT_PLAIN);
-            headers.setContentDispositionFormData("attachment", filename);
-            headers.setContentLength(csv.length());
-            
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .body(csv.toString().getBytes(StandardCharsets.UTF_8));
+            return CsvUtils.createCsvResponse(csv.toString(), "workflow_transition_removal_impact", workflowId);
         } catch (Exception e) {
             log.error("Error generating CSV export", e);
             throw new com.example.demo.exception.ApiException("Error generating CSV export: " + e.getMessage(), e);
@@ -258,48 +247,24 @@ public class WorkflowImpactController {
             // Status Owner Permissions
             for (StatusRemovalImpactDto.PermissionImpact perm : impact.getStatusOwnerPermissions()) {
                 csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-                    escapeCsv(perm.getPermissionType()),
+                    CsvUtils.escapeCsv(perm.getPermissionType()),
                     perm.getItemTypeSetId(),
-                    escapeCsv(perm.getItemTypeSetName()),
+                    CsvUtils.escapeCsv(perm.getItemTypeSetName()),
                     perm.getProjectId() != null ? perm.getProjectId().toString() : "",
-                    perm.getProjectName() != null ? escapeCsv(perm.getProjectName()) : "",
+                    perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
                     perm.getWorkflowStatusId() != null ? perm.getWorkflowStatusId().toString() : "",
-                    escapeCsv(perm.getStatusName() != null ? perm.getStatusName() : ""),
-                    escapeCsv(perm.getStatusCategory() != null ? perm.getStatusCategory() : ""),
-                    escapeCsv(String.join(";", perm.getAssignedRoles())),
+                    CsvUtils.escapeCsv(perm.getStatusName() != null ? perm.getStatusName() : ""),
+                    CsvUtils.escapeCsv(perm.getStatusCategory() != null ? perm.getStatusCategory() : ""),
+                    CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
                     perm.isHasAssignments()
                 ));
             }
             
-            // Genera nome file con timestamp
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String filename = String.format("workflow_status_removal_impact_%d_%s.csv", workflowId, timestamp);
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.TEXT_PLAIN);
-            headers.setContentDispositionFormData("attachment", filename);
-            headers.setContentLength(csv.length());
-            
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .body(csv.toString().getBytes(StandardCharsets.UTF_8));
+            return CsvUtils.createCsvResponse(csv.toString(), "workflow_status_removal_impact", workflowId);
         } catch (Exception e) {
             log.error("Error generating Status CSV export", e);
             throw new com.example.demo.exception.ApiException("Error generating Status CSV export: " + e.getMessage(), e);
         }
     }
     
-    /**
-     * Utility method per escape dei valori CSV
-     */
-    private String escapeCsv(String value) {
-        if (value == null) {
-            return "";
-        }
-        // Se il valore contiene virgole, virgolette o newline, lo racchiudiamo tra virgolette
-        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        return value;
-    }
 }

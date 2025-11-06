@@ -1,6 +1,5 @@
 package com.example.demo.dto;
 
-import com.example.demo.entity.Transition;
 import com.example.demo.metadata.WorkflowEdgeDto;
 import com.example.demo.metadata.WorkflowNodeDto;
 import jakarta.validation.constraints.NotBlank;

@@ -1,8 +1,6 @@
 package com.example.demo.entity;
 
 import com.example.demo.enums.ScopeType;
-import com.example.demo.metadata.WorkflowEdge;
-import com.example.demo.metadata.WorkflowNode;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

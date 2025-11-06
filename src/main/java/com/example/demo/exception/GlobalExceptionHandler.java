@@ -30,8 +30,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse> handleIllegalStateException(IllegalStateException ex) {
         logger.error("Illegal state", ex);
-        ApiResponse error = new ApiResponse(ex.getMessage(), HttpStatus.BAD_REQUEST.value());
-        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+        ApiResponse error = new ApiResponse(ex.getMessage(), HttpStatus.CONFLICT.value());
+        return new ResponseEntity<>(error, HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<ApiResponse> handleSecurityException(SecurityException ex) {
+        logger.error("Security error", ex);
+        ApiResponse error = new ApiResponse(ex.getMessage(), HttpStatus.FORBIDDEN.value());
+        return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(java.io.IOException.class)

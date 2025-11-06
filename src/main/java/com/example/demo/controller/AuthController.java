@@ -1,12 +1,9 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.*;
-import com.example.demo.entity.Tenant;
 import com.example.demo.entity.User;
 import com.example.demo.repository.*;
-import com.example.demo.security.CurrentTenant;
 import com.example.demo.security.CurrentUser;
-import com.example.demo.security.JwtTokenUtil;
 import com.example.demo.service.*;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -29,9 +26,6 @@ public class AuthController {
 
     private final UserService userService;
     private final TenantService tenantService;
-    private final AuthenticationManager authenticationManager;
-    private final JwtTokenUtil jwtTokenUtil; // Classe per gestire JWT
-    private final TokenBlacklistRepository tokenBlacklistRepository; // (Opzionale per logout)
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse> registerUser(@RequestBody RegisterRequest request) {

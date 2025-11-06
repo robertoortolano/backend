@@ -4,6 +4,7 @@ import com.example.demo.security.CurrentTenantResolver;
 import com.example.demo.security.CurrentUserResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.lang.NonNull;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -17,7 +18,7 @@ public class WebConfig implements WebMvcConfigurer {
     private final CurrentTenantResolver currentTenantResolver;
 
     @Override
-    public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+    public void addArgumentResolvers(@NonNull List<HandlerMethodArgumentResolver> resolvers) {
         resolvers.add(currentTenantResolver);
         resolvers.add(currentUserResolver);
     }
