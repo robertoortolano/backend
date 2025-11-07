@@ -46,6 +46,8 @@ public class ProjectPermissionAssignmentController {
     
     /**
      * Ottiene ProjectPermissionAssignment per una Permission e un progetto.
+     * Restituisce un oggetto vuoto (con assignment null) se non esiste, invece di 404,
+     * per evitare errori in console quando le grant vengono create on-demand.
      */
     @GetMapping("/{permissionType}/{permissionId}/project/{projectId}")
     @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_USER')")
@@ -59,7 +61,16 @@ public class ProjectPermissionAssignmentController {
         if (projectAssignmentOpt.isPresent()) {
             return ResponseEntity.ok(projectPermissionAssignmentMapper.toDto(projectAssignmentOpt.get()));
         } else {
-            return ResponseEntity.notFound().build();
+            // Restituisce un oggetto vuoto invece di 404 per evitare errori in console
+            // quando le grant vengono create on-demand
+            ProjectPermissionAssignmentDto emptyDto = ProjectPermissionAssignmentDto.builder()
+                    .permissionType(permissionType)
+                    .permissionId(permissionId)
+                    .projectId(projectId)
+                    .tenantId(tenant.getId())
+                    .assignment(null) // Nessun assignment esistente
+                    .build();
+            return ResponseEntity.ok(emptyDto);
         }
     }
     
