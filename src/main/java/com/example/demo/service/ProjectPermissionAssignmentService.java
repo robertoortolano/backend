@@ -68,13 +68,23 @@ public class ProjectPermissionAssignmentService {
             projectAssignment = existingOpt.get();
             assignment = projectAssignment.getAssignment();
         } else {
-            // Crea nuovo PermissionAssignment per il progetto
-            assignment = PermissionAssignment.builder()
-                    .permissionType(permissionType)
-                    .permissionId(permissionId)
-                    .tenant(tenant)
-                    .roles(new HashSet<>())
-                    .build();
+            // Verifica se esiste già un PermissionAssignment globale per questa permission
+            // Un PermissionAssignment può essere condiviso tra assignment globale e di progetto
+            Optional<PermissionAssignment> existingGlobalAssignmentOpt = permissionAssignmentRepository
+                    .findByPermissionTypeAndPermissionIdAndTenant(permissionType, permissionId, tenant);
+            
+            if (existingGlobalAssignmentOpt.isPresent()) {
+                // Riutilizza l'assignment globale esistente
+                assignment = existingGlobalAssignmentOpt.get();
+            } else {
+                // Crea nuovo PermissionAssignment per il progetto
+                assignment = PermissionAssignment.builder()
+                        .permissionType(permissionType)
+                        .permissionId(permissionId)
+                        .tenant(tenant)
+                        .roles(new HashSet<>())
+                        .build();
+            }
             
             projectAssignment = ProjectPermissionAssignment.builder()
                     .permissionType(permissionType)
