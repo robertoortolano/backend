@@ -66,7 +66,8 @@ public class TransitionRemovalImpactDto {
         // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata, ora usiamo permissionId e permissionType
         private Long grantId; // Grant globale (se presente)
         private String grantName; // Nome grant globale
-        private List<String> assignedRoles;
+        private List<String> assignedRoles; // Ruoli globali
+        private List<ProjectRoleInfo> projectAssignedRoles; // Ruoli di progetto per ogni progetto
         private boolean hasAssignments; // true se ha ruoli o grant assegnati
         
         // Info per preservazione
@@ -85,5 +86,13 @@ public class TransitionRemovalImpactDto {
         private Long projectId;
         private String projectName;
         // RIMOSSO: roleId - ItemTypeSetRole eliminata, ora usiamo permissionId e permissionType
+    }
+    
+    @Data
+    @Builder
+    public static class ProjectRoleInfo {
+        private Long projectId;
+        private String projectName;
+        private List<String> roles; // Ruoli di progetto per questo progetto
     }
 }
