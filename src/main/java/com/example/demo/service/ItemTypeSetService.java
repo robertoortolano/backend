@@ -57,8 +57,6 @@ public class ItemTypeSetService {
     private final PermissionAssignmentService permissionAssignmentService;
     private final ProjectPermissionAssignmentService projectPermissionAssignmentService;
     
-    private final GrantCleanupService grantCleanupService;
-    
     // Repository per Permission (necessari per eliminare PermissionAssignment)
     private final WorkerPermissionRepository workerPermissionRepository;
     private final CreatorPermissionRepository creatorPermissionRepository;
@@ -447,25 +445,25 @@ public class ItemTypeSetService {
                 analyzeExecutorPermissionImpacts(configsToRemove, itemTypeSet);
 
         // Calcola statistiche
-        int totalGrantAssignments = fieldOwnerPermissions.stream()
-                .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
-                .sum() + statusOwnerPermissions.stream()
-                .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
-                .sum() + fieldStatusPermissions.stream()
-                .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
-                .sum() + executorPermissions.stream()
-                .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
-                .sum();
-        
-        int totalRoleAssignments = fieldOwnerPermissions.stream()
-                .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
-                .sum() + statusOwnerPermissions.stream()
-                .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
-                .sum() + fieldStatusPermissions.stream()
-                .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
-                .sum() + executorPermissions.stream()
-                .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
-                .sum();
+        int totalGrantAssignments =
+                countGlobalGrantAssignments(fieldOwnerPermissions)
+                        + countGlobalGrantAssignments(statusOwnerPermissions)
+                        + countGlobalGrantAssignments(fieldStatusPermissions)
+                        + countGlobalGrantAssignments(executorPermissions)
+                        + countProjectGrantAssignments(fieldOwnerPermissions)
+                        + countProjectGrantAssignments(statusOwnerPermissions)
+                        + countProjectGrantAssignments(fieldStatusPermissions)
+                        + countProjectGrantAssignments(executorPermissions);
+
+        int totalRoleAssignments =
+                countGlobalRoleAssignments(fieldOwnerPermissions)
+                        + countGlobalRoleAssignments(statusOwnerPermissions)
+                        + countGlobalRoleAssignments(fieldStatusPermissions)
+                        + countGlobalRoleAssignments(executorPermissions)
+                        + countProjectRoleAssignments(fieldOwnerPermissions)
+                        + countProjectRoleAssignments(statusOwnerPermissions)
+                        + countProjectRoleAssignments(fieldStatusPermissions)
+                        + countProjectRoleAssignments(executorPermissions);
 
         // ItemTypeSet coinvolto (sempre l'ItemTypeSet stesso)
         List<ItemTypeConfigurationRemovalImpactDto.ItemTypeSetImpact> affectedItemTypeSets = List.of(
@@ -497,7 +495,157 @@ public class ItemTypeSetService {
                 .build();
     }
 
-    // Metodi helper per analizzare i diversi tipi di permission
+    private AssignmentDetails resolveAssignmentDetails(String permissionType, Long permissionId, ItemTypeSet itemTypeSet) {
+        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                permissionType,
+                permissionId,
+                itemTypeSet.getTenant()
+        );
+
+        List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                .map(Role::getName)
+                .collect(Collectors.toList()))
+                .orElseGet(ArrayList::new);
+
+        List<String> assignedGrants = new ArrayList<>();
+        Long globalGrantId = null;
+        String globalGrantName = null;
+        if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
+            Grant grant = assignmentOpt.get().getGrant();
+            globalGrantId = grant.getId();
+            globalGrantName = grant.getRole() != null
+                    ? grant.getRole().getName()
+                    : "Grant globale";
+            assignedGrants.add(globalGrantName);
+        }
+
+        List<ItemTypeConfigurationRemovalImpactDto.ProjectGrantInfo> projectGrants = new ArrayList<>();
+        List<ItemTypeConfigurationRemovalImpactDto.ProjectRoleInfo> projectRoles = new ArrayList<>();
+
+        if (itemTypeSet.getProject() != null) {
+            appendProjectAssignmentDetails(
+                    permissionType,
+                    permissionId,
+                    itemTypeSet,
+                    itemTypeSet.getProject(),
+                    projectGrants,
+                    projectRoles
+            );
+        } else if (itemTypeSet.getProjectsAssociation() != null) {
+            for (Project project : itemTypeSet.getProjectsAssociation()) {
+                appendProjectAssignmentDetails(
+                        permissionType,
+                        permissionId,
+                        itemTypeSet,
+                        project,
+                        projectGrants,
+                        projectRoles
+                );
+            }
+        }
+
+        boolean hasAssignments = !assignedRoles.isEmpty()
+                || !assignedGrants.isEmpty()
+                || !projectGrants.isEmpty()
+                || !projectRoles.isEmpty();
+
+        return new AssignmentDetails(
+                assignedRoles,
+                assignedGrants,
+                globalGrantId,
+                globalGrantName,
+                projectGrants,
+                projectRoles,
+                hasAssignments
+        );
+    }
+
+    private void appendProjectAssignmentDetails(
+            String permissionType,
+            Long permissionId,
+            ItemTypeSet itemTypeSet,
+            Project project,
+            List<ItemTypeConfigurationRemovalImpactDto.ProjectGrantInfo> projectGrants,
+            List<ItemTypeConfigurationRemovalImpactDto.ProjectRoleInfo> projectRoles
+    ) {
+        if (project == null) {
+            return;
+        }
+
+        Optional<PermissionAssignment> projectAssignmentOpt =
+                projectPermissionAssignmentService.getProjectAssignment(
+                        permissionType,
+                        permissionId,
+                        project.getId(),
+                        itemTypeSet.getTenant()
+                );
+
+        if (projectAssignmentOpt.isEmpty()) {
+            return;
+        }
+
+        PermissionAssignment projectAssignment = projectAssignmentOpt.get();
+        if (projectAssignment.getGrant() != null) {
+            projectGrants.add(ItemTypeConfigurationRemovalImpactDto.ProjectGrantInfo.builder()
+                    .projectId(project.getId())
+                    .projectName(project.getName())
+                    .build());
+        }
+
+        Set<Role> projectRolesSet = projectAssignment.getRoles();
+        if (projectRolesSet != null && !projectRolesSet.isEmpty()) {
+            List<String> projectRoleNames = projectRolesSet.stream()
+                    .map(Role::getName)
+                    .collect(Collectors.toList());
+            projectRoles.add(ItemTypeConfigurationRemovalImpactDto.ProjectRoleInfo.builder()
+                    .projectId(project.getId())
+                    .projectName(project.getName())
+                    .roles(projectRoleNames)
+                    .build());
+        }
+    }
+
+    private record AssignmentDetails(
+            List<String> assignedRoles,
+            List<String> assignedGrants,
+            Long globalGrantId,
+            String globalGrantName,
+            List<ItemTypeConfigurationRemovalImpactDto.ProjectGrantInfo> projectGrants,
+            List<ItemTypeConfigurationRemovalImpactDto.ProjectRoleInfo> projectRoles,
+            boolean hasAssignments
+    ) {}
+
+    private int countGlobalGrantAssignments(List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> permissions) {
+        return permissions.stream()
+                .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
+                .sum();
+    }
+
+    private int countProjectGrantAssignments(List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> permissions) {
+        return permissions.stream()
+                .mapToInt(p -> p.getProjectGrants() != null ? p.getProjectGrants().size() : 0)
+                .sum();
+    }
+
+    private int countGlobalRoleAssignments(List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> permissions) {
+        return permissions.stream()
+                .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
+                .sum();
+    }
+
+    private int countProjectRoleAssignments(List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> permissions) {
+        return permissions.stream()
+                .mapToInt(p -> {
+                    if (p.getProjectAssignedRoles() == null) {
+                        return 0;
+                    }
+                    return p.getProjectAssignedRoles().stream()
+                            .mapToInt(pr -> pr.getRoles() != null ? pr.getRoles().size() : 0)
+                            .sum();
+                })
+                .sum();
+    }
+ 
     private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeFieldOwnerPermissionImpacts(
             List<ItemTypeConfiguration> configsToRemove,
             ItemTypeSet itemTypeSet
@@ -508,17 +656,13 @@ public class ItemTypeSetService {
             List<FieldOwnerPermission> permissions = fieldOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
             
             for (FieldOwnerPermission permission : permissions) {
-                // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "FieldOwnerPermission", permission.getId(), itemTypeSet.getTenant());
-                List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
-                        .map(Role::getName)
-                        .collect(Collectors.toList()))
-                        .orElse(new ArrayList<>());
-                
-                boolean hasAssignments = !assignedRoles.isEmpty();
-                
-                if (hasAssignments) {
+                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
+                        "FieldOwnerPermission",
+                        permission.getId(),
+                        itemTypeSet
+                );
+
+                if (assignmentDetails.hasAssignments()) {
                     impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
                             .permissionId(permission.getId())
                             .permissionType("FIELD_OWNERS")
@@ -531,8 +675,12 @@ public class ItemTypeSetService {
                             .itemTypeCategory(config.getCategory() != null ? config.getCategory().toString() : null)
                             .fieldConfigurationId(null) // FieldOwnerPermission è legata a Field, non FieldConfiguration
                             .fieldConfigurationName(permission.getField() != null ? permission.getField().getName() : null)
-                            .assignedRoles(assignedRoles)
-                            .assignedGrants(new ArrayList<>())
+                            .grantId(assignmentDetails.globalGrantId())
+                            .grantName(assignmentDetails.globalGrantName())
+                            .assignedRoles(assignmentDetails.assignedRoles())
+                            .assignedGrants(assignmentDetails.assignedGrants())
+                            .projectAssignedRoles(assignmentDetails.projectRoles())
+                            .projectGrants(assignmentDetails.projectGrants())
                             .hasAssignments(true)
                             .build());
                 }
@@ -552,17 +700,13 @@ public class ItemTypeSetService {
             List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
             
             for (StatusOwnerPermission permission : permissions) {
-                // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "StatusOwnerPermission", permission.getId(), itemTypeSet.getTenant());
-                List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
-                        .map(Role::getName)
-                        .collect(Collectors.toList()))
-                        .orElse(new ArrayList<>());
-                
-                boolean hasAssignments = !assignedRoles.isEmpty();
-                
-                if (hasAssignments) {
+                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
+                        "StatusOwnerPermission",
+                        permission.getId(),
+                        itemTypeSet
+                );
+
+                if (assignmentDetails.hasAssignments()) {
                     impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
                             .permissionId(permission.getId())
                             .permissionType("STATUS_OWNERS")
@@ -576,8 +720,12 @@ public class ItemTypeSetService {
                             .workflowStatusId(permission.getWorkflowStatus() != null ? permission.getWorkflowStatus().getId() : null)
                             .workflowStatusName(permission.getWorkflowStatus() != null && permission.getWorkflowStatus().getStatus() != null 
                                     ? permission.getWorkflowStatus().getStatus().getName() : null)
-                            .assignedRoles(assignedRoles)
-                            .assignedGrants(new ArrayList<>())
+                            .grantId(assignmentDetails.globalGrantId())
+                            .grantName(assignmentDetails.globalGrantName())
+                            .assignedRoles(assignmentDetails.assignedRoles())
+                            .assignedGrants(assignmentDetails.assignedGrants())
+                            .projectAssignedRoles(assignmentDetails.projectRoles())
+                            .projectGrants(assignmentDetails.projectGrants())
                             .hasAssignments(true)
                             .build());
                 }
@@ -597,17 +745,13 @@ public class ItemTypeSetService {
             List<FieldStatusPermission> permissions = fieldStatusPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
             
             for (FieldStatusPermission permission : permissions) {
-                // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "FieldStatusPermission", permission.getId(), itemTypeSet.getTenant());
-                List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
-                        .map(Role::getName)
-                        .collect(Collectors.toList()))
-                        .orElse(new ArrayList<>());
-                
-                boolean hasAssignments = !assignedRoles.isEmpty();
-                
-                if (hasAssignments) {
+                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
+                        "FieldStatusPermission",
+                        permission.getId(),
+                        itemTypeSet
+                );
+
+                if (assignmentDetails.hasAssignments()) {
                     impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
                             .permissionId(permission.getId())
                             .permissionType(permission.getPermissionType() != null ? permission.getPermissionType().toString() : null)
@@ -622,9 +766,13 @@ public class ItemTypeSetService {
                             .fieldConfigurationName(permission.getField() != null ? permission.getField().getName() : null)
                             .workflowStatusId(permission.getWorkflowStatus() != null ? permission.getWorkflowStatus().getId() : null)
                             .workflowStatusName(permission.getWorkflowStatus() != null && permission.getWorkflowStatus().getStatus() != null
-                                    ? permission.getWorkflowStatus().getStatus().getName() : null)
-                            .assignedRoles(assignedRoles)
-                            .assignedGrants(new ArrayList<>())
+                                ? permission.getWorkflowStatus().getStatus().getName() : null)
+                            .grantId(assignmentDetails.globalGrantId())
+                            .grantName(assignmentDetails.globalGrantName())
+                            .assignedRoles(assignmentDetails.assignedRoles())
+                            .assignedGrants(assignmentDetails.assignedGrants())
+                            .projectAssignedRoles(assignmentDetails.projectRoles())
+                            .projectGrants(assignmentDetails.projectGrants())
                             .hasAssignments(true)
                             .build());
                 }
@@ -644,17 +792,13 @@ public class ItemTypeSetService {
             List<ExecutorPermission> permissions = executorPermissionRepository.findAllByItemTypeConfiguration(config);
             
             for (ExecutorPermission permission : permissions) {
-                // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "ExecutorPermission", permission.getId(), itemTypeSet.getTenant());
-                List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
-                        .map(Role::getName)
-                        .collect(Collectors.toList()))
-                        .orElse(new ArrayList<>());
-                
-                boolean hasAssignments = !assignedRoles.isEmpty();
-                
-                if (hasAssignments && permission.getTransition() != null) {
+                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
+                        "ExecutorPermission",
+                        permission.getId(),
+                        itemTypeSet
+                );
+
+                if (assignmentDetails.hasAssignments() && permission.getTransition() != null) {
                     Transition transition = permission.getTransition();
                     impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
                             .permissionId(permission.getId())
@@ -672,8 +816,12 @@ public class ItemTypeSetService {
                                     ? transition.getFromStatus().getStatus().getName() : null)
                             .toStatusName(transition.getToStatus() != null && transition.getToStatus().getStatus() != null
                                     ? transition.getToStatus().getStatus().getName() : null)
-                            .assignedRoles(assignedRoles)
-                            .assignedGrants(new ArrayList<>())
+                            .grantId(assignmentDetails.globalGrantId())
+                            .grantName(assignmentDetails.globalGrantName())
+                            .assignedRoles(assignmentDetails.assignedRoles())
+                            .assignedGrants(assignmentDetails.assignedGrants())
+                            .projectAssignedRoles(assignmentDetails.projectRoles())
+                            .projectGrants(assignmentDetails.projectGrants())
                             .hasAssignments(true)
                             .build());
                 }

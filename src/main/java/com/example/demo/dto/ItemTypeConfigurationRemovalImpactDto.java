@@ -82,6 +82,7 @@ public class ItemTypeConfigurationRemovalImpactDto {
         private String grantName;
         private List<String> assignedRoles;
         private List<String> assignedGrants;
+        private List<ProjectRoleInfo> projectAssignedRoles;
         private boolean hasAssignments; // true se ha ruoli o grant assegnati
         
         // Info per preservazione
@@ -105,6 +106,14 @@ public class ItemTypeConfigurationRemovalImpactDto {
     public static class ProjectGrantInfo {
         private Long projectId;
         private String projectName;
+    }
+
+    @Data
+    @Builder
+    public static class ProjectRoleInfo {
+        private Long projectId;
+        private String projectName;
+        private List<String> roles;
     }
 }
 

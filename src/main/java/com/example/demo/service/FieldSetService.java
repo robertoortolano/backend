@@ -28,7 +28,6 @@ public class FieldSetService {
     private final ProjectRepository projectRepository;
     private final FieldOwnerPermissionRepository fieldOwnerPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
-    private final ItemTypeSetRepository itemTypeSetRepository;
     
     // Servizi per PermissionAssignment (nuova struttura)
     private final PermissionAssignmentService permissionAssignmentService;
@@ -168,6 +167,7 @@ public class FieldSetService {
                 .collect(Collectors.toSet());
         
         // ✅ Identifica i Field completamente rimossi (non presenti nel FieldSet finale)
+        @SuppressWarnings("unused")
         Set<Long> removedFieldIds = existingFieldIds.stream()
                 .filter(fieldId -> !finalFieldIds.contains(fieldId))
                 .collect(Collectors.toSet());
@@ -537,26 +537,18 @@ public class FieldSetService {
         
         // Calcola statistiche usando grantId dal DTO (già popolato da PermissionAssignment)
         // RIMOSSO: Logica ItemTypeSetRole - le grant sono ora gestite tramite PermissionAssignment
-        Set<Long> countedGrantIds = new HashSet<>();
-        for (FieldSetRemovalImpactDto.PermissionImpact perm : fieldOwnerPermissions) {
-            if (perm.getGrantId() != null) {
-                countedGrantIds.add(perm.getGrantId());
-            }
-        }
-        for (FieldSetRemovalImpactDto.PermissionImpact perm : fieldStatusPermissions) {
-            if (perm.getGrantId() != null) {
-                countedGrantIds.add(perm.getGrantId());
-            }
-        }
-        
-        int totalGrantAssignments = countedGrantIds.size();
-        
-        // Calcola totalRoleAssignments usando assignedRoles dal DTO (già popolato da PermissionAssignment)
-        int totalRoleAssignments = fieldOwnerPermissions.stream()
-                .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
-                .sum() + fieldStatusPermissions.stream()
-                .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
-                .sum();
+        int totalGrantAssignments =
+                countGlobalGrantAssignments(fieldOwnerPermissions)
+                        + countGlobalGrantAssignments(fieldStatusPermissions)
+                        + countProjectGrantAssignments(fieldOwnerPermissions)
+                        + countProjectGrantAssignments(fieldStatusPermissions);
+
+        // Calcola totalRoleAssignments includendo ruoli globali e di progetto
+        int totalRoleAssignments =
+                countGlobalRoleAssignments(fieldOwnerPermissions)
+                        + countGlobalRoleAssignments(fieldStatusPermissions)
+                        + countProjectRoleAssignments(fieldOwnerPermissions)
+                        + countProjectRoleAssignments(fieldStatusPermissions);
 
         // Mappa gli ItemTypeSet con informazioni aggregate (incluso conteggio grant di progetto)
         List<FieldSetRemovalImpactDto.ItemTypeSetImpact> mappedItemTypeSets = 
@@ -671,6 +663,7 @@ public class FieldSetService {
                 .collect(Collectors.toList());
     }
     
+    @SuppressWarnings("unused")
     private List<FieldSetRemovalImpactDto.ItemTypeSetImpact> mapItemTypeSetImpacts(List<ItemTypeSet> itemTypeSets) {
         return itemTypeSets.stream()
                 .map(its -> FieldSetRemovalImpactDto.ItemTypeSetImpact.builder()
@@ -706,9 +699,20 @@ public class FieldSetService {
                     
                     // Calcola totali usando assignedRoles dal DTO (già popolato da PermissionAssignment)
                     int totalPermissions = itsPermissions.size();
-                    int totalRoleAssignments = itsPermissions.stream()
+                    int totalGlobalRoles = itsPermissions.stream()
                             .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
                             .sum();
+                    int totalProjectRoles = itsPermissions.stream()
+                            .mapToInt(p -> {
+                                if (p.getProjectAssignedRoles() == null) {
+                                    return 0;
+                                }
+                                return p.getProjectAssignedRoles().stream()
+                                        .mapToInt(pr -> pr.getRoles() != null ? pr.getRoles().size() : 0)
+                                        .sum();
+                            })
+                            .sum();
+                    int totalRoleAssignments = totalGlobalRoles + totalProjectRoles;
                     int totalGlobalGrants = itsPermissions.stream()
                             .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
                             .sum();
@@ -757,7 +761,137 @@ public class FieldSetService {
                 })
                 .collect(Collectors.toList());
     }
-    
+
+    private AssignmentDetails resolveAssignmentDetails(
+            String permissionType,
+            Long permissionId,
+            ItemTypeSet itemTypeSet
+    ) {
+        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                permissionType,
+                permissionId,
+                itemTypeSet.getTenant()
+        );
+
+        List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                .map(Role::getName)
+                .collect(Collectors.toList()))
+                .orElseGet(ArrayList::new);
+
+        List<String> assignedGrants = new ArrayList<>();
+        Long globalGrantId = null;
+        String globalGrantName = null;
+        if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
+            Grant grant = assignmentOpt.get().getGrant();
+            globalGrantId = grant.getId();
+            globalGrantName = grant.getRole() != null
+                    ? grant.getRole().getName()
+                    : "Grant globale";
+            assignedGrants.add(globalGrantName);
+        }
+
+        List<FieldSetRemovalImpactDto.ProjectGrantInfo> projectGrants = new ArrayList<>();
+        List<FieldSetRemovalImpactDto.ProjectRoleInfo> projectRoles = new ArrayList<>();
+
+        Set<Project> projectsToCheck = new HashSet<>();
+        if (itemTypeSet.getProject() != null) {
+            projectsToCheck.add(itemTypeSet.getProject());
+        }
+        if (itemTypeSet.getProjectsAssociation() != null) {
+            projectsToCheck.addAll(itemTypeSet.getProjectsAssociation());
+        }
+
+        for (Project project : projectsToCheck) {
+            Optional<PermissionAssignment> projectAssignmentOpt =
+                    projectPermissionAssignmentService.getProjectAssignment(
+                            permissionType,
+                            permissionId,
+                            project.getId(),
+                            itemTypeSet.getTenant()
+                    );
+
+            if (projectAssignmentOpt.isEmpty()) {
+                continue;
+            }
+
+            PermissionAssignment projectAssignment = projectAssignmentOpt.get();
+            if (projectAssignment.getGrant() != null) {
+                projectGrants.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
+                        .projectId(project.getId())
+                        .projectName(project.getName())
+                        .build());
+            }
+
+            Set<Role> projectRolesSet = projectAssignment.getRoles();
+            if (projectRolesSet != null && !projectRolesSet.isEmpty()) {
+                List<String> roleNames = projectRolesSet.stream()
+                        .map(Role::getName)
+                        .collect(Collectors.toList());
+                projectRoles.add(FieldSetRemovalImpactDto.ProjectRoleInfo.builder()
+                        .projectId(project.getId())
+                        .projectName(project.getName())
+                        .roles(roleNames)
+                        .build());
+            }
+        }
+
+        boolean hasAssignments = !assignedRoles.isEmpty()
+                || !assignedGrants.isEmpty()
+                || !projectGrants.isEmpty()
+                || !projectRoles.isEmpty();
+
+        return new AssignmentDetails(
+                assignedRoles,
+                assignedGrants,
+                globalGrantId,
+                globalGrantName,
+                projectGrants,
+                projectRoles,
+                hasAssignments
+        );
+    }
+
+    private record AssignmentDetails(
+            List<String> assignedRoles,
+            List<String> assignedGrants,
+            Long globalGrantId,
+            String globalGrantName,
+            List<FieldSetRemovalImpactDto.ProjectGrantInfo> projectGrants,
+            List<FieldSetRemovalImpactDto.ProjectRoleInfo> projectRoles,
+            boolean hasAssignments
+    ) {}
+
+    private int countGlobalGrantAssignments(List<FieldSetRemovalImpactDto.PermissionImpact> permissions) {
+        return permissions.stream()
+                .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
+                .sum();
+    }
+
+    private int countProjectGrantAssignments(List<FieldSetRemovalImpactDto.PermissionImpact> permissions) {
+        return permissions.stream()
+                .mapToInt(p -> p.getProjectGrants() != null ? p.getProjectGrants().size() : 0)
+                .sum();
+    }
+
+    private int countGlobalRoleAssignments(List<FieldSetRemovalImpactDto.PermissionImpact> permissions) {
+        return permissions.stream()
+                .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
+                .sum();
+    }
+
+    private int countProjectRoleAssignments(List<FieldSetRemovalImpactDto.PermissionImpact> permissions) {
+        return permissions.stream()
+                .mapToInt(p -> {
+                    if (p.getProjectAssignedRoles() == null) {
+                        return 0;
+                    }
+                    return p.getProjectAssignedRoles().stream()
+                            .mapToInt(pr -> pr.getRoles() != null ? pr.getRoles().size() : 0)
+                            .sum();
+                })
+                .sum();
+    }
+ 
     /**
      * Analizza gli impatti delle FieldOwnerPermission per Field rimossi
      * @param remainingFieldIds I Field che rimarranno nel FieldSet finale (per calcolare canBePreserved)
@@ -791,44 +925,13 @@ public class FieldSetService {
                     
                     if (isRemoved || isOrphaned) {
                         Field field = permission.getField();
-                        // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
-                        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                                "FieldOwnerPermission", permission.getId(), itemTypeSet.getTenant());
-                        List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
-                                .map(Role::getName)
-                                .collect(Collectors.toList()))
-                                .orElse(new ArrayList<>());
-                        
-                        // Controlla se ha grant globale
-                        boolean hasGlobalGrant = assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null;
-                        
-                        // Controlla se ha grant di progetto
-                        boolean hasProjectGrant = false;
-                        if (itemTypeSet.getProject() != null) {
-                            Optional<PermissionAssignment> projectAssignmentOpt = 
-                                    projectPermissionAssignmentService.getProjectAssignment(
-                                            "FieldOwnerPermission", permission.getId(), 
-                                            itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
-                            hasProjectGrant = projectAssignmentOpt.isPresent() && 
-                                    projectAssignmentOpt.get().getGrant() != null;
-                        } else {
-                            for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                Optional<PermissionAssignment> projectAssignmentOpt = 
-                                        projectPermissionAssignmentService.getProjectAssignment(
-                                                "FieldOwnerPermission", permission.getId(), 
-                                                project.getId(), itemTypeSet.getTenant());
-                                if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getGrant() != null) {
-                                    hasProjectGrant = true;
-                                    break;
-                                }
-                            }
-                        }
-                        
-                        // Includi se ha ruoli O grant (globale o di progetto)
-                        boolean hasAssignments = !assignedRoles.isEmpty() || hasGlobalGrant || hasProjectGrant;
-                        
-                        if (hasAssignments) {
+                        AssignmentDetails assignmentDetails = resolveAssignmentDetails(
+                                "FieldOwnerPermission",
+                                permission.getId(),
+                                itemTypeSet
+                        );
+
+                        if (assignmentDetails.hasAssignments()) {
                             // IMPORTANTE: Trova la FieldConfiguration corretta dal FieldSet modificato
                             // Non una "di esempio", ma quella specifica che verrà rimossa
                             FieldConfiguration targetConfigTemp = null;
@@ -855,72 +958,31 @@ public class FieldSetService {
                             // NOTA: Se canBePreserved = true, la permission verrebbe mantenuta automaticamente,
                             // quindi non dovrebbe apparire qui. Ma per coerenza con altri report, lo includiamo comunque.
                             boolean canBePreserved = remainingFieldIds.contains(fieldId);
-                            boolean defaultPreserve = canBePreserved && hasAssignments;
+                            boolean defaultPreserve = canBePreserved && assignmentDetails.hasAssignments();
                             
-                            // RIMOSSO: ItemTypeSetRole eliminata - le grant sono ora gestite tramite PermissionAssignment
-                            Long globalGrantId = null;
-                            String globalGrantName = null;
-                            List<FieldSetRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
-                            
-                            // Recupera Grant globale da PermissionAssignment
-                            // Riutilizza assignmentOpt già definito sopra per i ruoli
-                            if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                                Grant grant = assignmentOpt.get().getGrant();
-                                globalGrantId = grant.getId();
-                                globalGrantName = grant.getRole() != null 
-                                        ? grant.getRole().getName() 
-                                        : "Grant globale";
-                            }
-                            
-                            // Recupera grant di progetto da ProjectPermissionAssignmentService
-                            // Se è un ItemTypeSet di progetto, controlla solo quel progetto
-                            if (itemTypeSet.getProject() != null) {
-                                Optional<PermissionAssignment> projectAssignmentOpt = 
-                                        projectPermissionAssignmentService.getProjectAssignment(
-                                                "FieldOwnerPermission", permission.getId(), 
-                                                itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
-                                if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getGrant() != null) {
-                                    projectGrantsList.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
-                                            .projectId(itemTypeSet.getProject().getId())
-                                            .projectName(itemTypeSet.getProject().getName())
-                                            .build());
-                                }
-                            } else {
-                                // Se è un ItemTypeSet globale, controlla tutti i progetti associati
-                                for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                    Optional<PermissionAssignment> projectAssignmentOpt = 
-                                            projectPermissionAssignmentService.getProjectAssignment(
-                                                    "FieldOwnerPermission", permission.getId(), 
-                                                    project.getId(), itemTypeSet.getTenant());
-                                    if (projectAssignmentOpt.isPresent() && 
-                                            projectAssignmentOpt.get().getGrant() != null) {
-                                        projectGrantsList.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
-                                                .projectId(project.getId())
-                                                .projectName(project.getName())
-                                                .build());
-                                    }
-                                }
-                            }
+                            Long globalGrantId = assignmentDetails.globalGrantId();
+                            String globalGrantName = assignmentDetails.globalGrantName();
+                            List<FieldSetRemovalImpactDto.ProjectGrantInfo> projectGrantsList = assignmentDetails.projectGrants();
                             
                             impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
                                     .permissionId(permission.getId())
                                     .permissionType("FIELD_OWNERS")
                                     .itemTypeSetId(itemTypeSet.getId())
                                     .itemTypeSetName(itemTypeSet.getName())
-                                    .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
-                                    .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
+                                    .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
+                                    .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
                                     .fieldConfigurationId(targetConfig != null ? targetConfig.getId() : null)
                                     .fieldConfigurationName(targetConfig != null ? targetConfig.getName() : field.getName())
                                     .fieldId(fieldId)
                                     .fieldName(field.getName())
                                     .matchingFieldId(canBePreserved ? fieldId : null)
                                     .matchingFieldName(canBePreserved ? field.getName() : null)
-                                    .assignedRoles(assignedRoles)
+                                    .assignedRoles(assignmentDetails.assignedRoles())
+                                    .assignedGrants(assignmentDetails.assignedGrants())
+                                    .projectAssignedRoles(assignmentDetails.projectRoles())
                                     .hasAssignments(true)
                                     .canBePreserved(canBePreserved)
                                     .defaultPreserve(defaultPreserve)
-                                    // RIMOSSO: roleId - ItemTypeSetRole eliminata
                                     .grantId(globalGrantId)
                                     .grantName(globalGrantName)
                                     .projectGrants(projectGrantsList)
@@ -968,45 +1030,13 @@ public class FieldSetService {
                     if (isRemoved || isOrphaned) {
                         Field field = permission.getField();
                         WorkflowStatus workflowStatus = permission.getWorkflowStatus();
-                        
-                        // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
-                        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                                "FieldStatusPermission", permission.getId(), itemTypeSet.getTenant());
-                        List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
-                                .map(Role::getName)
-                                .collect(Collectors.toList()))
-                                .orElse(new ArrayList<>());
-                        
-                        // Controlla se ha grant globale
-                        boolean hasGlobalGrant = assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null;
-                        
-                        // Controlla se ha grant di progetto
-                        boolean hasProjectGrant = false;
-                        if (itemTypeSet.getProject() != null) {
-                            Optional<PermissionAssignment> projectAssignmentOpt = 
-                                    projectPermissionAssignmentService.getProjectAssignment(
-                                            "FieldStatusPermission", permission.getId(), 
-                                            itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
-                            hasProjectGrant = projectAssignmentOpt.isPresent() && 
-                                    projectAssignmentOpt.get().getGrant() != null;
-                        } else {
-                            for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                Optional<PermissionAssignment> projectAssignmentOpt = 
-                                        projectPermissionAssignmentService.getProjectAssignment(
-                                                "FieldStatusPermission", permission.getId(), 
-                                                project.getId(), itemTypeSet.getTenant());
-                                if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getGrant() != null) {
-                                    hasProjectGrant = true;
-                                    break;
-                                }
-                            }
-                        }
-                        
-                        // Includi se ha ruoli O grant (globale o di progetto)
-                        boolean hasAssignments = !assignedRoles.isEmpty() || hasGlobalGrant || hasProjectGrant;
-                        
-                        if (hasAssignments) {
+                        AssignmentDetails assignmentDetails = resolveAssignmentDetails(
+                                "FieldStatusPermission",
+                                permission.getId(),
+                                itemTypeSet
+                        );
+
+                        if (assignmentDetails.hasAssignments()) {
                             // Per il DTO, manteniamo fieldConfigurationId/Name per retrocompatibilità
                             FieldConfiguration exampleConfig = fieldConfigurationLookup.getAllByField(fieldId, itemTypeSet.getTenant())
                                     .stream()
@@ -1021,63 +1051,29 @@ public class FieldSetService {
                             // Status rimane sempre quando modifichi solo FieldSet (non Workflow)
                             boolean statusRemains = true; // Se modifichi solo FieldSet, il Workflow non cambia
                             boolean canBePreserved = fieldRemains && statusRemains;
-                            boolean defaultPreserve = canBePreserved && hasAssignments;
+                            boolean defaultPreserve = canBePreserved && assignmentDetails.hasAssignments();
                             
                             String permissionType = permission.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS 
                                     ? "EDITORS" : "VIEWERS";
-                            
-                            // Recupera Grant globale e di progetto (simile a FieldOwnerPermission)
-                            Long globalGrantId = null;
-                            String globalGrantName = null;
-                            List<FieldSetRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
-                            
-                            // Recupera Grant globale da PermissionAssignment
-                            if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                                Grant grant = assignmentOpt.get().getGrant();
-                                globalGrantId = grant.getId();
-                                globalGrantName = grant.getRole() != null 
-                                        ? grant.getRole().getName() 
-                                        : "Grant globale";
-                            }
-                            
-                            // Recupera grant di progetto da ProjectPermissionAssignmentService
-                            // Se è un ItemTypeSet di progetto, controlla solo quel progetto
+
+                            Long primaryProjectId = null;
+                            String primaryProjectName = null;
                             if (itemTypeSet.getProject() != null) {
-                                Optional<PermissionAssignment> projectAssignmentOpt = 
-                                        projectPermissionAssignmentService.getProjectAssignment(
-                                                "FieldStatusPermission", permission.getId(), 
-                                                itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
-                                if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getGrant() != null) {
-                                    projectGrantsList.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
-                                            .projectId(itemTypeSet.getProject().getId())
-                                            .projectName(itemTypeSet.getProject().getName())
-                                            .build());
-                                }
-                            } else {
-                                // Se è un ItemTypeSet globale, controlla tutti i progetti associati
-                                for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                    Optional<PermissionAssignment> projectAssignmentOpt = 
-                                            projectPermissionAssignmentService.getProjectAssignment(
-                                                    "FieldStatusPermission", permission.getId(), 
-                                                    project.getId(), itemTypeSet.getTenant());
-                                    if (projectAssignmentOpt.isPresent() && 
-                                            projectAssignmentOpt.get().getGrant() != null) {
-                                        projectGrantsList.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
-                                                .projectId(project.getId())
-                                                .projectName(project.getName())
-                                                .build());
-                                    }
-                                }
+                                primaryProjectId = itemTypeSet.getProject().getId();
+                                primaryProjectName = itemTypeSet.getProject().getName();
+                            } else if (!itemTypeSet.getProjectsAssociation().isEmpty()) {
+                                Project firstProject = itemTypeSet.getProjectsAssociation().iterator().next();
+                                primaryProjectId = firstProject.getId();
+                                primaryProjectName = firstProject.getName();
                             }
-                            
+
                             impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
                                     .permissionId(permission.getId())
                                     .permissionType(permissionType)
                                     .itemTypeSetId(itemTypeSet.getId())
                                     .itemTypeSetName(itemTypeSet.getName())
-                                    .projectId(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getId())
-                                    .projectName(itemTypeSet.getProjectsAssociation().isEmpty() ? null : itemTypeSet.getProjectsAssociation().iterator().next().getName())
+                                    .projectId(primaryProjectId)
+                                    .projectName(primaryProjectName)
                                     .fieldConfigurationId(exampleConfig != null ? exampleConfig.getId() : null)
                                     .fieldConfigurationName(exampleConfig != null ? exampleConfig.getName() : field.getName())
                                     .workflowStatusId(workflowStatus.getId())
@@ -1090,13 +1086,15 @@ public class FieldSetService {
                                     .matchingFieldName(canBePreserved && fieldRemains ? field.getName() : null)
                                     .matchingStatusId(canBePreserved && statusRemains ? (status != null ? status.getId() : null) : null)
                                     .matchingStatusName(canBePreserved && statusRemains ? (status != null ? status.getName() : null) : null)
-                                    .assignedRoles(assignedRoles)
+                                    .assignedRoles(assignmentDetails.assignedRoles())
+                                    .assignedGrants(assignmentDetails.assignedGrants())
+                                    .projectAssignedRoles(assignmentDetails.projectRoles())
                                     .hasAssignments(true)
                                     .canBePreserved(canBePreserved)
                                     .defaultPreserve(defaultPreserve)
-                                    .grantId(globalGrantId)
-                                    .grantName(globalGrantName)
-                                    .projectGrants(projectGrantsList)
+                                    .grantId(assignmentDetails.globalGrantId())
+                                    .grantName(assignmentDetails.globalGrantName())
+                                    .projectGrants(assignmentDetails.projectGrants())
                                     .build());
                         }
                     }

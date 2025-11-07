@@ -71,6 +71,7 @@ public class FieldSetRemovalImpactDto {
         private String grantName; // Nome grant globale
         private List<String> assignedRoles;
         private List<String> assignedGrants;
+        private List<ProjectRoleInfo> projectAssignedRoles; // Ruoli di progetto per questa permission
         private boolean hasAssignments; // true se ha ruoli o grant assegnati
         
         // Info per preservazione (simile a ItemTypeConfigurationMigrationImpactDto)
@@ -94,5 +95,13 @@ public class FieldSetRemovalImpactDto {
     public static class ProjectGrantInfo {
         private Long projectId;
         private String projectName;
+    }
+
+    @Data
+    @Builder
+    public static class ProjectRoleInfo {
+        private Long projectId;
+        private String projectName;
+        private List<String> roles;
     }
 }
