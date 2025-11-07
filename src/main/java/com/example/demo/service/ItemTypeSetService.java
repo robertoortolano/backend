@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -53,7 +54,15 @@ public class ItemTypeSetService {
     private final StatusOwnerPermissionRepository statusOwnerPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
     private final ExecutorPermissionRepository executorPermissionRepository;
-    private final ItemTypeSetRoleRepository itemTypeSetRoleRepository;
+    // Servizi per PermissionAssignment (nuova struttura)
+    private final PermissionAssignmentService permissionAssignmentService;
+    private final ProjectPermissionAssignmentService projectPermissionAssignmentService;
+    
+    private final GrantCleanupService grantCleanupService;
+    
+    // Repository per Permission (necessari per eliminare PermissionAssignment)
+    private final WorkerPermissionRepository workerPermissionRepository;
+    private final CreatorPermissionRepository creatorPermissionRepository;
     
     private static final String ITEMTYPESET_NOT_FOUND = "ItemTypeSet not found";
 
@@ -332,6 +341,58 @@ public class ItemTypeSetService {
             );
         }
 
+        // Prima di eliminare l'ITS, elimina tutte le PermissionAssignment e ProjectPermissionAssignment associate
+        // Questo è necessario perché:
+        // 1. Le PermissionAssignment sono specifiche per una sola permission, quindi vanno eliminate
+        // 2. Le ProjectPermissionAssignment sono specifiche per un ITS e un progetto, quindi vanno eliminate
+        
+        // 1. Elimina tutte le ProjectPermissionAssignment per questo ITS
+        projectPermissionAssignmentService.deleteByItemTypeSet(id, tenant.getId());
+        
+        // 2. Per ogni ItemTypeConfiguration nell'ITS, elimina tutte le PermissionAssignment associate
+        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+            // Elimina PermissionAssignment per WorkerPermission
+            List<WorkerPermission> workerPermissions = workerPermissionRepository.findAllByItemTypeConfiguration(config);
+            for (WorkerPermission perm : workerPermissions) {
+                permissionAssignmentService.deleteAssignment("WorkerPermission", perm.getId(), tenant);
+            }
+            
+            // Elimina PermissionAssignment per CreatorPermission
+            List<CreatorPermission> creatorPermissions = creatorPermissionRepository.findByItemTypeConfigurationId(config.getId());
+            for (CreatorPermission perm : creatorPermissions) {
+                permissionAssignmentService.deleteAssignment("CreatorPermission", perm.getId(), tenant);
+            }
+            
+            // Elimina PermissionAssignment per FieldOwnerPermission
+            List<FieldOwnerPermission> fieldOwnerPermissions = fieldOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
+            for (FieldOwnerPermission perm : fieldOwnerPermissions) {
+                permissionAssignmentService.deleteAssignment("FieldOwnerPermission", perm.getId(), tenant);
+            }
+            
+            // Elimina PermissionAssignment per StatusOwnerPermission
+            List<StatusOwnerPermission> statusOwnerPermissions = statusOwnerPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), tenant);
+            for (StatusOwnerPermission perm : statusOwnerPermissions) {
+                permissionAssignmentService.deleteAssignment("StatusOwnerPermission", perm.getId(), tenant);
+            }
+            
+            // Elimina PermissionAssignment per ExecutorPermission
+            List<ExecutorPermission> executorPermissions = executorPermissionRepository.findAllByItemTypeConfiguration(config);
+            for (ExecutorPermission perm : executorPermissions) {
+                permissionAssignmentService.deleteAssignment("ExecutorPermission", perm.getId(), tenant);
+            }
+            
+            // Elimina PermissionAssignment per FieldStatusPermission
+            List<FieldStatusPermission> fieldStatusPermissions = fieldStatusPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), tenant);
+            for (FieldStatusPermission perm : fieldStatusPermissions) {
+                permissionAssignmentService.deleteAssignment("FieldStatusPermission", perm.getId(), tenant);
+            }
+        }
+        
+        // 3. Elimina anche le grant/ruoli legacy (ItemTypeSetRole) se esistono ancora
+        // RIMOSSO: ItemTypeSetRole e ProjectItemTypeSetRoleGrant/ProjectItemTypeSetRoleRole sono state eliminate
+        // Le grant sono ora gestite tramite PermissionAssignment
+        // TODO: Se necessario, aggiungere logica per eliminare PermissionAssignment quando si elimina ItemTypeSet
+
         itemTypeSetRepository.deleteByIdAndTenant(id, tenant);
     }
 
@@ -369,7 +430,7 @@ public class ItemTypeSetService {
                     .totalStatusOwnerPermissions(0)
                     .totalFieldStatusPermissions(0)
                     .totalExecutorPermissions(0)
-                    .totalItemTypeSetRoles(0)
+                    .totalItemTypeSetRoles(0) // RIMOSSO: ItemTypeSetRole eliminata
                     .totalGrantAssignments(0)
                     .totalRoleAssignments(0)
                     .build();
@@ -388,8 +449,9 @@ public class ItemTypeSetService {
         List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> executorPermissions = 
                 analyzeExecutorPermissionImpacts(configsToRemove, itemTypeSet);
         
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> itemTypeSetRoles = 
-                analyzeItemTypeSetRoleImpacts(configsToRemove, itemTypeSet);
+        // RIMOSSO: analyzeItemTypeSetRoleImpacts - ItemTypeSetRole eliminata
+        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> itemTypeSetRoles = new ArrayList<>();
+                // analyzeItemTypeSetRoleImpacts(configsToRemove, itemTypeSet);
 
         // Calcola statistiche
         int totalGrantAssignments = fieldOwnerPermissions.stream()
@@ -442,7 +504,7 @@ public class ItemTypeSetService {
                 .totalStatusOwnerPermissions(statusOwnerPermissions.size())
                 .totalFieldStatusPermissions(fieldStatusPermissions.size())
                 .totalExecutorPermissions(executorPermissions.size())
-                .totalItemTypeSetRoles(itemTypeSetRoles.size())
+                .totalItemTypeSetRoles(0) // RIMOSSO: ItemTypeSetRole eliminata
                 .totalGrantAssignments(totalGrantAssignments)
                 .totalRoleAssignments(totalRoleAssignments)
                 .build();
@@ -459,11 +521,13 @@ public class ItemTypeSetService {
             List<FieldOwnerPermission> permissions = fieldOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
             
             for (FieldOwnerPermission permission : permissions) {
-                List<String> assignedRoles = permission.getAssignedRoles() != null
-                        ? permission.getAssignedRoles().stream()
-                                .map(Role::getName)
-                                .collect(Collectors.toList())
-                        : new ArrayList<>();
+                // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
+                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                        "FieldOwnerPermission", permission.getId(), itemTypeSet.getTenant());
+                List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                        .map(Role::getName)
+                        .collect(Collectors.toList()))
+                        .orElse(new ArrayList<>());
                 
                 boolean hasAssignments = !assignedRoles.isEmpty();
                 
@@ -501,11 +565,13 @@ public class ItemTypeSetService {
             List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
             
             for (StatusOwnerPermission permission : permissions) {
-                List<String> assignedRoles = permission.getAssignedRoles() != null
-                        ? permission.getAssignedRoles().stream()
-                                .map(Role::getName)
-                                .collect(Collectors.toList())
-                        : new ArrayList<>();
+                // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
+                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                        "StatusOwnerPermission", permission.getId(), itemTypeSet.getTenant());
+                List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                        .map(Role::getName)
+                        .collect(Collectors.toList()))
+                        .orElse(new ArrayList<>());
                 
                 boolean hasAssignments = !assignedRoles.isEmpty();
                 
@@ -544,11 +610,13 @@ public class ItemTypeSetService {
             List<FieldStatusPermission> permissions = fieldStatusPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
             
             for (FieldStatusPermission permission : permissions) {
-                List<String> assignedRoles = permission.getAssignedRoles() != null
-                        ? permission.getAssignedRoles().stream()
-                                .map(Role::getName)
-                                .collect(Collectors.toList())
-                        : new ArrayList<>();
+                // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
+                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                        "FieldStatusPermission", permission.getId(), itemTypeSet.getTenant());
+                List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                        .map(Role::getName)
+                        .collect(Collectors.toList()))
+                        .orElse(new ArrayList<>());
                 
                 boolean hasAssignments = !assignedRoles.isEmpty();
                 
@@ -589,11 +657,13 @@ public class ItemTypeSetService {
             List<ExecutorPermission> permissions = executorPermissionRepository.findAllByItemTypeConfiguration(config);
             
             for (ExecutorPermission permission : permissions) {
-                List<String> assignedRoles = permission.getAssignedRoles() != null
-                        ? permission.getAssignedRoles().stream()
-                                .map(Role::getName)
-                                .collect(Collectors.toList())
-                        : new ArrayList<>();
+                // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
+                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                        "ExecutorPermission", permission.getId(), itemTypeSet.getTenant());
+                List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                        .map(Role::getName)
+                        .collect(Collectors.toList()))
+                        .orElse(new ArrayList<>());
                 
                 boolean hasAssignments = !assignedRoles.isEmpty();
                 
@@ -626,6 +696,8 @@ public class ItemTypeSetService {
         return impacts;
     }
 
+    // RIMOSSO: Metodo obsoleto - ItemTypeSetRole eliminata
+    /*
     private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeItemTypeSetRoleImpacts(
             List<ItemTypeConfiguration> configsToRemove,
             ItemTypeSet itemTypeSet
@@ -704,6 +776,7 @@ public class ItemTypeSetService {
         
         return impacts;
     }
+    */
 
     private List<String> getItemTypeConfigurationNames(Set<Long> configIds, Tenant tenant) {
         return configIds.stream()

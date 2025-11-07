@@ -28,8 +28,11 @@ public class FieldSetService {
     private final ProjectRepository projectRepository;
     private final FieldOwnerPermissionRepository fieldOwnerPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
-    private final ProjectItemTypeSetRoleGrantRepository projectItemTypeSetRoleGrantRepository;
-    private final ItemTypeSetRoleRepository itemTypeSetRoleRepository;
+    private final ItemTypeSetRepository itemTypeSetRepository;
+    
+    // Servizi per PermissionAssignment (nuova struttura)
+    private final PermissionAssignmentService permissionAssignmentService;
+    
 
     private final FieldConfigurationLookup fieldConfigurationLookup;
     private final FieldLookup fieldLookup;
@@ -328,87 +331,15 @@ public class FieldSetService {
                     
                     // IMPORTANTE: Rimuovi anche le grant dagli ItemTypeSetRole per le FieldConfiguration riaggiunte
                     // Questo previene che le grant vengano preservate quando si riaggiunge una FieldConfiguration
-                    removeGrantsFromItemTypeSetRolesForReAddedFields(itemTypeSet, fieldSet, newFieldIds, tenant);
+                    // RIMOSSO: removeGrantsFromItemTypeSetRolesForReAddedFields - ItemTypeSetRole eliminata
+                    // removeGrantsFromItemTypeSetRolesForReAddedFields(itemTypeSet, fieldSet, newFieldIds, tenant);
                 }
             }
         }
     }
     
-    /**
-     * Rimuove le grant dagli ItemTypeSetRole per le FieldConfiguration riaggiunte
-     * Questo previene che le grant vengano preservate quando si riaggiunge una FieldConfiguration
-     */
-    private void removeGrantsFromItemTypeSetRolesForReAddedFields(
-            ItemTypeSet itemTypeSet,
-            FieldSet fieldSet,
-            Set<Long> newFieldIds,
-            Tenant tenant
-    ) {
-        // Trova tutte le FieldConfiguration nel FieldSet che corrispondono ai nuovi Field
-        Set<Long> fieldConfigIds = fieldSet.getFieldSetEntries().stream()
-                .filter(entry -> newFieldIds.contains(entry.getFieldConfiguration().getField().getId()))
-                .map(entry -> entry.getFieldConfiguration().getId())
-                .collect(Collectors.toSet());
-        
-        // Per ogni FieldConfiguration, rimuovi le grant dagli ItemTypeSetRole FIELD_OWNERS
-        for (Long fieldConfigId : fieldConfigIds) {
-            itemTypeSetRoleRepository
-                    .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
-                            itemTypeSet.getId(),
-                            "FieldConfiguration",
-                            fieldConfigId,
-                            com.example.demo.enums.ItemTypeSetRoleType.FIELD_OWNERS,
-                            tenant.getId()
-                    )
-                    .ifPresent(role -> {
-                        if (role.getGrant() != null) {
-                            role.setGrant(null);
-                            itemTypeSetRoleRepository.save(role);
-                        }
-                    });
-        }
-        
-        // Per ogni FieldConfiguration, rimuovi anche le grant dagli ItemTypeSetRole EDITORS/VIEWERS
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            if (config.getFieldSet().getId().equals(fieldSet.getId())) {
-                for (Long fieldConfigId : fieldConfigIds) {
-                    // Rimuovi grant da EDITORS
-                    itemTypeSetRoleRepository
-                            .findByItemTypeSetIdAndRoleTypeAndTenantId(
-                                    itemTypeSet.getId(),
-                                    com.example.demo.enums.ItemTypeSetRoleType.EDITORS,
-                                    tenant.getId()
-                            )
-                            .stream()
-                            .filter(role -> role.getRelatedEntityId() != null && role.getRelatedEntityId().equals(config.getId()))
-                            .filter(role -> role.getSecondaryEntityId() != null && role.getSecondaryEntityId().equals(fieldConfigId))
-                            .forEach(role -> {
-                                if (role.getGrant() != null) {
-                                    role.setGrant(null);
-                                    itemTypeSetRoleRepository.save(role);
-                                }
-                            });
-                    
-                    // Rimuovi grant da VIEWERS
-                    itemTypeSetRoleRepository
-                            .findByItemTypeSetIdAndRoleTypeAndTenantId(
-                                    itemTypeSet.getId(),
-                                    com.example.demo.enums.ItemTypeSetRoleType.VIEWERS,
-                                    tenant.getId()
-                            )
-                            .stream()
-                            .filter(role -> role.getRelatedEntityId() != null && role.getRelatedEntityId().equals(config.getId()))
-                            .filter(role -> role.getSecondaryEntityId() != null && role.getSecondaryEntityId().equals(fieldConfigId))
-                            .forEach(role -> {
-                                if (role.getGrant() != null) {
-                                    role.setGrant(null);
-                                    itemTypeSetRoleRepository.save(role);
-                                }
-                            });
-                }
-            }
-        }
-    }
+    // RIMOSSO: Metodo obsoleto - ItemTypeSetRole eliminata
+    // Le grant sono ora gestite tramite PermissionAssignment
     
     /**
      * Trova tutti gli ItemTypeSet che usano un FieldSet specifico
@@ -449,17 +380,13 @@ public class FieldSetService {
             FieldOwnerPermission permission = new FieldOwnerPermission();
             permission.setItemTypeConfiguration(config);
             permission.setField(field);
-            permission.setAssignedRoles(new HashSet<>());
-            
+            // PermissionAssignment verrà creato on-demand quando necessario
             fieldOwnerPermissionRepository.save(permission);
         } else {
             // IMPORTANTE: Se la permission esiste già (permission orfana o riaggiunta dopo rimozione),
-            // assicurati che sia vuota (senza ruoli). Questo previene che i ruoli vengano preservati
+            // elimina PermissionAssignment se esiste. Questo previene che i ruoli vengano preservati
             // quando si riaggiunge un Field dopo averlo rimosso.
-            if (!existingPermission.getAssignedRoles().isEmpty()) {
-                existingPermission.setAssignedRoles(new HashSet<>());
-                fieldOwnerPermissionRepository.save(existingPermission);
-            }
+            permissionAssignmentService.deleteAssignment("FieldOwnerPermission", existingPermission.getId(), config.getTenant());
         }
     }
     
@@ -503,17 +430,13 @@ public class FieldSetService {
             permission.setField(field);
             permission.setWorkflowStatus(workflowStatus);
             permission.setPermissionType(permissionType);
-            permission.setAssignedRoles(new HashSet<>());
-            
+            // PermissionAssignment verrà creato on-demand quando necessario
             fieldStatusPermissionRepository.save(permission);
         } else {
             // IMPORTANTE: Se la permission esiste già (permission orfana o riaggiunta dopo rimozione),
-            // assicurati che sia vuota (senza ruoli). Questo previene che i ruoli vengano preservati
+            // elimina PermissionAssignment se esiste. Questo previene che i ruoli vengano preservati
             // quando si riaggiunge un Field dopo averlo rimosso.
-            if (!existingPermission.getAssignedRoles().isEmpty()) {
-                existingPermission.setAssignedRoles(new HashSet<>());
-                fieldStatusPermissionRepository.save(existingPermission);
-            }
+            permissionAssignmentService.deleteAssignment("FieldStatusPermission", existingPermission.getId(), config.getTenant());
         }
     }
 
@@ -607,8 +530,9 @@ public class FieldSetService {
         List<FieldSetRemovalImpactDto.PermissionImpact> fieldStatusPermissions = 
                 analyzeFieldStatusPermissionImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds, remainingFieldIds, tenant);
         
-        List<FieldSetRemovalImpactDto.PermissionImpact> itemTypeSetRoles = 
-                analyzeItemTypeSetRoleImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds);
+        // RIMOSSO: analyzeItemTypeSetRoleImpacts - ItemTypeSetRole eliminata
+        List<FieldSetRemovalImpactDto.PermissionImpact> itemTypeSetRoles = new ArrayList<>();
+                // analyzeItemTypeSetRoleImpacts(allItemTypeSetsUsingFieldSet, removedFieldIds);
         
         // Calcola solo gli ItemTypeSet che hanno effettivamente impatti (permissions con ruoli assegnati)
         Set<Long> itemTypeSetIdsWithImpact = new HashSet<>();
@@ -620,96 +544,23 @@ public class FieldSetService {
                 .filter(its -> itemTypeSetIdsWithImpact.contains(its.getId()))
                 .collect(Collectors.toList());
         
-        // Calcola statistiche
-        // IMPORTANTE: Conta le grant dagli ItemTypeSetRole associati SOLO alle permission che verranno effettivamente rimosse
-        // Usa un Set per evitare di contare la stessa grant più volte (se la stessa grant è associata a più ruoli)
+        // Calcola statistiche usando grantId dal DTO (già popolato da PermissionAssignment)
+        // RIMOSSO: Logica ItemTypeSetRole - le grant sono ora gestite tramite PermissionAssignment
         Set<Long> countedGrantIds = new HashSet<>();
-        
-        // IMPORTANTE: Per evitare di contare grant duplicate, usiamo solo le permission effettivamente impattate
-        // In un FieldSet non ci possono essere più FieldConfiguration per lo stesso Field
-        // Quindi per ogni FieldOwnerPermission che verrà rimossa, trova l'ItemTypeSetRole corrispondente
-        
-        // Crea una mappa: FieldConfiguration ID -> Field ID (per il FieldSet modificato)
-        Set<Long> fieldSetConfigIds = fieldSet.getFieldSetEntries().stream()
-                .map(e -> e.getFieldConfiguration().getId())
-                .collect(Collectors.toSet());
-        
-        java.util.Map<Long, Long> configIdToFieldId = new java.util.HashMap<>();
-        for (FieldSetEntry entry : fieldSet.getFieldSetEntries()) {
-            configIdToFieldId.put(entry.getFieldConfiguration().getId(), entry.getFieldConfiguration().getField().getId());
-        }
-        
-        // Per ogni FieldOwnerPermission che verrà rimossa
-        Set<Long> processedItemTypeSetAndFieldPairs = new HashSet<>(); // Per evitare duplicati
-        
         for (FieldSetRemovalImpactDto.PermissionImpact perm : fieldOwnerPermissions) {
-            Long itemTypeSetId = perm.getItemTypeSetId();
-            Long fieldId = perm.getFieldId();
-            
-            // Crea una chiave unica per (ItemTypeSet, Field) per evitare di contare la stessa grant due volte
-            // Se lo stesso ItemTypeSet ha più ItemTypeConfiguration con lo stesso Field, conta solo una volta
-            long uniqueKey = itemTypeSetId * 1000000L + fieldId; // Combinazione unica
-            if (processedItemTypeSetAndFieldPairs.contains(uniqueKey)) {
-                continue; // Già processato
-            }
-            processedItemTypeSetAndFieldPairs.add(uniqueKey);
-            
-            // Trova la FieldConfiguration corrispondente a questo Field nel FieldSet modificato
-            // (dato che in un FieldSet non ci possono essere più FieldConfiguration per lo stesso Field)
-            Long matchingConfigId = null;
-            for (Long configId : fieldSetConfigIds) {
-                if (configIdToFieldId.containsKey(configId) && configIdToFieldId.get(configId).equals(fieldId)) {
-                    matchingConfigId = configId;
-                    break;
-                }
-            }
-            
-            if (matchingConfigId != null && removedFieldConfigIds.contains(matchingConfigId)) {
-                // Trova l'ItemTypeSetRole FIELD_OWNERS per questa FieldConfiguration
-                Optional<com.example.demo.entity.ItemTypeSetRole> fieldOwnerRole = itemTypeSetRoleRepository
-                        .findByItemTypeSetIdAndRelatedEntityTypeAndRelatedEntityIdAndRoleTypeAndTenantId(
-                                itemTypeSetId, 
-                                "FieldConfiguration", 
-                                matchingConfigId, 
-                                com.example.demo.enums.ItemTypeSetRoleType.FIELD_OWNERS, 
-                                tenant.getId());
-                
-                if (fieldOwnerRole.isPresent() && fieldOwnerRole.get().getGrant() != null) {
-                    Long grantId = fieldOwnerRole.get().getGrant().getId();
-                    countedGrantIds.add(grantId);
-                }
+            if (perm.getGrantId() != null) {
+                countedGrantIds.add(perm.getGrantId());
             }
         }
-        
-        // Per FieldStatusPermissions (EDITORS/VIEWERS)
         for (FieldSetRemovalImpactDto.PermissionImpact perm : fieldStatusPermissions) {
-            if (perm.getFieldConfigurationId() != null) {
-                // Verifica che questa FieldConfiguration appartenga al FieldSet modificato E che verrà rimossa
-                if (fieldSetConfigIds.contains(perm.getFieldConfigurationId()) 
-                        && removedFieldConfigIds.contains(perm.getFieldConfigurationId())) {
-                    com.example.demo.enums.ItemTypeSetRoleType roleType = "EDITORS".equals(perm.getPermissionType()) 
-                            ? com.example.demo.enums.ItemTypeSetRoleType.EDITORS 
-                            : com.example.demo.enums.ItemTypeSetRoleType.VIEWERS;
-                    
-                    List<com.example.demo.entity.ItemTypeSetRole> editorsViewersRoles = itemTypeSetRoleRepository
-                            .findByItemTypeSetIdAndRoleTypeAndTenantId(perm.getItemTypeSetId(), roleType, tenant.getId());
-                    
-                    for (com.example.demo.entity.ItemTypeSetRole role : editorsViewersRoles) {
-                        if (role.getSecondaryEntityId() != null 
-                                && role.getSecondaryEntityId().equals(perm.getFieldConfigurationId())
-                                && "FieldConfiguration".equals(role.getSecondaryEntityType())) {
-                            if (role.getGrant() != null) {
-                                Long grantId = role.getGrant().getId();
-                                countedGrantIds.add(grantId);
-                            }
-                        }
-                    }
-                }
+            if (perm.getGrantId() != null) {
+                countedGrantIds.add(perm.getGrantId());
             }
         }
         
         int totalGrantAssignments = countedGrantIds.size();
         
+        // Calcola totalRoleAssignments usando assignedRoles dal DTO (già popolato da PermissionAssignment)
         int totalRoleAssignments = fieldOwnerPermissions.stream()
                 .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
                 .sum() + fieldStatusPermissions.stream()
@@ -816,8 +667,8 @@ public class FieldSetService {
         // Rimuovi FieldStatusPermissions orfane (escludendo quelle preservate)
         removeOrphanedFieldStatusPermissions(affectedItemTypeSets, removedFieldIds, preservedPermissionIds);
         
-        // Rimuovi ItemTypeSetRoles orfane (escludendo quelle preservate)
-        removeOrphanedItemTypeSetRoles(affectedItemTypeSets, removedFieldIds, preservedPermissionIds);
+        // RIMOSSO: removeOrphanedItemTypeSetRoles - ItemTypeSetRole eliminata
+        // removeOrphanedItemTypeSetRoles(affectedItemTypeSets, removedFieldIds, preservedPermissionIds);
     }
     
     private List<String> getFieldConfigurationNames(Set<Long> fieldConfigIds, Tenant tenant) {
@@ -870,7 +721,7 @@ public class FieldSetService {
                             .filter(p -> p.getItemTypeSetId().equals(itemTypeSetId))
                             .collect(Collectors.toList()));
                     
-                    // Calcola totali
+                    // Calcola totali usando assignedRoles dal DTO (già popolato da PermissionAssignment)
                     int totalPermissions = itsPermissions.size();
                     int totalRoleAssignments = itsPermissions.stream()
                             .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
@@ -903,18 +754,12 @@ public class FieldSetService {
                     int totalProjectGrants = 0;
                     
                     for (Project project : projects) {
-                        // Conta SOLO le grant di progetto per i ruoli rilevanti (associati alle permission rimosse)
-                        List<com.example.demo.entity.ProjectItemTypeSetRoleGrant> allProjectGrants = 
-                                projectItemTypeSetRoleGrantRepository.findByItemTypeSetIdAndProjectIdAndTenantId(
-                                        itemTypeSetId, project.getId(), tenant.getId());
+                        // RIMOSSO: ItemTypeSetRole eliminata - le grant di progetto sono ora gestite tramite ProjectPermissionAssignmentService
+                        // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
+                        // Per ora, non contiamo grant di progetto (totalProjectGrants rimane 0)
+                        int projectGrantsCount = 0;
                         
-                        // Filtra solo quelle per ruoli rilevanti
-                        long projectGrantsCount = allProjectGrants.stream()
-                                .filter(pg -> pg.getItemTypeSetRole() != null 
-                                        && relevantRoleIds.contains(pg.getItemTypeSetRole().getId()))
-                                .count();
-                        
-                        totalProjectGrants += (int) projectGrantsCount;
+                        totalProjectGrants += projectGrantsCount;
                         
                         if (projectGrantsCount > 0) {
                             projectImpacts.add(FieldSetRemovalImpactDto.ProjectImpact.builder()
@@ -973,12 +818,13 @@ public class FieldSetService {
                     
                     if (isRemoved || isOrphaned) {
                         Field field = permission.getField();
-                        // IMPORTANTE: assignedRoles è già caricato grazie al JOIN FETCH nella query
-                        List<String> assignedRoles = permission.getAssignedRoles() != null 
-                                ? permission.getAssignedRoles().stream()
-                                        .map(role -> role.getName())
-                                        .collect(Collectors.toList())
-                                : new ArrayList<>();
+                        // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
+                        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                                "FieldOwnerPermission", permission.getId(), itemTypeSet.getTenant());
+                        List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                                .map(Role::getName)
+                                .collect(Collectors.toList()))
+                                .orElse(new ArrayList<>());
                         
                         
                         // Solo se ha ruoli assegnati
@@ -1011,64 +857,23 @@ public class FieldSetService {
                             boolean canBePreserved = remainingFieldIds.contains(fieldId);
                             boolean defaultPreserve = canBePreserved && !assignedRoles.isEmpty();
                             
-                            // Trova l'ItemTypeSetRole FIELD_OWNERS corrispondente e le grant di progetto
+                            // RIMOSSO: ItemTypeSetRole eliminata - le grant sono ora gestite tramite PermissionAssignment
                             Long roleId = null;
                             Long globalGrantId = null;
                             String globalGrantName = null;
                             List<FieldSetRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
                             
-                            // Cerca TUTTI gli ItemTypeSetRole FIELD_OWNERS per questa FieldConfiguration
-                            // IMPORTANTE: Possono esserci multipli se lo stesso ItemTypeSet ha più ItemTypeConfiguration
-                            // che usano la stessa FieldConfiguration (stesso FieldSet)
-                            if (targetConfig != null) {
-                                // Trova tutti i ruoli FIELD_OWNERS per questa FieldConfiguration nello stesso ItemTypeSet
-                                List<ItemTypeSetRole> fieldOwnerRoles = itemTypeSetRoleRepository
-                                        .findByItemTypeSetIdAndRoleTypeAndTenantId(
-                                                itemTypeSet.getId(),
-                                                com.example.demo.enums.ItemTypeSetRoleType.FIELD_OWNERS,
-                                                itemTypeSet.getTenant().getId())
-                                        .stream()
-                                        .filter(role -> role.getRelatedEntityId() != null 
-                                                && role.getRelatedEntityId().equals(targetConfig.getId())
-                                                && "FieldConfiguration".equals(role.getRelatedEntityType()))
-                                        .collect(Collectors.toList());
-                                
-                                // Per ogni ruolo trovato, raccogli grant globali e di progetto
-                                Set<Long> processedProjectIds = new HashSet<>(); // Per evitare duplicati
-                                
-                                for (ItemTypeSetRole role : fieldOwnerRoles) {
-                                    // Usa il primo ruolo per roleId e grant globale (se non già impostati)
-                                    if (roleId == null) {
-                                        roleId = role.getId();
-                                        
-                                        // Grant globale
-                                        if (role.getGrant() != null) {
-                                            globalGrantId = role.getGrant().getId();
-                                            globalGrantName = role.getGrant().getRole() != null 
-                                                    ? role.getGrant().getRole().getName() 
-                                                    : "Grant globale";
-                                        }
-                                    }
-                                    
-                                    // Grant di progetto: trova TUTTE le grant di progetto per questo ruolo
-                                    List<ProjectItemTypeSetRoleGrant> allProjectGrantsForRole = 
-                                            projectItemTypeSetRoleGrantRepository.findByItemTypeSetRoleIdAndTenantId(
-                                                    role.getId(),
-                                                    itemTypeSet.getTenant().getId());
-                                    
-                                    // Per ogni grant di progetto trovata, aggiungi il progetto alla lista (evitando duplicati)
-                                    for (ProjectItemTypeSetRoleGrant projectGrant : allProjectGrantsForRole) {
-                                        if (projectGrant.getProject() != null && !processedProjectIds.contains(projectGrant.getProject().getId())) {
-                                            processedProjectIds.add(projectGrant.getProject().getId());
-                                            projectGrantsList.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
-                                                    .projectId(projectGrant.getProject().getId())
-                                                    .projectName(projectGrant.getProject().getName())
-                                                    .roleId(role.getId())
-                                                    .build());
-                                        }
-                                    }
-                                }
+                            // Recupera Grant globale da PermissionAssignment
+                            // Riutilizza assignmentOpt già definito sopra per i ruoli
+                            if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
+                                Grant grant = assignmentOpt.get().getGrant();
+                                globalGrantId = grant.getId();
+                                globalGrantName = grant.getRole() != null 
+                                        ? grant.getRole().getName() 
+                                        : "Grant globale";
                             }
+                            
+                            // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
                             
                             impacts.add(FieldSetRemovalImpactDto.PermissionImpact.builder()
                                     .permissionId(permission.getId())
@@ -1136,12 +941,13 @@ public class FieldSetService {
                         Field field = permission.getField();
                         WorkflowStatus workflowStatus = permission.getWorkflowStatus();
                         
-                        // IMPORTANTE: assignedRoles è già caricato grazie al JOIN FETCH nella query
-                        List<String> assignedRoles = permission.getAssignedRoles() != null 
-                                ? permission.getAssignedRoles().stream()
-                                        .map(role -> role.getName())
-                                        .collect(Collectors.toList())
-                                : new ArrayList<>();
+                        // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
+                        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                                "FieldStatusPermission", permission.getId(), itemTypeSet.getTenant());
+                        List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                                .map(Role::getName)
+                                .collect(Collectors.toList()))
+                                .orElse(new ArrayList<>());
                         
                         // Solo se ha ruoli assegnati
                         if (!assignedRoles.isEmpty()) {
@@ -1197,13 +1003,6 @@ public class FieldSetService {
         return impacts;
     }
     
-    private List<FieldSetRemovalImpactDto.PermissionImpact> analyzeItemTypeSetRoleImpacts(
-            List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldIds
-    ) {
-        return new ArrayList<>();
-    }
-    
     /**
      * Rimuove le FieldOwnerPermission orfane per Field rimossi
      */
@@ -1219,10 +1018,9 @@ public class FieldSetService {
                             .findByItemTypeConfigurationAndFieldId(config, fieldId);
                     
                     if (permission != null && !preservedPermissionIds.contains(permission.getId())) {
-                        // IMPORTANTE: Rimuovi prima i ruoli associati per assicurarti che vengano eliminati completamente
+                        // IMPORTANTE: Elimina prima PermissionAssignment per assicurarti che vengano eliminati completamente
                         // Questo previene che i ruoli vengano riassegnati quando si riaggiunge il Field
-                        permission.setAssignedRoles(new HashSet<>());
-                        fieldOwnerPermissionRepository.save(permission);
+                        permissionAssignmentService.deleteAssignment("FieldOwnerPermission", permission.getId(), itemTypeSet.getTenant());
                         // Poi elimina la permission
                         fieldOwnerPermissionRepository.delete(permission);
                     }
@@ -1252,9 +1050,8 @@ public class FieldSetService {
                                         config, field, workflowStatus, FieldStatusPermission.PermissionType.EDITORS);
                         
                         if (editorsPermission != null && !preservedPermissionIds.contains(editorsPermission.getId())) {
-                            // IMPORTANTE: Rimuovi prima i ruoli associati per assicurarti che vengano eliminati completamente
-                            editorsPermission.setAssignedRoles(new HashSet<>());
-                            fieldStatusPermissionRepository.save(editorsPermission);
+                            // IMPORTANTE: Elimina prima PermissionAssignment per assicurarti che vengano eliminati completamente
+                            permissionAssignmentService.deleteAssignment("FieldStatusPermission", editorsPermission.getId(), itemTypeSet.getTenant());
                             // Poi elimina la permission
                             fieldStatusPermissionRepository.delete(editorsPermission);
                         }
@@ -1265,9 +1062,8 @@ public class FieldSetService {
                                         config, field, workflowStatus, FieldStatusPermission.PermissionType.VIEWERS);
                         
                         if (viewersPermission != null && !preservedPermissionIds.contains(viewersPermission.getId())) {
-                            // IMPORTANTE: Rimuovi prima i ruoli associati per assicurarti che vengano eliminati completamente
-                            viewersPermission.setAssignedRoles(new HashSet<>());
-                            fieldStatusPermissionRepository.save(viewersPermission);
+                            // IMPORTANTE: Elimina prima PermissionAssignment per assicurarti che vengano eliminati completamente
+                            permissionAssignmentService.deleteAssignment("FieldStatusPermission", viewersPermission.getId(), itemTypeSet.getTenant());
                             // Poi elimina la permission
                             fieldStatusPermissionRepository.delete(viewersPermission);
                         }
@@ -1275,14 +1071,6 @@ public class FieldSetService {
                 }
             }
         }
-    }
-    
-    private void removeOrphanedItemTypeSetRoles(
-            List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedFieldIds,
-            Set<Long> preservedPermissionIds
-    ) {
-        // Method kept for consistency but not implemented as ItemTypeSetRoles are handled separately
     }
     
     /**

@@ -23,14 +23,8 @@ public class WorkerPermission {
     @JoinColumn(name = "itemtypeconfiguration_id", nullable = false)
     private ItemTypeConfiguration itemTypeConfiguration;
 
-    // Relazioni con ruoli personalizzati
-    @ManyToMany
-    @JoinTable(
-            name = "workerpermission_role",
-            joinColumns = @JoinColumn(name = "workerpermission_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
-    private Set<Role> assignedRoles = new HashSet<>();
+    // Nota: assignedRoles e grant sono ora gestiti tramite PermissionAssignment
+    // Usa PermissionAssignmentService per recuperare/gestire ruoli e grant
 
 }
 

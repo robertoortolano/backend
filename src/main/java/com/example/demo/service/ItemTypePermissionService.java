@@ -60,7 +60,7 @@ public class ItemTypePermissionService {
         
         WorkerPermission workerPermission = new WorkerPermission();
         workerPermission.setItemTypeConfiguration(itemTypeConfiguration);
-        workerPermission.setAssignedRoles(new HashSet<>());
+        // RIMOSSO: setAssignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
         
         workerPermissionRepository.save(workerPermission);
     }
@@ -83,7 +83,7 @@ public class ItemTypePermissionService {
                 StatusOwnerPermission permission = new StatusOwnerPermission();
                 permission.setItemTypeConfiguration(itemTypeConfiguration);
                 permission.setWorkflowStatus(workflowStatus);
-                permission.setAssignedRoles(new HashSet<>());
+                // RIMOSSO: setAssignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
                 
                 statusOwnerPermissionRepository.save(permission);
             }
@@ -110,7 +110,7 @@ public class ItemTypePermissionService {
                 FieldOwnerPermission permission = new FieldOwnerPermission();
                 permission.setItemTypeConfiguration(itemTypeConfiguration);
                 permission.setField(field);
-                permission.setAssignedRoles(new HashSet<>());
+                // RIMOSSO: setAssignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
                 
                 fieldOwnerPermissionRepository.save(permission);
             }
@@ -121,7 +121,7 @@ public class ItemTypePermissionService {
         if (!creatorPermissionRepository.existsByItemTypeConfigurationId(itemTypeConfiguration.getId())) {
             CreatorPermission permission = new CreatorPermission();
             permission.setItemTypeConfiguration(itemTypeConfiguration);
-            permission.setAssignedRoles(new HashSet<>());
+            // RIMOSSO: setAssignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
             
             creatorPermissionRepository.save(permission);
         }
@@ -143,7 +143,7 @@ public class ItemTypePermissionService {
                 ExecutorPermission permission = new ExecutorPermission();
                 permission.setItemTypeConfiguration(itemTypeConfiguration);
                 permission.setTransition(transition);
-                permission.setAssignedRoles(new HashSet<>());
+                // RIMOSSO: setAssignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
                 
                 executorPermissionRepository.save(permission);
             }
@@ -183,7 +183,7 @@ public class ItemTypePermissionService {
                     editorPerm.setField(field);
                     editorPerm.setWorkflowStatus(workflowStatus);
                     editorPerm.setPermissionType(FieldStatusPermission.PermissionType.EDITORS);
-                    editorPerm.setAssignedRoles(new HashSet<>());
+                    // RIMOSSO: setAssignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
                     
                     fieldStatusPermissionRepository.save(editorPerm);
                 }
@@ -198,7 +198,7 @@ public class ItemTypePermissionService {
                     viewerPerm.setField(field);
                     viewerPerm.setWorkflowStatus(workflowStatus);
                     viewerPerm.setPermissionType(FieldStatusPermission.PermissionType.VIEWERS);
-                    viewerPerm.setAssignedRoles(new HashSet<>());
+                    // RIMOSSO: setAssignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
                     
                     fieldStatusPermissionRepository.save(viewerPerm);
                 }

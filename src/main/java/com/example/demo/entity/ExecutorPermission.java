@@ -27,14 +27,8 @@ public class ExecutorPermission {
     @JoinColumn(name = "transition_id")
     private Transition transition;
 
-    // Relazioni con ruoli personalizzati
-    @ManyToMany
-    @JoinTable(
-            name = "executorpermission_role",
-            joinColumns = @JoinColumn(name = "executorpermission_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
-    private Set<Role> assignedRoles = new HashSet<>();
+    // Nota: assignedRoles e grant sono ora gestiti tramite PermissionAssignment
+    // Usa PermissionAssignmentService per recuperare/gestire ruoli e grant
 
 }
 

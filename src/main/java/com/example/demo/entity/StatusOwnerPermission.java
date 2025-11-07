@@ -27,14 +27,8 @@ public class StatusOwnerPermission {
     @JoinColumn(name = "workflowstatus_id", nullable = false)
     private WorkflowStatus workflowStatus;
 
-    // Relazioni con ruoli personalizzati
-    @ManyToMany
-    @JoinTable(
-            name = "statusownerpermission_role",
-            joinColumns = @JoinColumn(name = "statusownerpermission_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
-    private Set<Role> assignedRoles = new HashSet<>();
+    // Nota: assignedRoles e grant sono ora gestiti tramite PermissionAssignment
+    // Usa PermissionAssignmentService per recuperare/gestire ruoli e grant
 
 }
 

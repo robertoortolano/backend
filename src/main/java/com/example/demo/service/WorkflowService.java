@@ -35,8 +35,9 @@ public class WorkflowService {
     private final StatusOwnerPermissionRepository statusOwnerPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
     private final ExecutorPermissionRepository executorPermissionRepository;
-    private final ProjectItemTypeSetRoleGrantRepository projectItemTypeSetRoleGrantRepository;
-    private final ItemTypeSetRoleRepository itemTypeSetRoleRepository;
+    
+    // Servizi per PermissionAssignment (nuova struttura)
+    private final PermissionAssignmentService permissionAssignmentService;
 
     @Transactional
     public WorkflowViewDto createGlobal(WorkflowCreateDto dto, Tenant tenant) {
@@ -725,7 +726,7 @@ public class WorkflowService {
             StatusOwnerPermission permission = new StatusOwnerPermission();
             permission.setItemTypeConfiguration(config);
             permission.setWorkflowStatus(workflowStatus);
-            permission.setAssignedRoles(new HashSet<>());
+            // RIMOSSO: setAssignedRoles - i ruoli sono ora gestiti tramite PermissionAssignmentService
             
             statusOwnerPermissionRepository.save(permission);
         }
@@ -777,7 +778,7 @@ public class WorkflowService {
             permission.setField(field);
             permission.setWorkflowStatus(workflowStatus);
             permission.setPermissionType(permissionType);
-            permission.setAssignedRoles(new HashSet<>());
+            // RIMOSSO: setAssignedRoles - i ruoli sono ora gestiti tramite PermissionAssignmentService
             
             fieldStatusPermissionRepository.save(permission);
         }
@@ -864,7 +865,7 @@ public class WorkflowService {
             ExecutorPermission permission = new ExecutorPermission();
             permission.setItemTypeConfiguration(config);
             permission.setTransition(transition);
-            permission.setAssignedRoles(new HashSet<>());
+            // RIMOSSO: setAssignedRoles - i ruoli sono ora gestiti tramite PermissionAssignmentService
             
             executorPermissionRepository.save(permission);
         }
@@ -901,7 +902,7 @@ public class WorkflowService {
                 .filter(its -> itemTypeSetIdsWithImpact.contains(its.getId()))
                 .collect(Collectors.toList());
         
-        // Calcola le statistiche
+        // Calcola le statistiche usando assignedRoles dal DTO (già popolato da PermissionAssignment)
         int totalExecutorPermissions = executorPermissions.size();
         int totalRoleAssignments = executorPermissions.stream()
                 .mapToInt(perm -> perm.getAssignedRoles() != null ? perm.getAssignedRoles().size() : 0)
@@ -961,60 +962,32 @@ public class WorkflowService {
                 for (ExecutorPermission permission : permissions) {
                     Transition transition = permission.getTransition();
                     
-                    // Raccogli ruoli assegnati
-                    List<String> assignedRoles = permission.getAssignedRoles().stream()
-                            .map(Role::getName)
-                            .collect(Collectors.toList());
+                    // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
+                    Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                            "ExecutorPermission", permission.getId(), itemTypeSet.getTenant());
                     
-                    // Trova l'ItemTypeSetRole EXECUTORS corrispondente
-                    Long roleId = null;
+                    List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                            .map(Role::getName)
+                            .collect(Collectors.toList()))
+                            .orElse(new ArrayList<>());
+                    
+                    // Recupera Grant globale se presente
                     Long globalGrantId = null;
                     String globalGrantName = null;
-                    List<TransitionRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
+                        Grant grant = assignmentOpt.get().getGrant();
+                        globalGrantId = grant.getId();
+                        globalGrantName = grant.getRole() != null 
+                                ? grant.getRole().getName() 
+                                : "Grant globale";
+                    }
                     
-                    List<ItemTypeSetRole> executorRoles = itemTypeSetRoleRepository
-                            .findByItemTypeSetIdAndRoleTypeAndTenantId(
-                                    itemTypeSet.getId(),
-                                    com.example.demo.enums.ItemTypeSetRoleType.EXECUTORS,
-                                    itemTypeSet.getTenant().getId())
-                            .stream()
-                            .filter(role -> role.getRelatedEntityId() != null 
-                                    && role.getRelatedEntityId().equals(transition.getId())
-                                    && "Transition".equals(role.getRelatedEntityType()))
-                            .collect(Collectors.toList());
+                    // Grant di progetto (TODO: implementare con ProjectPermissionAssignment)
+                    List<TransitionRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
                     
                     Set<Long> processedProjectIds = new HashSet<>();
                     
-                    for (ItemTypeSetRole role : executorRoles) {
-                        if (roleId == null) {
-                            roleId = role.getId();
-                            
-                            // Grant globale
-                            if (role.getGrant() != null) {
-                                globalGrantId = role.getGrant().getId();
-                                globalGrantName = role.getGrant().getRole() != null 
-                                        ? role.getGrant().getRole().getName() 
-                                        : "Grant globale";
-                            }
-                        }
-                        
-                        // Grant di progetto
-                        List<ProjectItemTypeSetRoleGrant> allProjectGrantsForRole = 
-                                projectItemTypeSetRoleGrantRepository.findByItemTypeSetRoleIdAndTenantId(
-                                        role.getId(),
-                                        itemTypeSet.getTenant().getId());
-                        
-                        for (ProjectItemTypeSetRoleGrant projectGrant : allProjectGrantsForRole) {
-                            if (projectGrant.getProject() != null && !processedProjectIds.contains(projectGrant.getProject().getId())) {
-                                processedProjectIds.add(projectGrant.getProject().getId());
-                                projectGrantsList.add(TransitionRemovalImpactDto.ProjectGrantInfo.builder()
-                                        .projectId(projectGrant.getProject().getId())
-                                        .projectName(projectGrant.getProject().getName())
-                                        .roleId(role.getId())
-                                        .build());
-                            }
-                        }
-                    }
                     
                     // Calcola hasAssignments: true se ha ruoli O grant
                     boolean hasRoles = !assignedRoles.isEmpty();
@@ -1045,7 +1018,7 @@ public class WorkflowService {
                                 .transitionName(transitionNameOnly)
                                 .fromStatusName(transition.getFromStatus().getStatus().getName())
                                 .toStatusName(transition.getToStatus().getStatus().getName())
-                                .roleId(roleId)
+                                .roleId(null) // Non più usato con PermissionAssignment
                                 .grantId(globalGrantId)
                                 .grantName(globalGrantName)
                                 .assignedRoles(assignedRoles)
@@ -1287,6 +1260,7 @@ public class WorkflowService {
         int totalStatusOwnerPermissions = statusOwnerPermissions.size();
         int totalExecutorPermissions = executorPermissions.size();
         int totalFieldStatusPermissions = fieldStatusPermissions.size();
+        // Calcola totalRoleAssignments usando assignedRoles dal DTO (già popolato da PermissionAssignment)
         int totalRoleAssignments = statusOwnerPermissions.stream()
                 .mapToInt(perm -> perm.getAssignedRoles() != null ? perm.getAssignedRoles().size() : 0)
                 .sum() + executorPermissions.stream()
@@ -1494,60 +1468,32 @@ public class WorkflowService {
                 for (StatusOwnerPermission permission : permissions) {
                     WorkflowStatus workflowStatus = permission.getWorkflowStatus();
                     
-                    // Raccogli ruoli assegnati
-                    List<String> assignedRoles = permission.getAssignedRoles().stream()
-                            .map(Role::getName)
-                            .collect(Collectors.toList());
+                    // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
+                    Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                            "StatusOwnerPermission", permission.getId(), itemTypeSet.getTenant());
                     
-                    // Trova l'ItemTypeSetRole STATUS_OWNERS corrispondente
-                    Long roleId = null;
+                    List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                            .map(Role::getName)
+                            .collect(Collectors.toList()))
+                            .orElse(new ArrayList<>());
+                    
+                    // Recupera Grant globale se presente
                     Long globalGrantId = null;
                     String globalGrantName = null;
-                    List<StatusRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
+                        Grant grant = assignmentOpt.get().getGrant();
+                        globalGrantId = grant.getId();
+                        globalGrantName = grant.getRole() != null 
+                                ? grant.getRole().getName() 
+                                : "Grant globale";
+                    }
                     
-                    List<ItemTypeSetRole> statusOwnerRoles = itemTypeSetRoleRepository
-                            .findByItemTypeSetIdAndRoleTypeAndTenantId(
-                                    itemTypeSet.getId(),
-                                    com.example.demo.enums.ItemTypeSetRoleType.STATUS_OWNERS,
-                                    itemTypeSet.getTenant().getId())
-                            .stream()
-                            .filter(role -> role.getRelatedEntityId() != null 
-                                    && role.getRelatedEntityId().equals(workflowStatus.getId())
-                                    && "WorkflowStatus".equals(role.getRelatedEntityType()))
-                            .collect(Collectors.toList());
+                    // Grant di progetto (TODO: implementare con ProjectPermissionAssignment)
+                    List<StatusRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
                     
                     Set<Long> processedProjectIds = new HashSet<>();
                     
-                    for (ItemTypeSetRole role : statusOwnerRoles) {
-                        if (roleId == null) {
-                            roleId = role.getId();
-                            
-                            // Grant globale
-                            if (role.getGrant() != null) {
-                                globalGrantId = role.getGrant().getId();
-                                globalGrantName = role.getGrant().getRole() != null 
-                                        ? role.getGrant().getRole().getName() 
-                                        : "Grant globale";
-                            }
-                        }
-                        
-                        // Grant di progetto
-                        List<ProjectItemTypeSetRoleGrant> allProjectGrantsForRole = 
-                                projectItemTypeSetRoleGrantRepository.findByItemTypeSetRoleIdAndTenantId(
-                                        role.getId(),
-                                        itemTypeSet.getTenant().getId());
-                        
-                        for (ProjectItemTypeSetRoleGrant projectGrant : allProjectGrantsForRole) {
-                            if (projectGrant.getProject() != null && !processedProjectIds.contains(projectGrant.getProject().getId())) {
-                                processedProjectIds.add(projectGrant.getProject().getId());
-                                projectGrantsList.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
-                                        .projectId(projectGrant.getProject().getId())
-                                        .projectName(projectGrant.getProject().getName())
-                                        .roleId(role.getId())
-                                        .build());
-                            }
-                        }
-                    }
                     
                     // Calcola hasAssignments: true se ha ruoli O grant
                     boolean hasRoles = !assignedRoles.isEmpty();
@@ -1572,7 +1518,7 @@ public class WorkflowService {
                                 .workflowStatusName(workflowStatus.getStatus().getName())
                                 .statusName(workflowStatus.getStatus().getName())
                                 .statusCategory(workflowStatus.getStatusCategory().toString())
-                                .roleId(roleId)
+                                .roleId(null) // Non più usato con PermissionAssignment
                                 .grantId(globalGrantId)
                                 .grantName(globalGrantName)
                                 .assignedRoles(assignedRoles)
@@ -1634,19 +1580,32 @@ public class WorkflowService {
                         continue;
                     }
                     
-                    // Raccogli ruoli assegnati
-                    List<String> assignedRoles = permission.getAssignedRoles().stream()
-                            .map(Role::getName)
-                            .collect(Collectors.toList());
+                    // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
+                    Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                            "FieldStatusPermission", permission.getId(), itemTypeSet.getTenant());
                     
-                    // Trova l'ItemTypeSetRole EDITORS/VIEWERS corrispondente
-                    Long roleId = null;
-                    String roleName = null;
+                    List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                            .map(Role::getName)
+                            .collect(Collectors.toList()))
+                            .orElse(new ArrayList<>());
+                    
+                    // Recupera Grant globale se presente
                     Long globalGrantId = null;
                     String globalGrantName = null;
-                    List<StatusRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
+                        Grant grant = assignmentOpt.get().getGrant();
+                        globalGrantId = grant.getId();
+                        globalGrantName = grant.getRole() != null 
+                                ? grant.getRole().getName() 
+                                : "Grant globale";
+                    }
                     
-                    // Trova la FieldConfiguration nel FieldSet
+                    // Grant di progetto (TODO: implementare con ProjectPermissionAssignment)
+                    List<StatusRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
+                    
+                    // Rimuovi la logica ItemTypeSetRole (obsoleta)
+                    // Trova la FieldConfiguration nel FieldSet (per info, non più per ItemTypeSetRole)
                     Field field = permission.getField();
                     final FieldConfiguration fieldConfig;
                     if (config.getFieldSet() != null && config.getFieldSet().getFieldSetEntries() != null) {
@@ -1659,69 +1618,7 @@ public class WorkflowService {
                         fieldConfig = null;
                     }
                     
-                    if (fieldConfig != null) {
-                        // Determina il tipo di ruolo (EDITORS o VIEWERS)
-                        com.example.demo.enums.ItemTypeSetRoleType roleType = 
-                                permission.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS
-                                ? com.example.demo.enums.ItemTypeSetRoleType.EDITORS
-                                : com.example.demo.enums.ItemTypeSetRoleType.VIEWERS;
-                        
-                        // Trova l'ItemTypeSetRole corrispondente
-                        // Richiede tertiaryEntityId (ruoli creati dopo la modifica)
-                        List<ItemTypeSetRole> fieldStatusRoles = itemTypeSetRoleRepository
-                                .findByItemTypeSetIdAndRoleTypeAndTenantId(
-                                        itemTypeSet.getId(),
-                                        roleType,
-                                        itemTypeSet.getTenant().getId())
-                                .stream()
-                                .filter(role -> role.getRelatedEntityType() != null 
-                                        && role.getRelatedEntityType().equals("ItemTypeConfiguration")
-                                        && role.getRelatedEntityId() != null
-                                        && role.getRelatedEntityId().equals(config.getId())
-                                        && role.getSecondaryEntityType() != null
-                                        && role.getSecondaryEntityType().equals("FieldConfiguration")
-                                        && role.getSecondaryEntityId() != null
-                                        && role.getSecondaryEntityId().equals(fieldConfig.getId())
-                                        && role.getTertiaryEntityType() != null
-                                        && role.getTertiaryEntityType().equals("WorkflowStatus")
-                                        && role.getTertiaryEntityId() != null
-                                        && role.getTertiaryEntityId().equals(workflowStatus.getId()))
-                                .collect(Collectors.toList());
-                        
-                        Set<Long> processedProjectIds = new HashSet<>();
-                        
-                        for (ItemTypeSetRole role : fieldStatusRoles) {
-                            if (roleId == null) {
-                                roleId = role.getId();
-                                roleName = role.getRoleTemplate() != null ? role.getRoleTemplate().getName() : null;
-                                
-                                // Grant globale
-                                if (role.getGrant() != null) {
-                                    globalGrantId = role.getGrant().getId();
-                                    globalGrantName = role.getGrant().getRole() != null 
-                                            ? role.getGrant().getRole().getName() 
-                                            : "Grant globale";
-                                }
-                            }
-                            
-                            // Grant di progetto
-                            List<ProjectItemTypeSetRoleGrant> allProjectGrantsForRole = 
-                                    projectItemTypeSetRoleGrantRepository.findByItemTypeSetRoleIdAndTenantId(
-                                            role.getId(),
-                                            itemTypeSet.getTenant().getId());
-                            
-                            for (ProjectItemTypeSetRoleGrant projectGrant : allProjectGrantsForRole) {
-                                if (projectGrant.getProject() != null && !processedProjectIds.contains(projectGrant.getProject().getId())) {
-                                    processedProjectIds.add(projectGrant.getProject().getId());
-                                    projectGrantsList.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
-                                            .projectId(projectGrant.getProject().getId())
-                                            .projectName(projectGrant.getProject().getName())
-                                            .roleId(role.getId())
-                                            .build());
-                                }
-                            }
-                        }
-                    }
+                    // fieldConfig è disponibile per info, ma non più necessario per ItemTypeSetRole
                     
                     // Calcola hasAssignments: true se ha ruoli O grant
                     boolean hasRoles = !assignedRoles.isEmpty();
@@ -1746,8 +1643,8 @@ public class WorkflowService {
                                 .workflowStatusId(workflowStatus.getId())
                                 .workflowStatusName(workflowStatus.getStatus().getName())
                                 .statusName(workflowStatus.getStatus().getName())
-                                .roleId(roleId)
-                                .roleName(roleName)
+                                .roleId(null) // Non più usato con PermissionAssignment
+                                .roleName(null) // Non più usato con PermissionAssignment
                                 .grantId(globalGrantId)
                                 .grantName(globalGrantName)
                                 .assignedRoles(assignedRoles)

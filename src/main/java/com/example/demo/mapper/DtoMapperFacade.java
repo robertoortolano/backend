@@ -39,7 +39,7 @@ public class DtoMapperFacade {
     private final UserResponseMapper userResponseMapper;
     private final GroupSimpleMapper groupSimpleMapper;
     private final GroupMapper groupMapper;
-    private final ItemTypeSetRoleMapper itemTypeSetRoleMapper;
+    // RIMOSSO: ItemTypeSetRoleMapper eliminato - ItemTypeSetRole eliminata
     private final TenantMapper tenantMapper;
     private final RoleMapper roleMapper;
     private final ProjectMemberMapper projectMemberMapper;
@@ -298,24 +298,7 @@ public class DtoMapperFacade {
         groupMapper.updateGroupFromDto(dto, group);
     }
 
-    // ---------------------
-    // ItemTypeSetRole
-    // ---------------------
-    public ItemTypeSetRoleDTO toItemTypeSetRoleDTO(ItemTypeSetRole role) {
-        return itemTypeSetRoleMapper.toDTO(role);
-    }
-
-    public List<ItemTypeSetRoleDTO> toItemTypeSetRoleDTOs(List<ItemTypeSetRole> roles) {
-        return itemTypeSetRoleMapper.toDTOList(roles);
-    }
-
-    public ItemTypeSetRole toItemTypeSetRole(ItemTypeSetRoleDTO dto) {
-        return itemTypeSetRoleMapper.toEntity(dto);
-    }
-
-    public void updateItemTypeSetRole(ItemTypeSetRoleDTO dto, ItemTypeSetRole entity) {
-        itemTypeSetRoleMapper.updateEntity(dto, entity);
-    }
+    // RIMOSSO: Metodi ItemTypeSetRole eliminati - ItemTypeSetRole eliminata
 
 
     // ---------------------

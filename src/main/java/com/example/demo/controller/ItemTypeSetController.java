@@ -7,7 +7,6 @@ import com.example.demo.entity.Tenant;
 import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.security.CurrentTenant;
 import com.example.demo.service.ItemTypeSetService;
-import com.example.demo.service.ItemTypeSetRoleService;
 import com.example.demo.service.ItemTypeSetPermissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +24,6 @@ public class ItemTypeSetController {
 
     private final ItemTypeSetService itemTypeSetService;
     private final DtoMapperFacade dtoMapper;
-    private final ItemTypeSetRoleService itemTypeSetRoleService;
     private final ItemTypeSetPermissionService itemTypeSetPermissionService;
 
     @GetMapping("/global")

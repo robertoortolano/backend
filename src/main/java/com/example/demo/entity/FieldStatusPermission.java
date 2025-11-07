@@ -35,15 +35,8 @@ public class FieldStatusPermission {
     @Column(nullable = false)
     private PermissionType permissionType; // EDITORS o VIEWERS
 
-    // Relazioni con ruoli personalizzati
-    @ManyToMany
-    @JoinTable(
-            name = "fieldstatuspermission_role",
-            joinColumns = @JoinColumn(name = "fieldstatuspermission_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
-    private Set<Role> assignedRoles = new HashSet<>();
-
+    // Nota: assignedRoles e grant sono ora gestiti tramite PermissionAssignment
+    // Usa PermissionAssignmentService per recuperare/gestire ruoli e grant
 
     public enum PermissionType {
         EDITORS,

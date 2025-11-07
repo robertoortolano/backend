@@ -61,7 +61,7 @@ public class ItemTypeSetPermissionController {
             @RequestParam Long roleId,
             @RequestParam(required = false) String permissionType,
             @CurrentTenant Tenant tenant) {
-        itemTypeSetPermissionService.assignRoleToPermission(permissionId, roleId, permissionType);
+        itemTypeSetPermissionService.assignRoleToPermission(permissionId, roleId, permissionType, tenant);
         return ResponseEntity.ok("Role assigned successfully to permission");
     }
     
@@ -87,7 +87,7 @@ public class ItemTypeSetPermissionController {
             @RequestParam Long roleId,
             @RequestParam(required = false) String permissionType,
             @CurrentTenant Tenant tenant) {
-        itemTypeSetPermissionService.removeRoleFromPermission(permissionId, roleId, permissionType);
+        itemTypeSetPermissionService.removeRoleFromPermission(permissionId, roleId, permissionType, tenant);
         return ResponseEntity.ok("Role removed successfully from permission");
     }
 }

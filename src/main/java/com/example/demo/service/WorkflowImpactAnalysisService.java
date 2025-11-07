@@ -2,7 +2,7 @@ package com.example.demo.service;
 
 import com.example.demo.dto.*;
 import com.example.demo.entity.*;
-import com.example.demo.enums.ItemTypeSetRoleType;
+// RIMOSSO: ItemTypeSetRoleType eliminato - ItemTypeSetRole eliminata
 import com.example.demo.exception.ApiException;
 import com.example.demo.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -28,9 +28,10 @@ public class WorkflowImpactAnalysisService {
     private final StatusOwnerPermissionRepository statusOwnerPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
     private final ExecutorPermissionRepository executorPermissionRepository;
-    private final ProjectItemTypeSetRoleGrantRepository projectItemTypeSetRoleGrantRepository;
-    private final ItemTypeSetRoleRepository itemTypeSetRoleRepository;
     private final ItemTypeConfigurationLookup itemTypeConfigurationLookup;
+    
+    // Servizi per PermissionAssignment (nuova struttura)
+    private final PermissionAssignmentService permissionAssignmentService;
 
     /**
      * Analyzes the impact of removing workflow statuses
@@ -132,7 +133,7 @@ public class WorkflowImpactAnalysisService {
                 .filter(its -> itemTypeSetIdsWithImpact.contains(its.getId()))
                 .collect(Collectors.toList());
         
-        // Calculate statistics
+        // Calculate statistics using assignedRoles from DTO (already populated from PermissionAssignment)
         int totalStatusOwnerPermissions = statusOwnerPermissions.size();
         int totalExecutorPermissions = executorPermissions.size();
         int totalFieldStatusPermissions = fieldStatusPermissions.size();
@@ -209,7 +210,7 @@ public class WorkflowImpactAnalysisService {
                 .filter(its -> itemTypeSetIdsWithImpact.contains(its.getId()))
                 .collect(Collectors.toList());
         
-        // Calculate statistics
+        // Calculate statistics using assignedRoles from DTO (already populated from PermissionAssignment)
         int totalExecutorPermissions = executorPermissions.size();
         int totalRoleAssignments = executorPermissions.stream()
                 .mapToInt(perm -> perm.getAssignedRoles() != null ? perm.getAssignedRoles().size() : 0)
@@ -256,23 +257,9 @@ public class WorkflowImpactAnalysisService {
                         continue;
                     }
                     
-                    // Find ItemTypeSetRole for this permission
-                    ItemTypeSetRoleType roleType = ItemTypeSetRoleType.STATUS_OWNERS;
-                    List<ItemTypeSetRole> roles = itemTypeSetRoleRepository
-                            .findByItemTypeSetIdAndRoleTypeAndTenantId(
-                                    itemTypeSet.getId(),
-                                    roleType,
-                                    itemTypeSet.getTenant().getId())
-                            .stream()
-                            .filter(role -> role.getRelatedEntityType() != null
-                                    && role.getRelatedEntityType().equals("ItemTypeConfiguration")
-                                    && role.getRelatedEntityId() != null
-                                    && role.getRelatedEntityId().equals(config.getId())
-                                    && role.getSecondaryEntityType() != null
-                                    && role.getSecondaryEntityType().equals("WorkflowStatus")
-                                    && role.getSecondaryEntityId() != null
-                                    && role.getSecondaryEntityId().equals(workflowStatus.getId()))
-                            .collect(Collectors.toList());
+                    // RIMOSSO: ItemTypeSetRole eliminata - recupera ruoli e grant da PermissionAssignment
+                    Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                            "StatusOwnerPermission", perm.getId(), itemTypeSet.getTenant());
                     
                     // Collect role and grant information
                     List<String> assignedRoles = new ArrayList<>();
@@ -282,30 +269,26 @@ public class WorkflowImpactAnalysisService {
                     String grantName = null;
                     List<StatusRemovalImpactDto.ProjectGrantInfo> projectGrants = new ArrayList<>();
                     
-                    for (ItemTypeSetRole role : roles) {
-                        if (roleId == null) {
-                            roleId = role.getId();
-                            roleName = role.getName();
-                        }
-                        assignedRoles.add(role.getName());
-                        
-                        // Find global grant
-                        if (grantId == null) {
-                            // Check for global grant
-                            // Implementation depends on Grant structure
+                    if (assignmentOpt.isPresent()) {
+                        PermissionAssignment assignment = assignmentOpt.get();
+                        // Recupera ruoli
+                        for (Role role : assignment.getRoles()) {
+                            if (roleId == null) {
+                                roleId = role.getId();
+                                roleName = role.getName();
+                            }
+                            assignedRoles.add(role.getName());
                         }
                         
-                        // Find project grants, filtrati per Tenant (sicurezza)
-                        List<ProjectItemTypeSetRoleGrant> projectGrantsList = projectItemTypeSetRoleGrantRepository
-                                .findByItemTypeSetRoleIdAndTenantId(role.getId(), itemTypeSet.getTenant().getId());
-                        for (ProjectItemTypeSetRoleGrant projectGrant : projectGrantsList) {
-                            projectGrants.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
-                                    .projectId(projectGrant.getProject().getId())
-                                    .projectName(projectGrant.getProject().getName())
-                                    .roleId(role.getId())
-                                    .build());
+                        // Recupera grant globale
+                        if (assignment.getGrant() != null) {
+                            Grant grant = assignment.getGrant();
+                            grantId = grant.getId();
+                            grantName = grant.getRole() != null ? grant.getRole().getName() : "Grant globale";
                         }
                     }
+                    
+                    // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
                     
                     boolean hasAssignments = !assignedRoles.isEmpty() || grantId != null || !projectGrants.isEmpty();
                     boolean canBePreserved = hasAssignments; // Can preserve if has assignments
@@ -399,33 +382,9 @@ public class WorkflowImpactAnalysisService {
                     }
                     
                     if (fieldConfig != null) {
-                        // Determine role type (EDITORS or VIEWERS)
-                        ItemTypeSetRoleType roleType = 
-                                perm.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS
-                                ? ItemTypeSetRoleType.EDITORS
-                                : ItemTypeSetRoleType.VIEWERS;
-                        
-                        // Find ItemTypeSetRole for this permission
-                        // Requires tertiaryEntityId (roles created after modification)
-                        List<ItemTypeSetRole> fieldStatusRoles = itemTypeSetRoleRepository
-                                .findByItemTypeSetIdAndRoleTypeAndTenantId(
-                                        itemTypeSet.getId(),
-                                        roleType,
-                                        itemTypeSet.getTenant().getId())
-                                .stream()
-                                .filter(role -> role.getRelatedEntityType() != null
-                                        && role.getRelatedEntityType().equals("ItemTypeConfiguration")
-                                        && role.getRelatedEntityId() != null
-                                        && role.getRelatedEntityId().equals(config.getId())
-                                        && role.getSecondaryEntityType() != null
-                                        && role.getSecondaryEntityType().equals("FieldConfiguration")
-                                        && role.getSecondaryEntityId() != null
-                                        && role.getSecondaryEntityId().equals(fieldConfig.getId())
-                                        && role.getTertiaryEntityType() != null
-                                        && role.getTertiaryEntityType().equals("WorkflowStatus")
-                                        && role.getTertiaryEntityId() != null
-                                        && role.getTertiaryEntityId().equals(workflowStatus.getId()))
-                                .collect(Collectors.toList());
+                        // RIMOSSO: ItemTypeSetRole eliminata - recupera ruoli e grant da PermissionAssignment
+                        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                                "FieldStatusPermission", perm.getId(), itemTypeSet.getTenant());
                         
                         // Collect role and grant information
                         List<String> assignedRoles = new ArrayList<>();
@@ -435,24 +394,26 @@ public class WorkflowImpactAnalysisService {
                         String grantName = null;
                         List<StatusRemovalImpactDto.ProjectGrantInfo> projectGrants = new ArrayList<>();
                         
-                        for (ItemTypeSetRole role : fieldStatusRoles) {
-                            if (roleId == null) {
-                                roleId = role.getId();
-                                roleName = role.getName();
+                        if (assignmentOpt.isPresent()) {
+                            PermissionAssignment assignment = assignmentOpt.get();
+                            // Recupera ruoli
+                            for (Role role : assignment.getRoles()) {
+                                if (roleId == null) {
+                                    roleId = role.getId();
+                                    roleName = role.getName();
+                                }
+                                assignedRoles.add(role.getName());
                             }
-                            assignedRoles.add(role.getName());
                             
-                            // Find project grants, filtrati per Tenant (sicurezza)
-                            List<ProjectItemTypeSetRoleGrant> projectGrantsList = projectItemTypeSetRoleGrantRepository
-                                    .findByItemTypeSetRoleIdAndTenantId(role.getId(), itemTypeSet.getTenant().getId());
-                            for (ProjectItemTypeSetRoleGrant projectGrant : projectGrantsList) {
-                                projectGrants.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
-                                        .projectId(projectGrant.getProject().getId())
-                                        .projectName(projectGrant.getProject().getName())
-                                        .roleId(role.getId())
-                                        .build());
+                            // Recupera grant globale
+                            if (assignment.getGrant() != null) {
+                                Grant grant = assignment.getGrant();
+                                grantId = grant.getId();
+                                grantName = grant.getRole() != null ? grant.getRole().getName() : "Grant globale";
                             }
                         }
+                        
+                        // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
                         
                         // Calculate hasAssignments: true if has roles OR grant
                         boolean hasRoles = !assignedRoles.isEmpty();
@@ -517,23 +478,9 @@ public class WorkflowImpactAnalysisService {
                         continue;
                     }
                     
-                    // Find ItemTypeSetRole for this permission
-                    ItemTypeSetRoleType roleType = ItemTypeSetRoleType.EXECUTORS;
-                    List<ItemTypeSetRole> roles = itemTypeSetRoleRepository
-                            .findByItemTypeSetIdAndRoleTypeAndTenantId(
-                                    itemTypeSet.getId(),
-                                    roleType,
-                                    itemTypeSet.getTenant().getId())
-                            .stream()
-                            .filter(role -> role.getRelatedEntityType() != null
-                                    && role.getRelatedEntityType().equals("ItemTypeConfiguration")
-                                    && role.getRelatedEntityId() != null
-                                    && role.getRelatedEntityId().equals(config.getId())
-                                    && role.getSecondaryEntityType() != null
-                                    && role.getSecondaryEntityType().equals("Transition")
-                                    && role.getSecondaryEntityId() != null
-                                    && role.getSecondaryEntityId().equals(transition.getId()))
-                            .collect(Collectors.toList());
+                    // RIMOSSO: ItemTypeSetRole eliminata - recupera ruoli e grant da PermissionAssignment
+                    Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                            "ExecutorPermission", perm.getId(), itemTypeSet.getTenant());
                     
                     // Collect role and grant information
                     List<String> assignedRoles = new ArrayList<>();
@@ -543,24 +490,26 @@ public class WorkflowImpactAnalysisService {
                     String grantName = null;
                     List<TransitionRemovalImpactDto.ProjectGrantInfo> projectGrants = new ArrayList<>();
                     
-                    for (ItemTypeSetRole role : roles) {
-                        if (roleId == null) {
-                            roleId = role.getId();
-                            roleName = role.getName();
+                    if (assignmentOpt.isPresent()) {
+                        PermissionAssignment assignment = assignmentOpt.get();
+                        // Recupera ruoli
+                        for (Role role : assignment.getRoles()) {
+                            if (roleId == null) {
+                                roleId = role.getId();
+                                roleName = role.getName();
+                            }
+                            assignedRoles.add(role.getName());
                         }
-                        assignedRoles.add(role.getName());
                         
-                        // Find project grants, filtrati per Tenant (sicurezza)
-                        List<ProjectItemTypeSetRoleGrant> projectGrantsList = projectItemTypeSetRoleGrantRepository
-                                .findByItemTypeSetRoleIdAndTenantId(role.getId(), itemTypeSet.getTenant().getId());
-                        for (ProjectItemTypeSetRoleGrant projectGrant : projectGrantsList) {
-                            projectGrants.add(TransitionRemovalImpactDto.ProjectGrantInfo.builder()
-                                    .projectId(projectGrant.getProject().getId())
-                                    .projectName(projectGrant.getProject().getName())
-                                    .roleId(role.getId())
-                                    .build());
+                        // Recupera grant globale
+                        if (assignment.getGrant() != null) {
+                            Grant grant = assignment.getGrant();
+                            grantId = grant.getId();
+                            grantName = grant.getRole() != null ? grant.getRole().getName() : "Grant globale";
                         }
                     }
+                    
+                    // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
                     
                     boolean hasAssignments = !assignedRoles.isEmpty() || grantId != null || !projectGrants.isEmpty();
                     boolean canBePreserved = hasAssignments;
