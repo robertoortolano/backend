@@ -453,7 +453,7 @@ public class ItemTypeConfigurationMigrationService {
                     
                     // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
                     Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                            "FieldOwnerPermission", perm.getId(), tenant);
+                            "StatusOwnerPermission", perm.getId(), tenant);
                     List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
                             .map(Role::getName)
                             .collect(Collectors.toList()))
@@ -544,8 +544,10 @@ public class ItemTypeConfigurationMigrationService {
                 .map(ItemTypeConfigurationMigrationImpactDto.WorkflowStatusInfo::getWorkflowStatusId)
                 .collect(Collectors.toSet());
         
+        // IMPORTANTE: Per FieldStatusPermission, usiamo Status.id (non WorkflowStatus.id) per il matching
+        // perché lo stesso Status può esistere in workflow diversi con WorkflowStatus diversi
         Set<Long> newStatusIds = newWorkflowInfo.getWorkflowStatuses().stream()
-                .map(ItemTypeConfigurationMigrationImpactDto.WorkflowStatusInfo::getWorkflowStatusId)
+                .map(ItemTypeConfigurationMigrationImpactDto.WorkflowStatusInfo::getStatusId)
                 .collect(Collectors.toSet());
         
         Map<Long, ItemTypeConfigurationMigrationImpactDto.FieldInfo> newFieldsMap = newFieldSetInfo.getFields().stream()
@@ -583,7 +585,7 @@ public class ItemTypeConfigurationMigrationService {
                     
                     // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
                     Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                            "FieldOwnerPermission", perm.getId(), tenant);
+                            "FieldStatusPermission", perm.getId(), tenant);
                     List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
                             .map(Role::getName)
                             .collect(Collectors.toList()))
@@ -704,7 +706,7 @@ public class ItemTypeConfigurationMigrationService {
                     
                     // Recupera ruoli da PermissionAssignment invece di getAssignedRoles()
                     Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                            "FieldOwnerPermission", perm.getId(), tenant);
+                            "ExecutorPermission", perm.getId(), tenant);
                     List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
                             .map(Role::getName)
                             .collect(Collectors.toList()))
