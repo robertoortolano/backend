@@ -23,10 +23,9 @@ public interface FieldStatusPermissionRepository extends JpaRepository<FieldStat
     
     /**
      * Trova tutte le FieldStatusPermission per una ItemTypeConfiguration
-     * IMPORTANTE: Carica anche i ruoli associati e lo Status (JOIN FETCH) per evitare problemi di lazy loading
+     * RIMOSSO: LEFT JOIN FETCH p.assignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
      */
     @Query("SELECT p FROM FieldStatusPermission p " +
-           "LEFT JOIN FETCH p.assignedRoles " +
            "LEFT JOIN FETCH p.workflowStatus ws " +
            "LEFT JOIN FETCH ws.status " +
            "WHERE p.itemTypeConfiguration = :config")
@@ -34,10 +33,9 @@ public interface FieldStatusPermissionRepository extends JpaRepository<FieldStat
     
     /**
      * Trova tutte le FieldStatusPermission per una ItemTypeConfiguration, filtrate per Tenant (sicurezza)
-     * IMPORTANTE: Carica anche i ruoli associati e lo Status (JOIN FETCH) per evitare problemi di lazy loading
+     * RIMOSSO: LEFT JOIN FETCH p.assignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
      */
     @Query("SELECT p FROM FieldStatusPermission p " +
-           "LEFT JOIN FETCH p.assignedRoles " +
            "LEFT JOIN FETCH p.workflowStatus ws " +
            "LEFT JOIN FETCH ws.status " +
            "WHERE p.itemTypeConfiguration = :config AND p.itemTypeConfiguration.tenant = :tenant")
@@ -53,10 +51,9 @@ public interface FieldStatusPermissionRepository extends JpaRepository<FieldStat
     
     /**
      * Trova FieldStatusPermission per ItemTypeConfiguration, Field, WorkflowStatus e PermissionType
-     * IMPORTANTE: Carica anche i ruoli associati (JOIN FETCH) per evitare problemi di lazy loading
+     * RIMOSSO: LEFT JOIN FETCH p.assignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
      */
     @Query("SELECT p FROM FieldStatusPermission p " +
-           "LEFT JOIN FETCH p.assignedRoles " +
            "WHERE p.itemTypeConfiguration = :config AND p.field = :field AND " +
            "p.workflowStatus = :workflowStatus AND p.permissionType = :permissionType")
     FieldStatusPermission findByItemTypeConfigurationAndFieldAndWorkflowStatusAndPermissionType(

@@ -31,10 +31,9 @@ public interface FieldOwnerPermissionRepository extends JpaRepository<FieldOwner
     
     /**
      * Trova FieldOwnerPermission per ItemTypeConfiguration e Field
-     * IMPORTANTE: Carica anche i ruoli associati (JOIN FETCH) per evitare problemi di lazy loading
+     * RIMOSSO: LEFT JOIN FETCH p.assignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
      */
     @Query("SELECT p FROM FieldOwnerPermission p " +
-           "LEFT JOIN FETCH p.assignedRoles " +
            "WHERE p.itemTypeConfiguration = :config AND p.field.id = :fieldId")
     FieldOwnerPermission findByItemTypeConfigurationAndFieldId(
         @Param("config") ItemTypeConfiguration config, 

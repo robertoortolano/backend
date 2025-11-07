@@ -1,7 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
-import com.example.demo.enums.ItemTypeSetRoleType;
+// RIMOSSO: ItemTypeSetRoleType - ItemTypeSetRole eliminata
 import com.example.demo.exception.ApiException;
 import com.example.demo.repository.*;
 // RIMOSSO: ProjectItemTypeSetRoleRole eliminata
@@ -68,6 +68,7 @@ public class ItemTypeSetPermissionService {
                 Map<String, Object> worker = new HashMap<>();
                 worker.put("id", perm.getId());
                 worker.put("name", "Workers");
+                worker.put("permissionType", "WorkerPermission"); // Aggiunto per il frontend
                 Map<String, Object> itemTypeMap = new HashMap<>();
                 itemTypeMap.put("id", config.getItemType().getId());
                 itemTypeMap.put("name", config.getItemType().getName());
@@ -119,7 +120,7 @@ public class ItemTypeSetPermissionService {
                 workers.add(worker);
             }
         }
-        result.put("WORKERS", workers);
+        result.put("Workers", workers); // Chiave aggiornata: usa nome completo invece di "WORKERS"
         
         // StatusOwner permissions
         List<Map<String, Object>> statusOwners = new ArrayList<>();
@@ -131,6 +132,7 @@ public class ItemTypeSetPermissionService {
                 Map<String, Object> statusOwner = new HashMap<>();
                 statusOwner.put("id", perm.getId());
                 statusOwner.put("name", "Status Owners");
+                statusOwner.put("permissionType", "StatusOwnerPermission"); // Aggiunto per il frontend
                 Map<String, Object> workflowStatusMap = new HashMap<>();
                 workflowStatusMap.put("id", perm.getWorkflowStatus().getId());
                 workflowStatusMap.put("name", perm.getWorkflowStatus().getStatus().getName());
@@ -206,7 +208,7 @@ public class ItemTypeSetPermissionService {
                 statusOwners.add(statusOwner);
             }
         }
-        result.put("STATUS_OWNERS", statusOwners);
+        result.put("Status Owners", statusOwners); // Chiave aggiornata: usa nome completo invece di "STATUS_OWNERS"
         
         // FieldOwner permissions
         List<Map<String, Object>> fieldOwners = new ArrayList<>();
@@ -218,6 +220,7 @@ public class ItemTypeSetPermissionService {
                 Map<String, Object> fieldOwner = new HashMap<>();
                 fieldOwner.put("id", perm.getId());
                 fieldOwner.put("name", "Field Owners");
+                fieldOwner.put("permissionType", "FieldOwnerPermission"); // Aggiunto per il frontend
                 Map<String, Object> fieldConfigMap = new HashMap<>();
                 // IMPORTANTE: Le permission sono ora associate al Field, non alla FieldConfiguration
                 fieldConfigMap.put("id", perm.getField().getId());
@@ -290,7 +293,7 @@ public class ItemTypeSetPermissionService {
                 fieldOwners.add(fieldOwner);
             }
         }
-        result.put("FIELD_OWNERS", fieldOwners);
+        result.put("Field Owners", fieldOwners); // Chiave aggiornata: usa nome completo invece di "FIELD_OWNERS"
         
         // Creator permissions
         List<Map<String, Object>> creators = new ArrayList<>();
@@ -302,6 +305,7 @@ public class ItemTypeSetPermissionService {
                 Map<String, Object> creator = new HashMap<>();
                 creator.put("id", perm.getId());
                 creator.put("name", "Creators");
+                creator.put("permissionType", "CreatorPermission"); // Aggiunto per il frontend
                 Map<String, Object> workflowMap2 = new HashMap<>();
                 workflowMap2.put("id", config.getWorkflow().getId());
                 workflowMap2.put("name", config.getWorkflow().getName());
@@ -372,7 +376,7 @@ public class ItemTypeSetPermissionService {
                 creators.add(creator);
             }
         }
-        result.put("CREATORS", creators);
+        result.put("Creators", creators); // Chiave aggiornata: usa nome completo invece di "CREATORS"
         
         // Executor permissions
         List<Map<String, Object>> executors = new ArrayList<>();
@@ -384,6 +388,7 @@ public class ItemTypeSetPermissionService {
                 Map<String, Object> executor = new HashMap<>();
                 executor.put("id", perm.getId());
                 executor.put("name", "Executors");
+                executor.put("permissionType", "ExecutorPermission"); // Aggiunto per il frontend
                 Map<String, Object> transitionMap = new HashMap<>();
                 transitionMap.put("id", perm.getTransition().getId());
                 transitionMap.put("name", perm.getTransition().getName() != null ? perm.getTransition().getName() : "N/A");
@@ -477,7 +482,7 @@ public class ItemTypeSetPermissionService {
                 executors.add(executor);
             }
         }
-        result.put("EXECUTORS", executors);
+        result.put("Executors", executors); // Chiave aggiornata: usa nome completo invece di "EXECUTORS"
         
         // Editor permissions
         List<Map<String, Object>> editors = new ArrayList<>();
@@ -489,6 +494,7 @@ public class ItemTypeSetPermissionService {
                 Map<String, Object> editor = new HashMap<>();
                 editor.put("id", perm.getId());
                 editor.put("name", "Editors");
+                editor.put("permissionType", "FieldStatusPermission"); // Aggiunto per il frontend
                 Map<String, Object> fieldConfigMap2 = new HashMap<>();
                 // IMPORTANTE: Le permission sono ora associate al Field, non alla FieldConfiguration
                 fieldConfigMap2.put("id", perm.getField().getId());
@@ -565,7 +571,7 @@ public class ItemTypeSetPermissionService {
                 editors.add(editor);
             }
         }
-        result.put("EDITORS", editors);
+        result.put("Editors", editors); // Chiave aggiornata: usa nome completo invece di "EDITORS"
         
         // Viewer permissions
         List<Map<String, Object>> viewers = new ArrayList<>();
@@ -577,6 +583,7 @@ public class ItemTypeSetPermissionService {
                 Map<String, Object> viewer = new HashMap<>();
                 viewer.put("id", perm.getId());
                 viewer.put("name", "Viewers");
+                viewer.put("permissionType", "FieldStatusPermission"); // Aggiunto per il frontend
                 Map<String, Object> fieldConfigMap3 = new HashMap<>();
                 // IMPORTANTE: Le permission sono ora associate al Field, non alla FieldConfiguration
                 fieldConfigMap3.put("id", perm.getField().getId());
@@ -653,7 +660,7 @@ public class ItemTypeSetPermissionService {
                 viewers.add(viewer);
             }
         }
-        result.put("VIEWERS", viewers);
+        result.put("Viewers", viewers); // Chiave aggiornata: usa nome completo invece di "VIEWERS"
         
         return result;
         } catch (Exception e) {
@@ -670,19 +677,20 @@ public class ItemTypeSetPermissionService {
             throw new ApiException("Permission type must be provided");
         }
         
-        // Mappa permissionType a permissionType string per PermissionAssignment
-        String permissionTypeString = switch (permissionType) {
-            case "WORKERS" -> "WorkerPermission";
-            case "STATUS_OWNERS" -> "StatusOwnerPermission";
-            case "FIELD_OWNERS" -> "FieldOwnerPermission";
-            case "CREATORS" -> "CreatorPermission";
-            case "EXECUTORS" -> "ExecutorPermission";
-            case "EDITORS", "VIEWERS" -> "FieldStatusPermission";
-            default -> throw new ApiException("Unknown permission type: " + permissionType);
-        };
+        // Valida che il tipo di permission sia uno dei tipi supportati
+        // Dopo la migrazione, accettiamo solo i nuovi tipi
+        switch (permissionType) {
+            case "WorkerPermission", "StatusOwnerPermission", "FieldOwnerPermission",
+                 "CreatorPermission", "ExecutorPermission", "FieldStatusPermission" -> {
+                // Tipo valido, procedi
+            }
+            default -> throw new ApiException("Unknown permission type: " + permissionType + 
+                ". Supported types: WorkerPermission, StatusOwnerPermission, FieldOwnerPermission, " +
+                "CreatorPermission, ExecutorPermission, FieldStatusPermission");
+        }
         
         // Usa PermissionAssignmentService per aggiungere il ruolo
-        permissionAssignmentService.addRole(permissionTypeString, permissionId, roleId, tenant);
+        permissionAssignmentService.addRole(permissionType, permissionId, roleId, tenant);
     }
     
     /**
@@ -693,19 +701,20 @@ public class ItemTypeSetPermissionService {
             throw new ApiException("Permission type must be provided");
         }
         
-        // Mappa permissionType a permissionType string per PermissionAssignment
-        String permissionTypeString = switch (permissionType) {
-            case "WORKERS" -> "WorkerPermission";
-            case "STATUS_OWNERS" -> "StatusOwnerPermission";
-            case "FIELD_OWNERS" -> "FieldOwnerPermission";
-            case "CREATORS" -> "CreatorPermission";
-            case "EXECUTORS" -> "ExecutorPermission";
-            case "EDITORS", "VIEWERS" -> "FieldStatusPermission";
-            default -> throw new ApiException("Unknown permission type: " + permissionType);
-        };
+        // Valida che il tipo di permission sia uno dei tipi supportati
+        // Dopo la migrazione, accettiamo solo i nuovi tipi
+        switch (permissionType) {
+            case "WorkerPermission", "StatusOwnerPermission", "FieldOwnerPermission",
+                 "CreatorPermission", "ExecutorPermission", "FieldStatusPermission" -> {
+                // Tipo valido, procedi
+            }
+            default -> throw new ApiException("Unknown permission type: " + permissionType + 
+                ". Supported types: WorkerPermission, StatusOwnerPermission, FieldOwnerPermission, " +
+                "CreatorPermission, ExecutorPermission, FieldStatusPermission");
+        }
         
         // Usa PermissionAssignmentService per rimuovere il ruolo
-        permissionAssignmentService.removeRole(permissionTypeString, permissionId, roleId, tenant);
+        permissionAssignmentService.removeRole(permissionType, permissionId, roleId, tenant);
     }
     
     // RIMOSSO: Metodi obsoleti - ItemTypeSetRole e ProjectItemTypeSetRoleGrant/ProjectItemTypeSetRoleRole eliminate

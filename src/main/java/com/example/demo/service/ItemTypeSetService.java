@@ -6,7 +6,6 @@ import com.example.demo.dto.ItemTypeSetCreateDto;
 import com.example.demo.dto.ItemTypeSetUpdateDto;
 import com.example.demo.dto.ItemTypeSetViewDto;
 import com.example.demo.entity.*;
-import com.example.demo.enums.ItemTypeSetRoleType;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.exception.ApiException;
 import com.example.demo.factory.FieldSetCloner;
@@ -261,7 +260,7 @@ public class ItemTypeSetService {
         
         // Crea/aggiorna le permission per l'ItemTypeSet (per assicurarsi che tutte le permission base siano create)
         // Questo è importante quando si aggiungono nuove configurazioni
-        // Nota: Gli ItemTypeSetRole vengono creati on-the-fly da getPermissionsByItemTypeSet, quindi non serve chiamare createRolesForItemTypeSet qui
+        // Le permission vengono create automaticamente tramite ItemTypeSetPermissionService
         try {
             itemTypeSetPermissionService.createPermissionsForItemTypeSet(updated.getId(), tenant);
         } catch (Exception e) {
@@ -424,13 +423,11 @@ public class ItemTypeSetService {
                     .statusOwnerPermissions(new ArrayList<>())
                     .fieldStatusPermissions(new ArrayList<>())
                     .executorPermissions(new ArrayList<>())
-                    .itemTypeSetRoles(new ArrayList<>())
                     .totalAffectedItemTypeSets(0)
                     .totalFieldOwnerPermissions(0)
                     .totalStatusOwnerPermissions(0)
                     .totalFieldStatusPermissions(0)
                     .totalExecutorPermissions(0)
-                    .totalItemTypeSetRoles(0) // RIMOSSO: ItemTypeSetRole eliminata
                     .totalGrantAssignments(0)
                     .totalRoleAssignments(0)
                     .build();
@@ -448,10 +445,6 @@ public class ItemTypeSetService {
         
         List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> executorPermissions = 
                 analyzeExecutorPermissionImpacts(configsToRemove, itemTypeSet);
-        
-        // RIMOSSO: analyzeItemTypeSetRoleImpacts - ItemTypeSetRole eliminata
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> itemTypeSetRoles = new ArrayList<>();
-                // analyzeItemTypeSetRoleImpacts(configsToRemove, itemTypeSet);
 
         // Calcola statistiche
         int totalGrantAssignments = fieldOwnerPermissions.stream()
@@ -462,8 +455,6 @@ public class ItemTypeSetService {
                 .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
                 .sum() + executorPermissions.stream()
                 .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
-                .sum() + itemTypeSetRoles.stream()
-                .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
                 .sum();
         
         int totalRoleAssignments = fieldOwnerPermissions.stream()
@@ -473,8 +464,6 @@ public class ItemTypeSetService {
                 .sum() + fieldStatusPermissions.stream()
                 .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
                 .sum() + executorPermissions.stream()
-                .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
-                .sum() + itemTypeSetRoles.stream()
                 .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
                 .sum();
 
@@ -498,13 +487,11 @@ public class ItemTypeSetService {
                 .statusOwnerPermissions(statusOwnerPermissions)
                 .fieldStatusPermissions(fieldStatusPermissions)
                 .executorPermissions(executorPermissions)
-                .itemTypeSetRoles(itemTypeSetRoles)
                 .totalAffectedItemTypeSets(affectedItemTypeSets.size())
                 .totalFieldOwnerPermissions(fieldOwnerPermissions.size())
                 .totalStatusOwnerPermissions(statusOwnerPermissions.size())
                 .totalFieldStatusPermissions(fieldStatusPermissions.size())
                 .totalExecutorPermissions(executorPermissions.size())
-                .totalItemTypeSetRoles(0) // RIMOSSO: ItemTypeSetRole eliminata
                 .totalGrantAssignments(totalGrantAssignments)
                 .totalRoleAssignments(totalRoleAssignments)
                 .build();
@@ -696,87 +683,7 @@ public class ItemTypeSetService {
         return impacts;
     }
 
-    // RIMOSSO: Metodo obsoleto - ItemTypeSetRole eliminata
-    /*
-    private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeItemTypeSetRoleImpacts(
-            List<ItemTypeConfiguration> configsToRemove,
-            ItemTypeSet itemTypeSet
-    ) {
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
-        
-        for (ItemTypeConfiguration config : configsToRemove) {
-            // Trova ItemTypeSetRole associati a questa configurazione
-            // WORKERS, CREATORS, EXECUTORS, EDITORS, VIEWERS possono essere associati a ItemTypeConfiguration
-            List<ItemTypeSetRole> roles = itemTypeSetRoleRepository.findByItemTypeSetIdAndTenantId(itemTypeSet.getId(), itemTypeSet.getTenant().getId());
-            
-            for (ItemTypeSetRole role : roles) {
-                // Verifica se il ruolo è associato a questa configurazione
-                boolean isRelatedToConfig = false;
-                
-                if (role.getRoleType() == ItemTypeSetRoleType.WORKERS && 
-                    role.getRelatedEntityType() != null && role.getRelatedEntityType().equals("ItemType") &&
-                    role.getRelatedEntityId() != null && config.getItemType() != null &&
-                    role.getRelatedEntityId().equals(config.getItemType().getId())) {
-                    isRelatedToConfig = true;
-                } else if (role.getRoleType() == ItemTypeSetRoleType.CREATORS &&
-                          role.getRelatedEntityType() != null && role.getRelatedEntityType().equals("Workflow") &&
-                          role.getRelatedEntityId() != null && config.getWorkflow() != null &&
-                          role.getRelatedEntityId().equals(config.getWorkflow().getId())) {
-                    isRelatedToConfig = true;
-                } else if (role.getRoleType() == ItemTypeSetRoleType.EXECUTORS &&
-                          role.getRelatedEntityType() != null && role.getRelatedEntityType().equals("Transition") &&
-                          config.getWorkflow() != null) {
-                    // Per EXECUTORS, devo controllare se la transition appartiene al workflow della config
-                    // Questo è più complesso, per ora includiamo tutti gli EXECUTORS del workflow
-                    if (role.getRelatedEntityId() != null) {
-                        // Controlla se la transition appartiene al workflow
-                        // Per semplicità, includiamo se il ruolo è EXECUTORS
-                        isRelatedToConfig = true;
-                    }
-                }
-                
-                if (isRelatedToConfig) {
-                    List<String> assignedRoles = new ArrayList<>();
-                    List<String> assignedGrants = new ArrayList<>();
-                    boolean hasAssignments = false;
-                    
-                    if (role.getRoleTemplate() != null) {
-                        assignedRoles.add(role.getRoleTemplate().getName());
-                        hasAssignments = true;
-                    }
-                    
-                    if (role.getGrant() != null) {
-                        assignedGrants.add("Grant diretto");
-                        hasAssignments = true;
-                    }
-                    
-                    if (hasAssignments) {
-                        impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
-                                .permissionId(null) // ItemTypeSetRole non è una Permission nel senso tradizionale
-                                .permissionType(role.getRoleType() != null ? role.getRoleType().toString() : null)
-                                .itemTypeSetId(itemTypeSet.getId())
-                                .itemTypeSetName(itemTypeSet.getName())
-                                .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
-                                .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
-                                .itemTypeConfigurationId(config.getId())
-                                .itemTypeName(config.getItemType() != null ? config.getItemType().getName() : null)
-                                .itemTypeCategory(config.getCategory() != null ? config.getCategory().toString() : null)
-                                .roleId(role.getRoleTemplate() != null ? role.getRoleTemplate().getId() : null)
-                                .roleName(role.getRoleTemplate() != null ? role.getRoleTemplate().getName() : null)
-                                .grantId(role.getGrant() != null ? role.getGrant().getId() : null)
-                                .grantName(role.getGrant() != null ? "Grant diretto" : null)
-                                .assignedRoles(assignedRoles)
-                                .assignedGrants(assignedGrants)
-                                .hasAssignments(true)
-                                .build());
-                    }
-                }
-            }
-        }
-        
-        return impacts;
-    }
-    */
+    // RIMOSSO: Metodo analyzeItemTypeSetRoleImpacts() - ItemTypeSetRole eliminata completamente
 
     private List<String> getItemTypeConfigurationNames(Set<Long> configIds, Tenant tenant) {
         return configIds.stream()
@@ -852,10 +759,7 @@ public class ItemTypeSetService {
                 }
             }
             
-            // Rimuovi anche gli ItemTypeSetRole associati a questa configurazione
-            // Cerca tutti gli ItemTypeSetRole che referenziano questa configurazione
-            // (non direttamente, ma tramite le permission)
-            // TODO: Potrebbe essere necessario rimuovere anche gli ItemTypeSetRole se non ci sono più permission
+            // RIMOSSO: ItemTypeSetRole eliminata - le permission sono ora gestite tramite PermissionAssignment
         }
     }
 

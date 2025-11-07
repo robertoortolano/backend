@@ -32,6 +32,7 @@ public class WorkflowImpactAnalysisService {
     
     // Servizi per PermissionAssignment (nuova struttura)
     private final PermissionAssignmentService permissionAssignmentService;
+    private final ProjectPermissionAssignmentService projectPermissionAssignmentService;
 
     /**
      * Analyzes the impact of removing workflow statuses
@@ -97,8 +98,7 @@ public class WorkflowImpactAnalysisService {
                         .transitionName(transitionImpact.getTransitionName())
                         .fromStatusName(transitionImpact.getFromStatusName())
                         .toStatusName(transitionImpact.getToStatusName())
-                        .roleId(transitionImpact.getRoleId())
-                        .roleName(transitionImpact.getRoleName())
+                        // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata
                         .grantId(transitionImpact.getGrantId())
                         .grantName(transitionImpact.getGrantName())
                         .assignedRoles(transitionImpact.getAssignedRoles())
@@ -111,7 +111,7 @@ public class WorkflowImpactAnalysisService {
                                 .map(pg -> StatusRemovalImpactDto.ProjectGrantInfo.builder()
                                         .projectId(pg.getProjectId())
                                         .projectName(pg.getProjectName())
-                                        .roleId(pg.getRoleId())
+                                        // RIMOSSO: roleId - ItemTypeSetRole eliminata
                                         .build())
                                 .collect(Collectors.toList()))
                         .build())
@@ -263,8 +263,7 @@ public class WorkflowImpactAnalysisService {
                     
                     // Collect role and grant information
                     List<String> assignedRoles = new ArrayList<>();
-                    Long roleId = null;
-                    String roleName = null;
+                    // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata
                     Long grantId = null;
                     String grantName = null;
                     List<StatusRemovalImpactDto.ProjectGrantInfo> projectGrants = new ArrayList<>();
@@ -273,10 +272,7 @@ public class WorkflowImpactAnalysisService {
                         PermissionAssignment assignment = assignmentOpt.get();
                         // Recupera ruoli
                         for (Role role : assignment.getRoles()) {
-                            if (roleId == null) {
-                                roleId = role.getId();
-                                roleName = role.getName();
-                            }
+                            // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata, non più necessari
                             assignedRoles.add(role.getName());
                         }
                         
@@ -288,7 +284,36 @@ public class WorkflowImpactAnalysisService {
                         }
                     }
                     
-                    // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
+                    // Recupera grant di progetto da ProjectPermissionAssignmentService
+                    // Se è un ItemTypeSet di progetto, controlla solo quel progetto
+                    if (itemTypeSet.getProject() != null) {
+                        Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                projectPermissionAssignmentService.getProjectAssignment(
+                                        "StatusOwnerPermission", perm.getId(), 
+                                        itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
+                        if (projectAssignmentOpt.isPresent() && 
+                                projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                            projectGrants.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
+                                    .projectId(itemTypeSet.getProject().getId())
+                                    .projectName(itemTypeSet.getProject().getName())
+                                    .build());
+                        }
+                    } else {
+                        // Se è un ItemTypeSet globale, controlla tutti i progetti associati
+                        for (Project project : itemTypeSet.getProjectsAssociation()) {
+                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                    projectPermissionAssignmentService.getProjectAssignment(
+                                            "StatusOwnerPermission", perm.getId(), 
+                                            project.getId(), itemTypeSet.getTenant());
+                            if (projectAssignmentOpt.isPresent() && 
+                                    projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                projectGrants.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
+                                        .projectId(project.getId())
+                                        .projectName(project.getName())
+                                        .build());
+                            }
+                        }
+                    }
                     
                     boolean hasAssignments = !assignedRoles.isEmpty() || grantId != null || !projectGrants.isEmpty();
                     boolean canBePreserved = hasAssignments; // Can preserve if has assignments
@@ -303,8 +328,7 @@ public class WorkflowImpactAnalysisService {
                             .workflowStatusId(workflowStatus.getId())
                             .statusName(workflowStatus.getStatus().getName())
                             .statusCategory(workflowStatus.getStatusCategory() != null ? workflowStatus.getStatusCategory().name() : null)
-                            .roleId(roleId)
-                            .roleName(roleName)
+                            // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata
                             .grantId(grantId)
                             .grantName(grantName)
                             .assignedRoles(assignedRoles)
@@ -388,8 +412,7 @@ public class WorkflowImpactAnalysisService {
                         
                         // Collect role and grant information
                         List<String> assignedRoles = new ArrayList<>();
-                        Long roleId = null;
-                        String roleName = null;
+                        // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata
                         Long grantId = null;
                         String grantName = null;
                         List<StatusRemovalImpactDto.ProjectGrantInfo> projectGrants = new ArrayList<>();
@@ -398,10 +421,7 @@ public class WorkflowImpactAnalysisService {
                             PermissionAssignment assignment = assignmentOpt.get();
                             // Recupera ruoli
                             for (Role role : assignment.getRoles()) {
-                                if (roleId == null) {
-                                    roleId = role.getId();
-                                    roleName = role.getName();
-                                }
+                                // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata, non più necessari
                                 assignedRoles.add(role.getName());
                             }
                             
@@ -413,7 +433,36 @@ public class WorkflowImpactAnalysisService {
                             }
                         }
                         
-                        // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
+                        // Recupera grant di progetto da ProjectPermissionAssignmentService
+                        // Se è un ItemTypeSet di progetto, controlla solo quel progetto
+                        if (itemTypeSet.getProject() != null) {
+                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                    projectPermissionAssignmentService.getProjectAssignment(
+                                            "FieldStatusPermission", perm.getId(), 
+                                            itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
+                            if (projectAssignmentOpt.isPresent() && 
+                                    projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                projectGrants.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
+                                        .projectId(itemTypeSet.getProject().getId())
+                                        .projectName(itemTypeSet.getProject().getName())
+                                        .build());
+                            }
+                        } else {
+                            // Se è un ItemTypeSet globale, controlla tutti i progetti associati
+                            for (Project project : itemTypeSet.getProjectsAssociation()) {
+                                Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                        projectPermissionAssignmentService.getProjectAssignment(
+                                                "FieldStatusPermission", perm.getId(), 
+                                                project.getId(), itemTypeSet.getTenant());
+                                if (projectAssignmentOpt.isPresent() && 
+                                        projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                    projectGrants.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
+                                            .projectId(project.getId())
+                                            .projectName(project.getName())
+                                            .build());
+                                }
+                            }
+                        }
                         
                         // Calculate hasAssignments: true if has roles OR grant
                         boolean hasRoles = !assignedRoles.isEmpty();
@@ -438,8 +487,7 @@ public class WorkflowImpactAnalysisService {
                                     .workflowStatusId(workflowStatus.getId())
                                     .workflowStatusName(workflowStatus.getStatus().getName())
                                     .statusName(workflowStatus.getStatus().getName())
-                                    .roleId(roleId)
-                                    .roleName(roleName)
+                                    // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata
                                     .grantId(grantId)
                                     .grantName(grantName)
                                     .assignedRoles(assignedRoles)
@@ -484,8 +532,7 @@ public class WorkflowImpactAnalysisService {
                     
                     // Collect role and grant information
                     List<String> assignedRoles = new ArrayList<>();
-                    Long roleId = null;
-                    String roleName = null;
+                    // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata
                     Long grantId = null;
                     String grantName = null;
                     List<TransitionRemovalImpactDto.ProjectGrantInfo> projectGrants = new ArrayList<>();
@@ -494,10 +541,7 @@ public class WorkflowImpactAnalysisService {
                         PermissionAssignment assignment = assignmentOpt.get();
                         // Recupera ruoli
                         for (Role role : assignment.getRoles()) {
-                            if (roleId == null) {
-                                roleId = role.getId();
-                                roleName = role.getName();
-                            }
+                            // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata, non più necessari
                             assignedRoles.add(role.getName());
                         }
                         
@@ -509,7 +553,36 @@ public class WorkflowImpactAnalysisService {
                         }
                     }
                     
-                    // TODO: Recuperare grant di progetto da ProjectPermissionAssignmentService
+                    // Recupera grant di progetto da ProjectPermissionAssignmentService
+                    // Se è un ItemTypeSet di progetto, controlla solo quel progetto
+                    if (itemTypeSet.getProject() != null) {
+                        Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                projectPermissionAssignmentService.getProjectAssignment(
+                                        "ExecutorPermission", perm.getId(), 
+                                        itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
+                        if (projectAssignmentOpt.isPresent() && 
+                                projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                            projectGrants.add(TransitionRemovalImpactDto.ProjectGrantInfo.builder()
+                                    .projectId(itemTypeSet.getProject().getId())
+                                    .projectName(itemTypeSet.getProject().getName())
+                                    .build());
+                        }
+                    } else {
+                        // Se è un ItemTypeSet globale, controlla tutti i progetti associati
+                        for (Project project : itemTypeSet.getProjectsAssociation()) {
+                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                    projectPermissionAssignmentService.getProjectAssignment(
+                                            "ExecutorPermission", perm.getId(), 
+                                            project.getId(), itemTypeSet.getTenant());
+                            if (projectAssignmentOpt.isPresent() && 
+                                    projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                projectGrants.add(TransitionRemovalImpactDto.ProjectGrantInfo.builder()
+                                        .projectId(project.getId())
+                                        .projectName(project.getName())
+                                        .build());
+                            }
+                        }
+                    }
                     
                     boolean hasAssignments = !assignedRoles.isEmpty() || grantId != null || !projectGrants.isEmpty();
                     boolean canBePreserved = hasAssignments;
@@ -528,8 +601,7 @@ public class WorkflowImpactAnalysisService {
                             .transitionName(transition.getName())
                             .fromStatusName(fromStatus != null && fromStatus.getStatus() != null ? fromStatus.getStatus().getName() : null)
                             .toStatusName(toStatus != null && toStatus.getStatus() != null ? toStatus.getStatus().getName() : null)
-                            .roleId(roleId)
-                            .roleName(roleName)
+                            // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata
                             .grantId(grantId)
                             .grantName(grantName)
                             .assignedRoles(assignedRoles)

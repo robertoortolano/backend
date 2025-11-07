@@ -16,7 +16,10 @@ public class GrantCleanupService {
     
     /**
      * Elimina una grant con una transazione completamente separata
-     * per evitare conflitti con Hibernate Session
+     * per evitare conflitti con Hibernate Session.
+     * 
+     * IMPORTANTE: Usa REQUIRES_NEW per isolare la transazione dalla transazione principale.
+     * Le eccezioni devono essere gestite dal chiamante per non compromettere la transazione principale.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deleteGrantCompletely(Long grantId) {
@@ -111,6 +114,15 @@ public class GrantCleanupService {
             entityManager.createNativeQuery("DELETE FROM fieldstatuspermission_grant WHERE grant_id = :grantId")
                 .setParameter("grantId", grantId).executeUpdate();
         } catch (Exception e) {
+        }
+        
+        // IMPORTANTE: Elimina i riferimenti da permission_assignment PRIMA di eliminare il Grant
+        // per evitare violazioni di foreign key constraint
+        try {
+            entityManager.createNativeQuery("UPDATE permission_assignment SET grant_id = NULL WHERE grant_id = :grantId")
+                .setParameter("grantId", grantId).executeUpdate();
+        } catch (Exception e) {
+            log.warn("Could not remove grant reference from permission_assignment: {}", e.getMessage());
         }
         
         // Elimina la grant stessa

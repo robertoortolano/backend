@@ -123,8 +123,7 @@ public class ItemTypeConfigurationMigrationImpactDto {
         private String projectName;
         
         // Grant information
-        private Long roleId; // ID dell'ItemTypeSetRole associato
-        private String roleName; // Nome del ruolo
+        // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata, ora usiamo permissionId e permissionType
         private Long grantId; // Grant globale (se presente)
         private String grantName; // Nome grant globale
         private List<ProjectGrantInfo> projectGrants; // Lista di progetti che hanno grant per questa permission
@@ -143,7 +142,7 @@ public class ItemTypeConfigurationMigrationImpactDto {
     public static class ProjectGrantInfo {
         private Long projectId;
         private String projectName;
-        private Long roleId; // ID dell'ItemTypeSetRole associato (per recuperare i dettagli via API)
+        // RIMOSSO: roleId - ItemTypeSetRole eliminata, ora usiamo permissionId e permissionType per recuperare i dettagli via API
     }
 }
 

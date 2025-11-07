@@ -153,19 +153,6 @@ public class FieldSetImpactController {
             ));
         }
         
-        // ItemTypeSet Roles
-        for (FieldSetRemovalImpactDto.PermissionImpact perm : impact.getItemTypeSetRoles()) {
-            csv.append(String.format("%s,%s,%s,%s,%s,,,,,%s,%s\n",
-                CsvUtils.escapeCsv(perm.getPermissionType()),
-                perm.getItemTypeSetId(),
-                CsvUtils.escapeCsv(perm.getItemTypeSetName()),
-                perm.getProjectId() != null ? perm.getProjectId().toString() : "",
-                perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
-                CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
-                perm.isHasAssignments()
-            ));
-        }
-        
         return CsvUtils.createCsvResponse(csv.toString(), "fieldset_removal_impact", fieldSetId);
         } catch (Exception e) {
             log.error("Error generating CSV export", e);

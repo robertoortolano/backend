@@ -22,10 +22,9 @@ public interface StatusOwnerPermissionRepository extends JpaRepository<StatusOwn
     
     /**
      * Trova tutte le StatusOwnerPermission per una ItemTypeConfiguration
-     * IMPORTANTE: Carica anche i ruoli associati (JOIN FETCH) per evitare problemi di lazy loading
+     * RIMOSSO: LEFT JOIN FETCH p.assignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
      */
     @Query("SELECT p FROM StatusOwnerPermission p " +
-           "LEFT JOIN FETCH p.assignedRoles " +
            "LEFT JOIN FETCH p.workflowStatus ws " +
            "LEFT JOIN FETCH ws.status " +
            "WHERE p.itemTypeConfiguration = :config")
@@ -33,10 +32,9 @@ public interface StatusOwnerPermissionRepository extends JpaRepository<StatusOwn
     
     /**
      * Trova tutte le StatusOwnerPermission per una ItemTypeConfiguration, filtrate per Tenant (sicurezza)
-     * IMPORTANTE: Carica anche i ruoli associati (JOIN FETCH) per evitare problemi di lazy loading
+     * RIMOSSO: LEFT JOIN FETCH p.assignedRoles - i ruoli sono ora gestiti tramite PermissionAssignment
      */
     @Query("SELECT p FROM StatusOwnerPermission p " +
-           "LEFT JOIN FETCH p.assignedRoles " +
            "LEFT JOIN FETCH p.workflowStatus ws " +
            "LEFT JOIN FETCH ws.status " +
            "WHERE p.itemTypeConfiguration = :config AND p.itemTypeConfiguration.tenant = :tenant")

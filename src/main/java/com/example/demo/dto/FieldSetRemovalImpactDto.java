@@ -20,13 +20,11 @@ public class FieldSetRemovalImpactDto {
     // Permissions che verranno rimosse
     private List<PermissionImpact> fieldOwnerPermissions;
     private List<PermissionImpact> fieldStatusPermissions;
-    private List<PermissionImpact> itemTypeSetRoles;
     
     // Statistiche
     private int totalAffectedItemTypeSets;
     private int totalFieldOwnerPermissions;
     private int totalFieldStatusPermissions;
-    private int totalItemTypeSetRoles;
     private int totalGrantAssignments;
     private int totalRoleAssignments;
     
@@ -96,6 +94,5 @@ public class FieldSetRemovalImpactDto {
     public static class ProjectGrantInfo {
         private Long projectId;
         private String projectName;
-        private Long roleId; // ID dell'ItemTypeSetRole associato (per recuperare i dettagli via API)
     }
 }

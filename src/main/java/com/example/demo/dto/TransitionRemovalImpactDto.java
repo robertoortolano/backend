@@ -63,8 +63,7 @@ public class TransitionRemovalImpactDto {
         private String transitionName;
         private String fromStatusName;
         private String toStatusName;
-        private Long roleId;
-        private String roleName;
+        // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata, ora usiamo permissionId e permissionType
         private Long grantId; // Grant globale (se presente)
         private String grantName; // Nome grant globale
         private List<String> assignedRoles;
@@ -85,6 +84,6 @@ public class TransitionRemovalImpactDto {
     public static class ProjectGrantInfo {
         private Long projectId;
         private String projectName;
-        private Long roleId; // ID dell'ItemTypeSetRole associato
+        // RIMOSSO: roleId - ItemTypeSetRole eliminata, ora usiamo permissionId e permissionType
     }
 }

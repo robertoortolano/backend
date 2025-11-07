@@ -23,7 +23,7 @@ public class Grant {
 
     @ManyToOne(optional = true)
     @JoinColumn(nullable = true)
-    private Role role; // Può essere null quando assegnato direttamente a ItemTypeSetRole
+    private Role role; // Può essere null quando assegnato direttamente a PermissionAssignment
 
     @ManyToMany(fetch = FetchType.EAGER, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(
