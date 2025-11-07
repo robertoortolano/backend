@@ -12,6 +12,8 @@ public interface PermissionAssignmentMapper {
     
     @Mapping(target = "tenantId", source = "tenant.id")
     @Mapping(target = "grantId", source = "grant.id")
+    @Mapping(target = "projectId", source = "project.id")
+    @Mapping(target = "itemTypeSetId", source = "itemTypeSet.id")
     @Mapping(target = "roleIds", expression = "java(entity.getRoles() != null ? entity.getRoles().stream().map(com.example.demo.entity.Role::getId).collect(java.util.stream.Collectors.toSet()) : null)")
     @Mapping(target = "roles", source = "roles")
     PermissionAssignmentDto toDto(PermissionAssignment entity);

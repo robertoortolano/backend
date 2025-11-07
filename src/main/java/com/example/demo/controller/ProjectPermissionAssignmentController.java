@@ -1,9 +1,9 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.*;
-import com.example.demo.entity.ProjectPermissionAssignment;
+import com.example.demo.entity.PermissionAssignment;
 import com.example.demo.entity.Tenant;
-import com.example.demo.mapper.ProjectPermissionAssignmentMapper;
+import com.example.demo.mapper.PermissionAssignmentMapper;
 import com.example.demo.security.CurrentTenant;
 import com.example.demo.service.ProjectPermissionAssignmentService;
 import jakarta.validation.Valid;
@@ -15,7 +15,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
 
 /**
- * Controller per gestire ProjectPermissionAssignment (assegnazioni di progetto per Permission).
+ * Controller per gestire PermissionAssignment di progetto (assegnazioni specifiche per progetto).
+ * 
+ * NOTA: Questo controller gestisce PermissionAssignment con project != null.
+ * Le assegnazioni sono completamente indipendenti da quelle globali (project = null).
  */
 @RestController
 @RequestMapping("/api/project-permission-assignments")
@@ -23,17 +26,17 @@ import java.util.Optional;
 public class ProjectPermissionAssignmentController {
     
     private final ProjectPermissionAssignmentService projectPermissionAssignmentService;
-    private final ProjectPermissionAssignmentMapper projectPermissionAssignmentMapper;
+    private final PermissionAssignmentMapper permissionAssignmentMapper;
     
     /**
-     * Crea o aggiorna un ProjectPermissionAssignment per una Permission e un progetto.
+     * Crea o aggiorna un PermissionAssignment per una Permission e un progetto.
      */
     @PostMapping
     @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#dto.projectId, 'PROJECT_ADMIN')")
-    public ResponseEntity<ProjectPermissionAssignmentDto> createOrUpdateProjectAssignment(
+    public ResponseEntity<PermissionAssignmentDto> createOrUpdateProjectAssignment(
             @Valid @RequestBody ProjectPermissionAssignmentCreateDto dto,
             @CurrentTenant Tenant tenant) {
-        ProjectPermissionAssignment projectAssignment = projectPermissionAssignmentService.createOrUpdateProjectAssignment(
+        PermissionAssignment assignment = projectPermissionAssignmentService.createOrUpdateProjectAssignment(
                 dto.getPermissionType(),
                 dto.getPermissionId(),
                 dto.getProjectId(),
@@ -41,41 +44,44 @@ public class ProjectPermissionAssignmentController {
                 dto.getRoleIds(),
                 dto.getGrantId(),
                 tenant);
-        return ResponseEntity.ok(projectPermissionAssignmentMapper.toDto(projectAssignment));
+        return ResponseEntity.ok(permissionAssignmentMapper.toDto(assignment));
     }
     
     /**
-     * Ottiene ProjectPermissionAssignment per una Permission e un progetto.
-     * Restituisce un oggetto vuoto (con assignment null) se non esiste, invece di 404,
+     * Ottiene PermissionAssignment per una Permission e un progetto.
+     * Restituisce un oggetto vuoto (con grant null e roles vuoti) se non esiste, invece di 404,
      * per evitare errori in console quando le grant vengono create on-demand.
      */
     @GetMapping("/{permissionType}/{permissionId}/project/{projectId}")
     @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_USER')")
-    public ResponseEntity<ProjectPermissionAssignmentDto> getProjectAssignment(
+    public ResponseEntity<PermissionAssignmentDto> getProjectAssignment(
             @PathVariable String permissionType,
             @PathVariable Long permissionId,
             @PathVariable Long projectId,
             @CurrentTenant Tenant tenant) {
-        Optional<ProjectPermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
+        Optional<PermissionAssignment> assignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
                 permissionType, permissionId, projectId, tenant);
-        if (projectAssignmentOpt.isPresent()) {
-            return ResponseEntity.ok(projectPermissionAssignmentMapper.toDto(projectAssignmentOpt.get()));
+        if (assignmentOpt.isPresent()) {
+            return ResponseEntity.ok(permissionAssignmentMapper.toDto(assignmentOpt.get()));
         } else {
             // Restituisce un oggetto vuoto invece di 404 per evitare errori in console
             // quando le grant vengono create on-demand
-            ProjectPermissionAssignmentDto emptyDto = ProjectPermissionAssignmentDto.builder()
+            PermissionAssignmentDto emptyDto = PermissionAssignmentDto.builder()
                     .permissionType(permissionType)
                     .permissionId(permissionId)
                     .projectId(projectId)
                     .tenantId(tenant.getId())
-                    .assignment(null) // Nessun assignment esistente
+                    .grantId(null)
+                    .grant(null)
+                    .roles(null)
+                    .roleIds(null)
                     .build();
             return ResponseEntity.ok(emptyDto);
         }
     }
     
     /**
-     * Elimina ProjectPermissionAssignment per una Permission e un progetto.
+     * Elimina PermissionAssignment per una Permission e un progetto.
      */
     @DeleteMapping("/{permissionType}/{permissionId}/project/{projectId}")
     @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#projectId, 'PROJECT_ADMIN')")
@@ -90,14 +96,14 @@ public class ProjectPermissionAssignmentController {
     }
     
     /**
-     * Crea un Grant e lo assegna a ProjectPermissionAssignment.
+     * Crea un Grant e lo assegna a PermissionAssignment di progetto.
      */
     @PostMapping("/create-and-assign-grant")
     @PreAuthorize("hasRole('TENANT_ADMIN') or @projectSecurityService.hasProjectRole(#dto.projectId, 'PROJECT_ADMIN')")
-    public ResponseEntity<ProjectPermissionAssignmentDto> createAndAssignGrant(
+    public ResponseEntity<PermissionAssignmentDto> createAndAssignGrant(
             @Valid @RequestBody ProjectPermissionAssignmentGrantCreateDto dto,
             @CurrentTenant Tenant tenant) {
-        ProjectPermissionAssignment projectAssignment = projectPermissionAssignmentService.createAndAssignGrant(
+        PermissionAssignment assignment = projectPermissionAssignmentService.createAndAssignGrant(
                 dto.getPermissionType(),
                 dto.getPermissionId(),
                 dto.getProjectId(),
@@ -107,7 +113,7 @@ public class ProjectPermissionAssignmentController {
                 dto.getNegatedUserIds(),
                 dto.getNegatedGroupIds(),
                 tenant);
-        return ResponseEntity.ok(projectPermissionAssignmentMapper.toDto(projectAssignment));
+        return ResponseEntity.ok(permissionAssignmentMapper.toDto(assignment));
     }
     
 }

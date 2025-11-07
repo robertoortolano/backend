@@ -988,21 +988,21 @@ public class WorkflowService {
                     List<TransitionRemovalImpactDto.ProjectRoleInfo> projectRolesList = new ArrayList<>();
                     // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                     if (itemTypeSet.getProject() != null) {
-                        Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                        Optional<PermissionAssignment> projectAssignmentOpt = 
                                 projectPermissionAssignmentService.getProjectAssignment(
                                         "ExecutorPermission", permission.getId(), 
                                         itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
                         if (projectAssignmentOpt.isPresent()) {
-                            ProjectPermissionAssignment projectAssignment = projectAssignmentOpt.get();
+                            PermissionAssignment projectAssignment = projectAssignmentOpt.get();
                             // Aggiungi grant di progetto se presente
-                            if (projectAssignment.getAssignment().getGrant() != null) {
+                            if (projectAssignment.getGrant() != null) {
                                 projectGrantsList.add(TransitionRemovalImpactDto.ProjectGrantInfo.builder()
                                         .projectId(itemTypeSet.getProject().getId())
                                         .projectName(itemTypeSet.getProject().getName())
                                         .build());
                             }
                             // IMPORTANTE: Separare i ruoli di progetto dai ruoli globali
-                            Set<Role> projectRoles = projectAssignment.getAssignment().getRoles();
+                            Set<Role> projectRoles = projectAssignment.getRoles();
                             if (projectRoles != null && !projectRoles.isEmpty()) {
                                 List<String> projectRoleNames = projectRoles.stream()
                                         .map(Role::getName)
@@ -1017,21 +1017,21 @@ public class WorkflowService {
                     } else {
                         // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                         for (Project project : itemTypeSet.getProjectsAssociation()) {
-                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                            Optional<PermissionAssignment> projectAssignmentOpt = 
                                     projectPermissionAssignmentService.getProjectAssignment(
                                             "ExecutorPermission", permission.getId(), 
                                             project.getId(), itemTypeSet.getTenant());
                             if (projectAssignmentOpt.isPresent()) {
-                                ProjectPermissionAssignment projectAssignment = projectAssignmentOpt.get();
+                                PermissionAssignment projectAssignment = projectAssignmentOpt.get();
                                 // Aggiungi grant di progetto se presente
-                                if (projectAssignment.getAssignment().getGrant() != null) {
+                                if (projectAssignment.getGrant() != null) {
                                     projectGrantsList.add(TransitionRemovalImpactDto.ProjectGrantInfo.builder()
                                             .projectId(project.getId())
                                             .projectName(project.getName())
                                             .build());
                                 }
                                 // IMPORTANTE: Separare i ruoli di progetto dai ruoli globali
-                                Set<Role> projectRoles = projectAssignment.getAssignment().getRoles();
+                                Set<Role> projectRoles = projectAssignment.getRoles();
                                 if (projectRoles != null && !projectRoles.isEmpty()) {
                                     List<String> projectRoleNames = projectRoles.stream()
                                             .map(Role::getName)
@@ -1606,21 +1606,21 @@ public class WorkflowService {
                     List<StatusRemovalImpactDto.ProjectRoleInfo> projectRolesList = new ArrayList<>();
                     // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                     if (itemTypeSet.getProject() != null) {
-                        Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                        Optional<PermissionAssignment> projectAssignmentOpt = 
                                 projectPermissionAssignmentService.getProjectAssignment(
                                         "StatusOwnerPermission", permission.getId(), 
                                         itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
                         if (projectAssignmentOpt.isPresent()) {
-                            ProjectPermissionAssignment projectAssignment = projectAssignmentOpt.get();
+                            PermissionAssignment projectAssignment = projectAssignmentOpt.get();
                             // Aggiungi grant di progetto se presente
-                            if (projectAssignment.getAssignment().getGrant() != null) {
+                            if (projectAssignment.getGrant() != null) {
                                 projectGrantsList.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
                                         .projectId(itemTypeSet.getProject().getId())
                                         .projectName(itemTypeSet.getProject().getName())
                                         .build());
                             }
                             // IMPORTANTE: Separare i ruoli di progetto dai ruoli globali
-                            Set<Role> projectRoles = projectAssignment.getAssignment().getRoles();
+                            Set<Role> projectRoles = projectAssignment.getRoles();
                             if (projectRoles != null && !projectRoles.isEmpty()) {
                                 List<String> projectRoleNames = projectRoles.stream()
                                         .map(Role::getName)
@@ -1635,21 +1635,21 @@ public class WorkflowService {
                     } else {
                         // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                         for (Project project : itemTypeSet.getProjectsAssociation()) {
-                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                            Optional<PermissionAssignment> projectAssignmentOpt = 
                                     projectPermissionAssignmentService.getProjectAssignment(
                                             "StatusOwnerPermission", permission.getId(), 
                                             project.getId(), itemTypeSet.getTenant());
                             if (projectAssignmentOpt.isPresent()) {
-                                ProjectPermissionAssignment projectAssignment = projectAssignmentOpt.get();
+                                PermissionAssignment projectAssignment = projectAssignmentOpt.get();
                                 // Aggiungi grant di progetto se presente
-                                if (projectAssignment.getAssignment().getGrant() != null) {
+                                if (projectAssignment.getGrant() != null) {
                                     projectGrantsList.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
                                             .projectId(project.getId())
                                             .projectName(project.getName())
                                             .build());
                                 }
                                 // IMPORTANTE: Separare i ruoli di progetto dai ruoli globali
-                                Set<Role> projectRoles = projectAssignment.getAssignment().getRoles();
+                                Set<Role> projectRoles = projectAssignment.getRoles();
                                 if (projectRoles != null && !projectRoles.isEmpty()) {
                                     List<String> projectRoleNames = projectRoles.stream()
                                             .map(Role::getName)
@@ -1780,21 +1780,21 @@ public class WorkflowService {
                     List<StatusRemovalImpactDto.ProjectRoleInfo> projectRolesList = new ArrayList<>();
                     // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                     if (itemTypeSet.getProject() != null) {
-                        Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                        Optional<PermissionAssignment> projectAssignmentOpt = 
                                 projectPermissionAssignmentService.getProjectAssignment(
                                         "FieldStatusPermission", permission.getId(), 
                                         itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
                         if (projectAssignmentOpt.isPresent()) {
-                            ProjectPermissionAssignment projectAssignment = projectAssignmentOpt.get();
+                            PermissionAssignment projectAssignment = projectAssignmentOpt.get();
                             // Aggiungi grant di progetto se presente
-                            if (projectAssignment.getAssignment().getGrant() != null) {
+                            if (projectAssignment.getGrant() != null) {
                                 projectGrantsList.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
                                         .projectId(itemTypeSet.getProject().getId())
                                         .projectName(itemTypeSet.getProject().getName())
                                         .build());
                             }
                             // IMPORTANTE: Separare i ruoli di progetto dai ruoli globali
-                            Set<Role> projectRoles = projectAssignment.getAssignment().getRoles();
+                            Set<Role> projectRoles = projectAssignment.getRoles();
                             if (projectRoles != null && !projectRoles.isEmpty()) {
                                 List<String> projectRoleNames = projectRoles.stream()
                                         .map(Role::getName)
@@ -1809,21 +1809,21 @@ public class WorkflowService {
                     } else {
                         // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                         for (Project project : itemTypeSet.getProjectsAssociation()) {
-                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                            Optional<PermissionAssignment> projectAssignmentOpt = 
                                     projectPermissionAssignmentService.getProjectAssignment(
                                             "FieldStatusPermission", permission.getId(), 
                                             project.getId(), itemTypeSet.getTenant());
                             if (projectAssignmentOpt.isPresent()) {
-                                ProjectPermissionAssignment projectAssignment = projectAssignmentOpt.get();
+                                PermissionAssignment projectAssignment = projectAssignmentOpt.get();
                                 // Aggiungi grant di progetto se presente
-                                if (projectAssignment.getAssignment().getGrant() != null) {
+                                if (projectAssignment.getGrant() != null) {
                                     projectGrantsList.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
                                             .projectId(project.getId())
                                             .projectName(project.getName())
                                             .build());
                                 }
                                 // IMPORTANTE: Separare i ruoli di progetto dai ruoli globali
-                                Set<Role> projectRoles = projectAssignment.getAssignment().getRoles();
+                                Set<Role> projectRoles = projectAssignment.getRoles();
                                 if (projectRoles != null && !projectRoles.isEmpty()) {
                                     List<String> projectRoleNames = projectRoles.stream()
                                             .map(Role::getName)

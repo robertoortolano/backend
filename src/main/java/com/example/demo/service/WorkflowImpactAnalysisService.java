@@ -287,12 +287,12 @@ public class WorkflowImpactAnalysisService {
                     // Recupera grant di progetto da ProjectPermissionAssignmentService
                     // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                     if (itemTypeSet.getProject() != null) {
-                        Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                        Optional<PermissionAssignment> projectAssignmentOpt = 
                                 projectPermissionAssignmentService.getProjectAssignment(
                                         "StatusOwnerPermission", perm.getId(), 
                                         itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
                         if (projectAssignmentOpt.isPresent() && 
-                                projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                projectAssignmentOpt.get().getGrant() != null) {
                             projectGrants.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
                                     .projectId(itemTypeSet.getProject().getId())
                                     .projectName(itemTypeSet.getProject().getName())
@@ -301,12 +301,12 @@ public class WorkflowImpactAnalysisService {
                     } else {
                         // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                         for (Project project : itemTypeSet.getProjectsAssociation()) {
-                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                            Optional<PermissionAssignment> projectAssignmentOpt = 
                                     projectPermissionAssignmentService.getProjectAssignment(
                                             "StatusOwnerPermission", perm.getId(), 
                                             project.getId(), itemTypeSet.getTenant());
                             if (projectAssignmentOpt.isPresent() && 
-                                    projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                    projectAssignmentOpt.get().getGrant() != null) {
                                 projectGrants.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
                                         .projectId(project.getId())
                                         .projectName(project.getName())
@@ -436,12 +436,12 @@ public class WorkflowImpactAnalysisService {
                         // Recupera grant di progetto da ProjectPermissionAssignmentService
                         // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                         if (itemTypeSet.getProject() != null) {
-                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                            Optional<PermissionAssignment> projectAssignmentOpt = 
                                     projectPermissionAssignmentService.getProjectAssignment(
                                             "FieldStatusPermission", perm.getId(), 
                                             itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
                             if (projectAssignmentOpt.isPresent() && 
-                                    projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                    projectAssignmentOpt.get().getGrant() != null) {
                                 projectGrants.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
                                         .projectId(itemTypeSet.getProject().getId())
                                         .projectName(itemTypeSet.getProject().getName())
@@ -450,12 +450,12 @@ public class WorkflowImpactAnalysisService {
                         } else {
                             // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                             for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                Optional<PermissionAssignment> projectAssignmentOpt = 
                                         projectPermissionAssignmentService.getProjectAssignment(
                                                 "FieldStatusPermission", perm.getId(), 
                                                 project.getId(), itemTypeSet.getTenant());
                                 if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                        projectAssignmentOpt.get().getGrant() != null) {
                                     projectGrants.add(StatusRemovalImpactDto.ProjectGrantInfo.builder()
                                             .projectId(project.getId())
                                             .projectName(project.getName())
@@ -556,12 +556,12 @@ public class WorkflowImpactAnalysisService {
                     // Recupera grant di progetto da ProjectPermissionAssignmentService
                     // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                     if (itemTypeSet.getProject() != null) {
-                        Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                        Optional<PermissionAssignment> projectAssignmentOpt = 
                                 projectPermissionAssignmentService.getProjectAssignment(
                                         "ExecutorPermission", perm.getId(), 
                                         itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
                         if (projectAssignmentOpt.isPresent() && 
-                                projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                projectAssignmentOpt.get().getGrant() != null) {
                             projectGrants.add(TransitionRemovalImpactDto.ProjectGrantInfo.builder()
                                     .projectId(itemTypeSet.getProject().getId())
                                     .projectName(itemTypeSet.getProject().getName())
@@ -570,12 +570,12 @@ public class WorkflowImpactAnalysisService {
                     } else {
                         // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                         for (Project project : itemTypeSet.getProjectsAssociation()) {
-                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                            Optional<PermissionAssignment> projectAssignmentOpt = 
                                     projectPermissionAssignmentService.getProjectAssignment(
                                             "ExecutorPermission", perm.getId(), 
                                             project.getId(), itemTypeSet.getTenant());
                             if (projectAssignmentOpt.isPresent() && 
-                                    projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                    projectAssignmentOpt.get().getGrant() != null) {
                                 projectGrants.add(TransitionRemovalImpactDto.ProjectGrantInfo.builder()
                                         .projectId(project.getId())
                                         .projectName(project.getName())

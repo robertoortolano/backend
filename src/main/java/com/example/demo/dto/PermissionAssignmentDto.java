@@ -5,7 +5,8 @@ import lombok.*;
 import java.util.Set;
 
 /**
- * DTO per PermissionAssignment (assegnazione globale di ruoli e grant a Permission).
+ * DTO per PermissionAssignment (assegnazione di ruoli e grant a Permission).
+ * Può essere globale (projectId = null) o specifica per un progetto (projectId != null).
  */
 @Getter
 @Setter
@@ -29,6 +30,17 @@ public class PermissionAssignmentDto {
     private GrantViewDto grant;
     
     private Long tenantId;
+    
+    /**
+     * ID del progetto a cui si applica questa assegnazione.
+     * Se null, è un'assegnazione globale.
+     */
+    private Long projectId;
+    
+    /**
+     * ID dell'ItemTypeSet di riferimento (utile per assegnazioni di progetto).
+     */
+    private Long itemTypeSetId;
     
 }
 

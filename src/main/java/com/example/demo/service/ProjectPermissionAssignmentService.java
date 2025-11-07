@@ -8,28 +8,32 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 /**
- * Servizio per gestire ProjectPermissionAssignment (assegnazioni di progetto per Permission).
+ * Servizio per gestire PermissionAssignment di progetto (assegnazioni specifiche per progetto).
+ * 
+ * NOTA: Questo servizio gestisce PermissionAssignment con project != null.
+ * Le assegnazioni sono completamente indipendenti da quelle globali (project = null).
  */
 @Service
 @Transactional
 @RequiredArgsConstructor
 public class ProjectPermissionAssignmentService {
     
-    private final ProjectPermissionAssignmentRepository projectPermissionAssignmentRepository;
     private final PermissionAssignmentRepository permissionAssignmentRepository;
-    private final PermissionAssignmentService permissionAssignmentService;
     private final ProjectRepository projectRepository;
     private final ItemTypeSetRepository itemTypeSetRepository;
     private final RoleRepository roleRepository;
     private final GrantRepository grantRepository;
     private final GrantCleanupService grantCleanupService;
+    private final UserRepository userRepository;
+    private final GroupRepository groupRepository;
     
     /**
-     * Crea o aggiorna un ProjectPermissionAssignment per una Permission e un progetto.
+     * Crea o aggiorna un PermissionAssignment per una Permission e un progetto.
      * 
      * @param permissionType Tipo della Permission (es. "FieldOwnerPermission")
      * @param permissionId ID della Permission
@@ -38,9 +42,9 @@ public class ProjectPermissionAssignmentService {
      * @param roleIds Set di ID dei ruoli custom da assegnare (può essere null/empty)
      * @param grantId ID del Grant da assegnare (può essere null)
      * @param tenant Tenant di appartenenza
-     * @return ProjectPermissionAssignment creato o aggiornato
+     * @return PermissionAssignment creato o aggiornato (con project != null)
      */
-    public ProjectPermissionAssignment createOrUpdateProjectAssignment(
+    public PermissionAssignment createOrUpdateProjectAssignment(
             String permissionType,
             Long permissionId,
             Long projectId,
@@ -57,42 +61,22 @@ public class ProjectPermissionAssignmentService {
         ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdAndTenant(itemTypeSetId, tenant)
                 .orElseThrow(() -> new ApiException("ItemTypeSet not found"));
         
-        // Trova o crea ProjectPermissionAssignment
-        Optional<ProjectPermissionAssignment> existingOpt = projectPermissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndProjectAndTenant(permissionType, permissionId, project, tenant);
+        // Trova o crea PermissionAssignment di progetto
+        Optional<PermissionAssignment> existingOpt = permissionAssignmentRepository
+                .findByPermissionTypeAndPermissionIdAndTenantAndProject(permissionType, permissionId, tenant, project);
         
-        ProjectPermissionAssignment projectAssignment;
         PermissionAssignment assignment;
-        
         if (existingOpt.isPresent()) {
-            projectAssignment = existingOpt.get();
-            assignment = projectAssignment.getAssignment();
+            assignment = existingOpt.get();
         } else {
-            // Verifica se esiste già un PermissionAssignment globale per questa permission
-            // Un PermissionAssignment può essere condiviso tra assignment globale e di progetto
-            Optional<PermissionAssignment> existingGlobalAssignmentOpt = permissionAssignmentRepository
-                    .findByPermissionTypeAndPermissionIdAndTenant(permissionType, permissionId, tenant);
-            
-            if (existingGlobalAssignmentOpt.isPresent()) {
-                // Riutilizza l'assignment globale esistente
-                assignment = existingGlobalAssignmentOpt.get();
-            } else {
-                // Crea nuovo PermissionAssignment per il progetto
-                assignment = PermissionAssignment.builder()
-                        .permissionType(permissionType)
-                        .permissionId(permissionId)
-                        .tenant(tenant)
-                        .roles(new HashSet<>())
-                        .build();
-            }
-            
-            projectAssignment = ProjectPermissionAssignment.builder()
+            // Crea nuovo PermissionAssignment per il progetto
+            assignment = PermissionAssignment.builder()
                     .permissionType(permissionType)
                     .permissionId(permissionId)
-                    .project(project)
-                    .itemTypeSet(itemTypeSet)
                     .tenant(tenant)
-                    .assignment(assignment)
+                    .project(project) // Assegnazione di progetto
+                    .itemTypeSet(itemTypeSet)
+                    .roles(new HashSet<>())
                     .build();
         }
         
@@ -123,23 +107,23 @@ public class ProjectPermissionAssignmentService {
             }
         }
         
-        assignment = permissionAssignmentRepository.save(assignment);
-        projectAssignment.setAssignment(assignment);
+        // Assicura che itemTypeSet sia aggiornato
+        assignment.setItemTypeSet(itemTypeSet);
         
-        return projectPermissionAssignmentRepository.save(projectAssignment);
+        return permissionAssignmentRepository.save(assignment);
     }
     
     /**
-     * Ottiene ProjectPermissionAssignment per una Permission e un progetto.
+     * Ottiene PermissionAssignment per una Permission e un progetto.
      * 
      * @param permissionType Tipo della Permission
      * @param permissionId ID della Permission
      * @param projectId ID del progetto
      * @param tenant Tenant di appartenenza
-     * @return ProjectPermissionAssignment se esiste, altrimenti Optional.empty()
+     * @return PermissionAssignment se esiste, altrimenti Optional.empty()
      */
     @Transactional(readOnly = true)
-    public Optional<ProjectPermissionAssignment> getProjectAssignment(
+    public Optional<PermissionAssignment> getProjectAssignment(
             String permissionType,
             Long permissionId,
             Long projectId,
@@ -148,13 +132,13 @@ public class ProjectPermissionAssignmentService {
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
         
-        return projectPermissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndProjectAndTenantWithCollections(permissionType, permissionId, project, tenant);
+        return permissionAssignmentRepository
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectWithCollections(permissionType, permissionId, tenant, project);
     }
     
     /**
-     * Elimina ProjectPermissionAssignment per una Permission e un progetto.
-     * Elimina anche il PermissionAssignment associato e il Grant se esiste.
+     * Elimina PermissionAssignment per una Permission e un progetto.
+     * Elimina anche il Grant associato se esiste.
      * 
      * @param permissionType Tipo della Permission
      * @param permissionId ID della Permission
@@ -170,29 +154,30 @@ public class ProjectPermissionAssignmentService {
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
         
-        Optional<ProjectPermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndProjectAndTenant(permissionType, permissionId, project, tenant);
+        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentRepository
+                .findByPermissionTypeAndPermissionIdAndTenantAndProject(permissionType, permissionId, tenant, project);
         
-        if (projectAssignmentOpt.isPresent()) {
-            ProjectPermissionAssignment projectAssignment = projectAssignmentOpt.get();
-            PermissionAssignment assignment = projectAssignment.getAssignment();
+        if (assignmentOpt.isPresent()) {
+            PermissionAssignment assignment = assignmentOpt.get();
             
-            // Elimina Grant se esiste
+            assignment.getRoles().clear();
+            Long grantId = null;
             if (assignment.getGrant() != null) {
-                Long grantId = assignment.getGrant().getId();
-                grantCleanupService.deleteGrantCompletely(grantId);
+                grantId = assignment.getGrant().getId();
+                assignment.setGrant(null);
             }
+            permissionAssignmentRepository.save(assignment);
             
-            // Elimina PermissionAssignment
             permissionAssignmentRepository.delete(assignment);
             
-            // Elimina ProjectPermissionAssignment
-            projectPermissionAssignmentRepository.delete(projectAssignment);
+            if (grantId != null) {
+                grantCleanupService.deleteGrantCompletely(grantId);
+            }
         }
     }
     
     /**
-     * Crea un Grant e lo assegna a ProjectPermissionAssignment.
+     * Crea un Grant e lo assegna a PermissionAssignment di progetto.
      * 
      * @param permissionType Tipo della Permission
      * @param permissionId ID della Permission
@@ -203,9 +188,9 @@ public class ProjectPermissionAssignmentService {
      * @param negatedUserIds Set di ID degli utenti da negare nel Grant
      * @param negatedGroupIds Set di ID dei gruppi da negare nel Grant
      * @param tenant Tenant di appartenenza
-     * @return ProjectPermissionAssignment aggiornato
+     * @return PermissionAssignment aggiornato (con project != null)
      */
-    public ProjectPermissionAssignment createAndAssignGrant(
+    public PermissionAssignment createAndAssignGrant(
             String permissionType,
             Long permissionId,
             Long projectId,
@@ -216,10 +201,6 @@ public class ProjectPermissionAssignmentService {
             Set<Long> negatedGroupIds,
             Tenant tenant) {
         
-        // Usa il servizio base per creare/aggiornare l'assignment
-        PermissionAssignment assignment = permissionAssignmentService.createAndAssignGrant(
-                permissionType, permissionId, userIds, groupIds, negatedUserIds, negatedGroupIds, tenant);
-        
         // Verifica che il progetto esista
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
@@ -228,42 +209,110 @@ public class ProjectPermissionAssignmentService {
         ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdAndTenant(itemTypeSetId, tenant)
                 .orElseThrow(() -> new ApiException("ItemTypeSet not found"));
         
-        // Trova o crea ProjectPermissionAssignment
-        Optional<ProjectPermissionAssignment> existingOpt = projectPermissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndProjectAndTenant(permissionType, permissionId, project, tenant);
+        // Trova o crea PermissionAssignment di progetto
+        Optional<PermissionAssignment> existingOpt = permissionAssignmentRepository
+                .findByPermissionTypeAndPermissionIdAndTenantAndProject(permissionType, permissionId, tenant, project);
         
-        ProjectPermissionAssignment projectAssignment;
+        PermissionAssignment assignment;
         if (existingOpt.isPresent()) {
-            projectAssignment = existingOpt.get();
-            projectAssignment.setAssignment(assignment);
+            assignment = existingOpt.get();
         } else {
-            projectAssignment = ProjectPermissionAssignment.builder()
+            assignment = PermissionAssignment.builder()
                     .permissionType(permissionType)
                     .permissionId(permissionId)
-                    .project(project)
-                    .itemTypeSet(itemTypeSet)
                     .tenant(tenant)
-                    .assignment(assignment)
+                    .project(project) // Assegnazione di progetto
+                    .itemTypeSet(itemTypeSet)
+                    .roles(new HashSet<>())
                     .build();
         }
         
-        return projectPermissionAssignmentRepository.save(projectAssignment);
+        Grant grant = resolveGrant(assignment);
+
+        Set<User> users = buildUsersSet(userIds);
+        Set<Group> groups = buildGroupsSet(groupIds, tenant);
+        Set<User> negatedUsers = buildUsersSet(negatedUserIds);
+        Set<Group> negatedGroups = buildGroupsSet(negatedGroupIds, tenant);
+
+        replaceGrantCollections(grant, users, groups, negatedUsers, negatedGroups);
+
+        grant = grantRepository.save(grant);
+        assignment.setGrant(grant);
+        
+        // Assicura che itemTypeSet sia aggiornato
+        assignment.setItemTypeSet(itemTypeSet);
+        
+        return permissionAssignmentRepository.save(assignment);
+    }
+    
+    private Grant resolveGrant(PermissionAssignment assignment) {
+        if (assignment.getGrant() != null) {
+            Long grantId = assignment.getGrant().getId();
+            return grantRepository.findByIdWithCollections(grantId)
+                    .orElseGet(assignment::getGrant);
+        }
+        Grant grant = new Grant();
+        grant.setRole(null); // Grant diretto, non associato a Role
+        return grant;
+    }
+
+    private Set<User> buildUsersSet(Set<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return new HashSet<>();
+        }
+        Set<User> users = new HashSet<>();
+        for (Long userId : userIds) {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ApiException("User not found: " + userId));
+            users.add(user);
+        }
+        return users;
+    }
+
+    private Set<Group> buildGroupsSet(Set<Long> groupIds, Tenant tenant) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return new HashSet<>();
+        }
+        Set<Group> groups = new HashSet<>();
+        for (Long groupId : groupIds) {
+            Group group = groupRepository.findByIdAndTenant(groupId, tenant)
+                    .orElseThrow(() -> new ApiException("Group not found: " + groupId));
+            groups.add(group);
+        }
+        return groups;
+    }
+
+    private void replaceGrantCollections(Grant grant,
+                                         Set<User> users,
+                                         Set<Group> groups,
+                                         Set<User> negatedUsers,
+                                         Set<Group> negatedGroups) {
+        grant.getUsers().clear();
+        grant.getUsers().addAll(users);
+
+        grant.getGroups().clear();
+        grant.getGroups().addAll(groups);
+
+        grant.getNegatedUsers().clear();
+        grant.getNegatedUsers().addAll(negatedUsers);
+
+        grant.getNegatedGroups().clear();
+        grant.getNegatedGroups().addAll(negatedGroups);
     }
     
     /**
-     * Elimina tutte le ProjectPermissionAssignment per un ItemTypeSet.
+     * Elimina tutte le PermissionAssignment di progetto per un ItemTypeSet.
      * Utile quando si elimina un ItemTypeSet.
      * 
      * @param itemTypeSetId ID dell'ItemTypeSet
      * @param tenantId ID del tenant
      */
     public void deleteByItemTypeSet(Long itemTypeSetId, Long tenantId) {
-        var projectAssignments = projectPermissionAssignmentRepository
-                .findByItemTypeSetIdAndTenantId(itemTypeSetId, tenantId);
+        // Trova tutte le PermissionAssignment di progetto per questo ItemTypeSet
+        List<PermissionAssignment> projectAssignments = permissionAssignmentRepository
+                .findByItemTypeSetIdAndProjectIsNotNull(itemTypeSetId);
         
-        for (ProjectPermissionAssignment projectAssignment : projectAssignments) {
-            PermissionAssignment assignment = projectAssignment.getAssignment();
-            
+        for (PermissionAssignment assignment : projectAssignments) {
             // Elimina Grant se esiste
             if (assignment.getGrant() != null) {
                 Long grantId = assignment.getGrant().getId();
@@ -273,10 +322,6 @@ public class ProjectPermissionAssignmentService {
             // Elimina PermissionAssignment
             permissionAssignmentRepository.delete(assignment);
         }
-        
-        // Elimina ProjectPermissionAssignment
-        projectPermissionAssignmentRepository.deleteByItemTypeSetIdAndTenantId(itemTypeSetId, tenantId);
     }
     
 }
-

@@ -340,12 +340,12 @@ public class ItemTypeSetService {
             );
         }
 
-        // Prima di eliminare l'ITS, elimina tutte le PermissionAssignment e ProjectPermissionAssignment associate
+        // Prima di eliminare l'ITS, elimina tutte le PermissionAssignment associate
         // Questo è necessario perché:
-        // 1. Le PermissionAssignment sono specifiche per una sola permission, quindi vanno eliminate
-        // 2. Le ProjectPermissionAssignment sono specifiche per un ITS e un progetto, quindi vanno eliminate
+        // 1. Le PermissionAssignment globali (project = null) sono specifiche per una sola permission, quindi vanno eliminate
+        // 2. Le PermissionAssignment di progetto (project != null) sono specifiche per un ITS e un progetto, quindi vanno eliminate
         
-        // 1. Elimina tutte le ProjectPermissionAssignment per questo ITS
+        // 1. Elimina tutte le PermissionAssignment di progetto per questo ITS
         projectPermissionAssignmentService.deleteByItemTypeSet(id, tenant.getId());
         
         // 2. Per ogni ItemTypeConfiguration nell'ITS, elimina tutte le PermissionAssignment associate

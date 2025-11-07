@@ -805,20 +805,20 @@ public class FieldSetService {
                         // Controlla se ha grant di progetto
                         boolean hasProjectGrant = false;
                         if (itemTypeSet.getProject() != null) {
-                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                            Optional<PermissionAssignment> projectAssignmentOpt = 
                                     projectPermissionAssignmentService.getProjectAssignment(
                                             "FieldOwnerPermission", permission.getId(), 
                                             itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
                             hasProjectGrant = projectAssignmentOpt.isPresent() && 
-                                    projectAssignmentOpt.get().getAssignment().getGrant() != null;
+                                    projectAssignmentOpt.get().getGrant() != null;
                         } else {
                             for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                Optional<PermissionAssignment> projectAssignmentOpt = 
                                         projectPermissionAssignmentService.getProjectAssignment(
                                                 "FieldOwnerPermission", permission.getId(), 
                                                 project.getId(), itemTypeSet.getTenant());
                                 if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                        projectAssignmentOpt.get().getGrant() != null) {
                                     hasProjectGrant = true;
                                     break;
                                 }
@@ -875,12 +875,12 @@ public class FieldSetService {
                             // Recupera grant di progetto da ProjectPermissionAssignmentService
                             // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                             if (itemTypeSet.getProject() != null) {
-                                Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                Optional<PermissionAssignment> projectAssignmentOpt = 
                                         projectPermissionAssignmentService.getProjectAssignment(
                                                 "FieldOwnerPermission", permission.getId(), 
                                                 itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
                                 if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                        projectAssignmentOpt.get().getGrant() != null) {
                                     projectGrantsList.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
                                             .projectId(itemTypeSet.getProject().getId())
                                             .projectName(itemTypeSet.getProject().getName())
@@ -889,12 +889,12 @@ public class FieldSetService {
                             } else {
                                 // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                                 for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                    Optional<PermissionAssignment> projectAssignmentOpt = 
                                             projectPermissionAssignmentService.getProjectAssignment(
                                                     "FieldOwnerPermission", permission.getId(), 
                                                     project.getId(), itemTypeSet.getTenant());
                                     if (projectAssignmentOpt.isPresent() && 
-                                            projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                            projectAssignmentOpt.get().getGrant() != null) {
                                         projectGrantsList.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
                                                 .projectId(project.getId())
                                                 .projectName(project.getName())
@@ -983,20 +983,20 @@ public class FieldSetService {
                         // Controlla se ha grant di progetto
                         boolean hasProjectGrant = false;
                         if (itemTypeSet.getProject() != null) {
-                            Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                            Optional<PermissionAssignment> projectAssignmentOpt = 
                                     projectPermissionAssignmentService.getProjectAssignment(
                                             "FieldStatusPermission", permission.getId(), 
                                             itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
                             hasProjectGrant = projectAssignmentOpt.isPresent() && 
-                                    projectAssignmentOpt.get().getAssignment().getGrant() != null;
+                                    projectAssignmentOpt.get().getGrant() != null;
                         } else {
                             for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                Optional<PermissionAssignment> projectAssignmentOpt = 
                                         projectPermissionAssignmentService.getProjectAssignment(
                                                 "FieldStatusPermission", permission.getId(), 
                                                 project.getId(), itemTypeSet.getTenant());
                                 if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                        projectAssignmentOpt.get().getGrant() != null) {
                                     hasProjectGrant = true;
                                     break;
                                 }
@@ -1043,12 +1043,12 @@ public class FieldSetService {
                             // Recupera grant di progetto da ProjectPermissionAssignmentService
                             // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                             if (itemTypeSet.getProject() != null) {
-                                Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                Optional<PermissionAssignment> projectAssignmentOpt = 
                                         projectPermissionAssignmentService.getProjectAssignment(
                                                 "FieldStatusPermission", permission.getId(), 
                                                 itemTypeSet.getProject().getId(), itemTypeSet.getTenant());
                                 if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                        projectAssignmentOpt.get().getGrant() != null) {
                                     projectGrantsList.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
                                             .projectId(itemTypeSet.getProject().getId())
                                             .projectName(itemTypeSet.getProject().getName())
@@ -1057,12 +1057,12 @@ public class FieldSetService {
                             } else {
                                 // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                                 for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                    Optional<PermissionAssignment> projectAssignmentOpt = 
                                             projectPermissionAssignmentService.getProjectAssignment(
                                                     "FieldStatusPermission", permission.getId(), 
                                                     project.getId(), itemTypeSet.getTenant());
                                     if (projectAssignmentOpt.isPresent() && 
-                                            projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                            projectAssignmentOpt.get().getGrant() != null) {
                                         projectGrantsList.add(FieldSetRemovalImpactDto.ProjectGrantInfo.builder()
                                                 .projectId(project.getId())
                                                 .projectName(project.getName())

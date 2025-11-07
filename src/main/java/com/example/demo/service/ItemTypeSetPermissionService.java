@@ -90,10 +90,10 @@ public class ItemTypeSetPermissionService {
                 
                 // Aggiungi informazioni su Grant di progetto se disponibile
                 if (projectId != null) {
-                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
+                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
                             "WorkerPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getAssignment().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getAssignment().getGrant();
+                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
+                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
                         worker.put("projectGrantId", projectGrant.getId());
                         worker.put("projectGrantName", "Grant di progetto");
                     }
@@ -164,16 +164,16 @@ public class ItemTypeSetPermissionService {
                 
                 // Aggiungi informazioni su Grant di progetto se disponibile
                 if (projectId != null) {
-                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
+                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
                             "StatusOwnerPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getAssignment().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getAssignment().getGrant();
+                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
+                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
                         statusOwner.put("projectGrantId", projectGrant.getId());
                         statusOwner.put("projectGrantName", "Grant di progetto");
                     }
                     // Aggiungi ruoli di progetto
                     if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getAssignment().getRoles();
+                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
                         List<Map<String, Object>> projectRolesList = new ArrayList<>();
                         for (Role role : projectRoles) {
                             Map<String, Object> roleMap = new HashMap<>();
@@ -249,16 +249,16 @@ public class ItemTypeSetPermissionService {
                 
                 // Aggiungi informazioni su Grant di progetto se disponibile
                 if (projectId != null) {
-                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
+                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
                             "FieldOwnerPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getAssignment().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getAssignment().getGrant();
+                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
+                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
                         fieldOwner.put("projectGrantId", projectGrant.getId());
                         fieldOwner.put("projectGrantName", "Grant di progetto");
                     }
                     // Aggiungi ruoli di progetto
                     if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getAssignment().getRoles();
+                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
                         List<Map<String, Object>> projectRolesList = new ArrayList<>();
                         for (Role role : projectRoles) {
                             Map<String, Object> roleMap = new HashMap<>();
@@ -332,16 +332,16 @@ public class ItemTypeSetPermissionService {
                 
                 // Aggiungi informazioni su Grant di progetto se disponibile
                 if (projectId != null) {
-                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
+                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
                             "CreatorPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getAssignment().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getAssignment().getGrant();
+                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
+                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
                         creator.put("projectGrantId", projectGrant.getId());
                         creator.put("projectGrantName", "Grant di progetto");
                     }
                     // Aggiungi ruoli di progetto
                     if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getAssignment().getRoles();
+                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
                         List<Map<String, Object>> projectRolesList = new ArrayList<>();
                         for (Role role : projectRoles) {
                             Map<String, Object> roleMap = new HashMap<>();
@@ -438,16 +438,16 @@ public class ItemTypeSetPermissionService {
                 
                 // Aggiungi informazioni su Grant di progetto se disponibile
                 if (projectId != null) {
-                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
+                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
                             "ExecutorPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getAssignment().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getAssignment().getGrant();
+                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
+                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
                         executor.put("projectGrantId", projectGrant.getId());
                         executor.put("projectGrantName", "Grant di progetto");
                     }
                     // Aggiungi ruoli di progetto
                     if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getAssignment().getRoles();
+                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
                         List<Map<String, Object>> projectRolesList = new ArrayList<>();
                         for (Role role : projectRoles) {
                             Map<String, Object> roleMap = new HashMap<>();
@@ -527,16 +527,16 @@ public class ItemTypeSetPermissionService {
                 
                 // Aggiungi informazioni su Grant di progetto se disponibile
                 if (projectId != null) {
-                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
+                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
                             "FieldStatusPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getAssignment().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getAssignment().getGrant();
+                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
+                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
                         editor.put("projectGrantId", projectGrant.getId());
                         editor.put("projectGrantName", "Grant di progetto");
                     }
                     // Aggiungi ruoli di progetto
                     if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getAssignment().getRoles();
+                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
                         List<Map<String, Object>> projectRolesList = new ArrayList<>();
                         for (Role role : projectRoles) {
                             Map<String, Object> roleMap = new HashMap<>();
@@ -616,16 +616,16 @@ public class ItemTypeSetPermissionService {
                 
                 // Aggiungi informazioni su Grant di progetto se disponibile
                 if (projectId != null) {
-                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
+                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
                             "FieldStatusPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getAssignment().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getAssignment().getGrant();
+                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
+                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
                         viewer.put("projectGrantId", projectGrant.getId());
                         viewer.put("projectGrantName", "Grant di progetto");
                     }
                     // Aggiungi ruoli di progetto
                     if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getAssignment().getRoles();
+                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
                         List<Map<String, Object>> projectRolesList = new ArrayList<>();
                         for (Role role : projectRoles) {
                             Map<String, Object> roleMap = new HashMap<>();

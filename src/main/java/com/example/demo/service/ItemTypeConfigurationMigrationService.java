@@ -375,12 +375,12 @@ public class ItemTypeConfigurationMigrationService {
                             if (itemTypeSet != null) {
                                 // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                                 if (itemTypeSet.getProject() != null) {
-                                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                    Optional<PermissionAssignment> projectAssignmentOpt = 
                                             projectPermissionAssignmentService.getProjectAssignment(
                                                     "FieldStatusPermission", perm.getId(), 
                                                     itemTypeSet.getProject().getId(), tenant);
                                     if (projectAssignmentOpt.isPresent() && 
-                                            projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                            projectAssignmentOpt.get().getGrant() != null) {
                                         projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
                                                 .projectId(itemTypeSet.getProject().getId())
                                                 .projectName(itemTypeSet.getProject().getName())
@@ -389,12 +389,12 @@ public class ItemTypeConfigurationMigrationService {
                                 } else {
                                     // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                                     for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                        Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                        Optional<PermissionAssignment> projectAssignmentOpt = 
                                                 projectPermissionAssignmentService.getProjectAssignment(
                                                         "FieldOwnerPermission", perm.getId(), 
                                                         project.getId(), tenant);
                                         if (projectAssignmentOpt.isPresent() && 
-                                                projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                                projectAssignmentOpt.get().getGrant() != null) {
                                             projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
                                                     .projectId(project.getId())
                                                     .projectName(project.getName())
@@ -520,12 +520,12 @@ public class ItemTypeConfigurationMigrationService {
                         if (itemTypeSet != null) {
                             // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                             if (itemTypeSet.getProject() != null) {
-                                Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                Optional<PermissionAssignment> projectAssignmentOpt = 
                                         projectPermissionAssignmentService.getProjectAssignment(
                                                 "StatusOwnerPermission", perm.getId(), 
                                                 itemTypeSet.getProject().getId(), tenant);
                                 if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                        projectAssignmentOpt.get().getGrant() != null) {
                                     projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
                                             .projectId(itemTypeSet.getProject().getId())
                                             .projectName(itemTypeSet.getProject().getName())
@@ -534,12 +534,12 @@ public class ItemTypeConfigurationMigrationService {
                             } else {
                                 // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                                 for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                    Optional<PermissionAssignment> projectAssignmentOpt = 
                                             projectPermissionAssignmentService.getProjectAssignment(
                                                     "StatusOwnerPermission", perm.getId(), 
                                                     project.getId(), tenant);
                                     if (projectAssignmentOpt.isPresent() && 
-                                            projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                            projectAssignmentOpt.get().getGrant() != null) {
                                         projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
                                                 .projectId(project.getId())
                                                 .projectName(project.getName())
@@ -691,12 +691,12 @@ public class ItemTypeConfigurationMigrationService {
                             if (itemTypeSet != null) {
                                 // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                                 if (itemTypeSet.getProject() != null) {
-                                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                    Optional<PermissionAssignment> projectAssignmentOpt = 
                                             projectPermissionAssignmentService.getProjectAssignment(
                                                     "FieldStatusPermission", perm.getId(), 
                                                     itemTypeSet.getProject().getId(), tenant);
                                     if (projectAssignmentOpt.isPresent() && 
-                                            projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                            projectAssignmentOpt.get().getGrant() != null) {
                                         projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
                                                 .projectId(itemTypeSet.getProject().getId())
                                                 .projectName(itemTypeSet.getProject().getName())
@@ -705,12 +705,12 @@ public class ItemTypeConfigurationMigrationService {
                                 } else {
                                     // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                                     for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                        Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                        Optional<PermissionAssignment> projectAssignmentOpt = 
                                                 projectPermissionAssignmentService.getProjectAssignment(
                                                         "FieldOwnerPermission", perm.getId(), 
                                                         project.getId(), tenant);
                                         if (projectAssignmentOpt.isPresent() && 
-                                                projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                                projectAssignmentOpt.get().getGrant() != null) {
                                             projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
                                                     .projectId(project.getId())
                                                     .projectName(project.getName())
@@ -835,12 +835,12 @@ public class ItemTypeConfigurationMigrationService {
                         if (itemTypeSet != null) {
                             // Se è un ItemTypeSet di progetto, controlla solo quel progetto
                             if (itemTypeSet.getProject() != null) {
-                                Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                Optional<PermissionAssignment> projectAssignmentOpt = 
                                         projectPermissionAssignmentService.getProjectAssignment(
                                                 "ExecutorPermission", perm.getId(), 
                                                 itemTypeSet.getProject().getId(), tenant);
                                 if (projectAssignmentOpt.isPresent() && 
-                                        projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                        projectAssignmentOpt.get().getGrant() != null) {
                                     projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
                                             .projectId(itemTypeSet.getProject().getId())
                                             .projectName(itemTypeSet.getProject().getName())
@@ -849,12 +849,12 @@ public class ItemTypeConfigurationMigrationService {
                             } else {
                                 // Se è un ItemTypeSet globale, controlla tutti i progetti associati
                                 for (Project project : itemTypeSet.getProjectsAssociation()) {
-                                    Optional<ProjectPermissionAssignment> projectAssignmentOpt = 
+                                    Optional<PermissionAssignment> projectAssignmentOpt = 
                                             projectPermissionAssignmentService.getProjectAssignment(
                                                     "ExecutorPermission", perm.getId(), 
                                                     project.getId(), tenant);
                                     if (projectAssignmentOpt.isPresent() && 
-                                            projectAssignmentOpt.get().getAssignment().getGrant() != null) {
+                                            projectAssignmentOpt.get().getGrant() != null) {
                                         projectGrantsList.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
                                                 .projectId(project.getId())
                                                 .projectName(project.getName())

@@ -14,6 +14,9 @@ import java.util.Set;
 
 /**
  * Servizio per gestire PermissionAssignment (assegnazioni globali di ruoli e grant a Permission).
+ * 
+ * NOTA: Questo servizio gestisce solo assegnazioni GLOBALI (project = null).
+ * Per assegnazioni di progetto, usa PermissionAssignment direttamente con project != null.
  */
 @Slf4j
 @Service
@@ -46,9 +49,9 @@ public class PermissionAssignmentService {
             Long grantId,
             Tenant tenant) {
         
-        // Trova o crea PermissionAssignment
+        // Trova o crea PermissionAssignment GLOBALE (project = null)
         Optional<PermissionAssignment> existingOpt = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenant(permissionType, permissionId, tenant);
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(permissionType, permissionId, tenant);
         
         PermissionAssignment assignment;
         if (existingOpt.isPresent()) {
@@ -58,6 +61,7 @@ public class PermissionAssignmentService {
                     .permissionType(permissionType)
                     .permissionId(permissionId)
                     .tenant(tenant)
+                    .project(null) // Assegnazione globale
                     .roles(new HashSet<>())
                     .build();
         }
@@ -120,19 +124,19 @@ public class PermissionAssignmentService {
      */
     public void deleteAssignment(String permissionType, Long permissionId, Tenant tenant) {
         Optional<PermissionAssignment> assignmentOpt = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenant(permissionType, permissionId, tenant);
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(permissionType, permissionId, tenant);
         
         if (assignmentOpt.isPresent()) {
             PermissionAssignment assignment = assignmentOpt.get();
             
-            // IMPORTANTE: Prima rimuovi il riferimento al Grant dal PermissionAssignment
-            // per evitare violazioni di foreign key constraint
+            // Scollega ruoli e grant prima di eliminare per evitare violazioni FK
+            assignment.getRoles().clear();
             Long grantId = null;
             if (assignment.getGrant() != null) {
                 grantId = assignment.getGrant().getId();
                 assignment.setGrant(null);
-                permissionAssignmentRepository.save(assignment);
             }
+            permissionAssignmentRepository.save(assignment);
             
             // Elimina PermissionAssignment
             permissionAssignmentRepository.delete(assignment);
@@ -160,11 +164,12 @@ public class PermissionAssignmentService {
             Tenant tenant) {
         
         PermissionAssignment assignment = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenant(permissionType, permissionId, tenant)
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(permissionType, permissionId, tenant)
                 .orElseGet(() -> PermissionAssignment.builder()
                         .permissionType(permissionType)
                         .permissionId(permissionId)
                         .tenant(tenant)
+                        .project(null) // Assegnazione globale
                         .roles(new HashSet<>())
                         .build());
         
@@ -195,7 +200,7 @@ public class PermissionAssignmentService {
             Tenant tenant) {
         
         PermissionAssignment assignment = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenant(permissionType, permissionId, tenant)
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(permissionType, permissionId, tenant)
                 .orElseThrow(() -> new ApiException("PermissionAssignment not found"));
         
         Role role = roleRepository.findById(roleId)
@@ -234,81 +239,84 @@ public class PermissionAssignmentService {
             Tenant tenant) {
         
         PermissionAssignment assignment = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenant(permissionType, permissionId, tenant)
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(permissionType, permissionId, tenant)
                 .orElseGet(() -> PermissionAssignment.builder()
                         .permissionType(permissionType)
                         .permissionId(permissionId)
                         .tenant(tenant)
+                        .project(null) // Assegnazione globale
                         .roles(new HashSet<>())
                         .build());
         
-        // Aggiorna Grant esistente o crea nuovo Grant
-        Grant grant;
-        if (assignment.getGrant() != null) {
-            // AGGIORNA Grant esistente (più efficiente e mantiene l'ID)
-            grant = assignment.getGrant();
-            // Carica le collezioni se non sono già caricate
-            grant = grantRepository.findByIdWithCollections(grant.getId())
-                    .orElse(grant);
-        } else {
-            // Crea nuovo Grant
-            grant = new Grant();
-            grant.setRole(null); // Grant diretto, non associato a Role
-        }
-        
-        // Aggiorna utenti (sostituisce completamente la collezione)
-        Set<User> users = new HashSet<>();
-        if (userIds != null && !userIds.isEmpty()) {
-            for (Long userId : userIds) {
-                User user = userRepository.findById(userId)
-                        .orElseThrow(() -> new ApiException("User not found: " + userId));
-                users.add(user);
-            }
-        }
-        grant.setUsers(users);
-        
-        // Aggiorna gruppi (sostituisce completamente la collezione)
-        Set<Group> groups = new HashSet<>();
-        if (groupIds != null && !groupIds.isEmpty()) {
-            for (Long groupId : groupIds) {
-                Group group = groupRepository.findByIdAndTenant(groupId, tenant)
-                        .orElseThrow(() -> new ApiException("Group not found: " + groupId));
-                groups.add(group);
-            }
-        }
-        grant.setGroups(groups);
-        
-        // Aggiorna utenti negati (sostituisce completamente la collezione)
-        Set<User> negatedUsers = new HashSet<>();
-        if (negatedUserIds != null && !negatedUserIds.isEmpty()) {
-            for (Long userId : negatedUserIds) {
-                User user = userRepository.findById(userId)
-                        .orElseThrow(() -> new ApiException("User not found: " + userId));
-                negatedUsers.add(user);
-            }
-        }
-        grant.setNegatedUsers(negatedUsers);
-        
-        // Aggiorna gruppi negati (sostituisce completamente la collezione)
-        Set<Group> negatedGroups = new HashSet<>();
-        if (negatedGroupIds != null && !negatedGroupIds.isEmpty()) {
-            for (Long groupId : negatedGroupIds) {
-                Group group = groupRepository.findByIdAndTenant(groupId, tenant)
-                        .orElseThrow(() -> new ApiException("Group not found: " + groupId));
-                negatedGroups.add(group);
-            }
-        }
-        grant.setNegatedGroups(negatedGroups);
-        
-        // Salva Grant (update se esiste, insert se nuovo)
+        Grant grant = resolveGrant(assignment);
+
+        Set<User> users = buildUsersSet(userIds);
+        Set<Group> groups = buildGroupsSet(groupIds, tenant);
+        Set<User> negatedUsers = buildUsersSet(negatedUserIds);
+        Set<Group> negatedGroups = buildGroupsSet(negatedGroupIds, tenant);
+
+        replaceGrantCollections(grant, users, groups, negatedUsers, negatedGroups);
+
         grant = grantRepository.save(grant);
-        
-        // Assicura che il Grant sia associato al PermissionAssignment
-        if (assignment.getGrant() == null) {
-            assignment.setGrant(grant);
-        }
+
+        assignment.setGrant(grant);
         
         return permissionAssignmentRepository.save(assignment);
+    }
+
+    private Grant resolveGrant(PermissionAssignment assignment) {
+        if (assignment.getGrant() != null) {
+            Long grantId = assignment.getGrant().getId();
+            return grantRepository.findByIdWithCollections(grantId)
+                    .orElseGet(assignment::getGrant);
+        }
+        Grant grant = new Grant();
+        grant.setRole(null); // Grant diretto, non associato a Role
+        return grant;
+    }
+
+    private Set<User> buildUsersSet(Set<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return new HashSet<>();
+        }
+        Set<User> users = new HashSet<>();
+        for (Long userId : userIds) {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ApiException("User not found: " + userId));
+            users.add(user);
+        }
+        return users;
+    }
+
+    private Set<Group> buildGroupsSet(Set<Long> groupIds, Tenant tenant) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return new HashSet<>();
+        }
+        Set<Group> groups = new HashSet<>();
+        for (Long groupId : groupIds) {
+            Group group = groupRepository.findByIdAndTenant(groupId, tenant)
+                    .orElseThrow(() -> new ApiException("Group not found: " + groupId));
+            groups.add(group);
+        }
+        return groups;
+    }
+
+    private void replaceGrantCollections(Grant grant,
+                                         Set<User> users,
+                                         Set<Group> groups,
+                                         Set<User> negatedUsers,
+                                         Set<Group> negatedGroups) {
+        grant.getUsers().clear();
+        grant.getUsers().addAll(users);
+
+        grant.getGroups().clear();
+        grant.getGroups().addAll(groups);
+
+        grant.getNegatedUsers().clear();
+        grant.getNegatedUsers().addAll(negatedUsers);
+
+        grant.getNegatedGroups().clear();
+        grant.getNegatedGroups().addAll(negatedGroups);
     }
     
 }
