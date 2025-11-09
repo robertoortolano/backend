@@ -5,7 +5,6 @@ import com.example.demo.entity.*;
 import com.example.demo.exception.ApiException;
 import com.example.demo.repository.*;
 // RIMOSSO: ProjectItemTypeSetRoleRole eliminata
-import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,8 +26,6 @@ public class ItemTypeSetPermissionService {
     private final ExecutorPermissionRepository executorPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
     private final ItemTypePermissionService itemTypePermissionService;
-    private final RoleRepository roleRepository;
-    private final EntityManager entityManager;
     
     // Servizi per PermissionAssignment (nuova struttura)
     private final PermissionAssignmentService permissionAssignmentService;
@@ -60,10 +57,22 @@ public class ItemTypeSetPermissionService {
         
         // Worker permissions
         List<Map<String, Object>> workers = new ArrayList<>();
+        Map<ItemTypeConfiguration, List<WorkerPermission>> workerPermissionsByConfig = new LinkedHashMap<>();
+        Set<Long> workerPermissionIds = new HashSet<>();
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<WorkerPermission> permissions = workerPermissionRepository
-                .findAllByItemTypeConfiguration(config);
-            
+            List<WorkerPermission> permissions = workerPermissionRepository.findAllByItemTypeConfiguration(config);
+            workerPermissionsByConfig.put(config, permissions);
+            for (WorkerPermission permission : permissions) {
+                workerPermissionIds.add(permission.getId());
+            }
+        }
+        Map<Long, PermissionAssignment> workerAssignments = permissionAssignmentService.getAssignments(
+                "WorkerPermission", workerPermissionIds, tenant);
+        Map<Long, PermissionAssignment> workerProjectAssignments = projectId != null
+                ? projectPermissionAssignmentService.getProjectAssignments("WorkerPermission", workerPermissionIds, projectId, tenant)
+                : Collections.emptyMap();
+        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+            List<WorkerPermission> permissions = workerPermissionsByConfig.getOrDefault(config, Collections.emptyList());
             for (WorkerPermission perm : permissions) {
                 Map<String, Object> worker = new HashMap<>();
                 worker.put("id", perm.getId());
@@ -73,49 +82,45 @@ public class ItemTypeSetPermissionService {
                 itemTypeMap.put("id", config.getItemType().getId());
                 itemTypeMap.put("name", config.getItemType().getName());
                 worker.put("itemType", itemTypeMap);
-                // Recupera PermissionAssignment invece di ItemTypeSetRole
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "WorkerPermission", perm.getId(), tenant);
                 
-                Set<Role> assignedRolesSet = assignmentOpt.map(PermissionAssignment::getRoles)
-                        .orElse(new HashSet<>());
+                PermissionAssignment assignment = workerAssignments.get(perm.getId());
+                PermissionAssignment projectAssignment = workerProjectAssignments.get(perm.getId());
+                
+                Set<Role> assignedRolesSet = assignment != null && assignment.getRoles() != null
+                        ? assignment.getRoles()
+                        : Collections.emptySet();
                 worker.put("assignedRolesCount", assignedRolesSet.size());
                 
-                // Aggiungi informazioni su Grant se presente
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    Grant grant = assignmentOpt.get().getGrant();
+                Grant grant = assignment != null ? assignment.getGrant() : null;
+                if (grant != null) {
                     worker.put("grantId", grant.getId());
                     worker.put("grantName", "Grant diretto");
                 }
                 
-                // Aggiungi informazioni su Grant di progetto se disponibile
-                if (projectId != null) {
-                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
-                            "WorkerPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
+                boolean hasAssignments = !assignedRolesSet.isEmpty() || grant != null;
+                
+                if (projectAssignment != null) {
+                    Grant projectGrant = projectAssignment.getGrant();
+                    if (projectGrant != null) {
                         worker.put("projectGrantId", projectGrant.getId());
                         worker.put("projectGrantName", "Grant di progetto");
+                        hasAssignments = true;
+                    }
+                    
+                    Set<Role> projectRoles = projectAssignment.getRoles() != null
+                            ? projectAssignment.getRoles()
+                            : Collections.emptySet();
+                    if (!projectRoles.isEmpty()) {
+                        worker.put("projectAssignedRoles", mapRoles(projectRoles));
+                        worker.put("hasProjectRoles", true);
+                        hasAssignments = true;
+                    } else {
+                        worker.put("hasProjectRoles", false);
                     }
                 }
                 
-                // Calcola se ci sono effettivamente assegnazioni (ruoli custom o grant)
-                boolean hasAssignments = !assignedRolesSet.isEmpty();
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    hasAssignments = true;
-                }
                 worker.put("hasAssignments", hasAssignments);
-                
-                // Aggiungi i dati delle assegnazioni esistenti
-                List<Map<String, Object>> assignedRoles = new ArrayList<>();
-                for (Role role : assignedRolesSet) {
-                    Map<String, Object> roleMap = new HashMap<>();
-                    roleMap.put("id", role.getId());
-                    roleMap.put("name", role.getName());
-                    roleMap.put("description", role.getDescription());
-                    assignedRoles.add(roleMap);
-                }
-                worker.put("assignedRoles", assignedRoles);
+                worker.put("assignedRoles", mapRoles(assignedRolesSet));
                 
                 workers.add(worker);
             }
@@ -124,15 +129,28 @@ public class ItemTypeSetPermissionService {
         
         // StatusOwner permissions
         List<Map<String, Object>> statusOwners = new ArrayList<>();
+        Map<ItemTypeConfiguration, List<StatusOwnerPermission>> statusPermissionsByConfig = new LinkedHashMap<>();
+        Set<Long> statusPermissionIds = new HashSet<>();
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository
-                .findAllByItemTypeConfiguration(config);
-            
+            List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
+            statusPermissionsByConfig.put(config, permissions);
+            for (StatusOwnerPermission permission : permissions) {
+                statusPermissionIds.add(permission.getId());
+            }
+        }
+        Map<Long, PermissionAssignment> statusAssignments = permissionAssignmentService.getAssignments(
+                "StatusOwnerPermission", statusPermissionIds, tenant);
+        Map<Long, PermissionAssignment> statusProjectAssignments = projectId != null
+                ? projectPermissionAssignmentService.getProjectAssignments("StatusOwnerPermission", statusPermissionIds, projectId, tenant)
+                : Collections.emptyMap();
+        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+            List<StatusOwnerPermission> permissions = statusPermissionsByConfig.getOrDefault(config, Collections.emptyList());
             for (StatusOwnerPermission perm : permissions) {
                 Map<String, Object> statusOwner = new HashMap<>();
                 statusOwner.put("id", perm.getId());
                 statusOwner.put("name", "Status Owners");
                 statusOwner.put("permissionType", "StatusOwnerPermission"); // Aggiunto per il frontend
+                
                 Map<String, Object> workflowStatusMap = new HashMap<>();
                 workflowStatusMap.put("id", perm.getWorkflowStatus().getId());
                 workflowStatusMap.put("name", perm.getWorkflowStatus().getStatus().getName());
@@ -147,63 +165,45 @@ public class ItemTypeSetPermissionService {
                 itemTypeMap2.put("id", config.getItemType().getId());
                 itemTypeMap2.put("name", config.getItemType().getName());
                 statusOwner.put("itemType", itemTypeMap2);
-                // Recupera PermissionAssignment invece di ItemTypeSetRole
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "StatusOwnerPermission", perm.getId(), tenant);
                 
-                Set<Role> assignedRolesSet = assignmentOpt.map(PermissionAssignment::getRoles)
-                        .orElse(new HashSet<>());
+                PermissionAssignment assignment = statusAssignments.get(perm.getId());
+                PermissionAssignment projectAssignment = statusProjectAssignments.get(perm.getId());
+                
+                Set<Role> assignedRolesSet = assignment != null && assignment.getRoles() != null
+                        ? assignment.getRoles()
+                        : Collections.emptySet();
                 statusOwner.put("assignedRolesCount", assignedRolesSet.size());
                 
-                // Aggiungi informazioni su Grant se presente
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    Grant grant = assignmentOpt.get().getGrant();
+                Grant grant = assignment != null ? assignment.getGrant() : null;
+                if (grant != null) {
                     statusOwner.put("grantId", grant.getId());
                     statusOwner.put("grantName", "Grant diretto");
                 }
                 
-                // Aggiungi informazioni su Grant di progetto se disponibile
-                if (projectId != null) {
-                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
-                            "StatusOwnerPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
+                boolean hasAssignments = !assignedRolesSet.isEmpty() || grant != null;
+                
+                if (projectAssignment != null) {
+                    Grant projectGrant = projectAssignment.getGrant();
+                    if (projectGrant != null) {
                         statusOwner.put("projectGrantId", projectGrant.getId());
                         statusOwner.put("projectGrantName", "Grant di progetto");
+                        hasAssignments = true;
                     }
-                    // Aggiungi ruoli di progetto
-                    if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
-                        List<Map<String, Object>> projectRolesList = new ArrayList<>();
-                        for (Role role : projectRoles) {
-                            Map<String, Object> roleMap = new HashMap<>();
-                            roleMap.put("id", role.getId());
-                            roleMap.put("name", role.getName());
-                            roleMap.put("description", role.getDescription());
-                            projectRolesList.add(roleMap);
-                        }
-                        statusOwner.put("projectAssignedRoles", projectRolesList);
-                        statusOwner.put("hasProjectRoles", !projectRoles.isEmpty());
+                    
+                    Set<Role> projectRoles = projectAssignment.getRoles() != null
+                            ? projectAssignment.getRoles()
+                            : Collections.emptySet();
+                    if (!projectRoles.isEmpty()) {
+                        statusOwner.put("projectAssignedRoles", mapRoles(projectRoles));
+                        statusOwner.put("hasProjectRoles", true);
+                        hasAssignments = true;
+                    } else {
+                        statusOwner.put("hasProjectRoles", false);
                     }
                 }
                 
-                // Calcola se ci sono effettivamente assegnazioni (ruoli custom o grant)
-                boolean hasAssignments = !assignedRolesSet.isEmpty();
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    hasAssignments = true;
-                }
                 statusOwner.put("hasAssignments", hasAssignments);
-                
-                // Aggiungi i dati delle assegnazioni esistenti
-                List<Map<String, Object>> assignedRoles = new ArrayList<>();
-                for (Role role : assignedRolesSet) {
-                    Map<String, Object> roleMap = new HashMap<>();
-                    roleMap.put("id", role.getId());
-                    roleMap.put("name", role.getName());
-                    roleMap.put("description", role.getDescription());
-                    assignedRoles.add(roleMap);
-                }
-                statusOwner.put("assignedRoles", assignedRoles);
+                statusOwner.put("assignedRoles", mapRoles(assignedRolesSet));
                 
                 statusOwners.add(statusOwner);
             }
@@ -212,17 +212,28 @@ public class ItemTypeSetPermissionService {
         
         // FieldOwner permissions
         List<Map<String, Object>> fieldOwners = new ArrayList<>();
+        Map<ItemTypeConfiguration, List<FieldOwnerPermission>> fieldOwnerPermissionsByConfig = new LinkedHashMap<>();
+        Set<Long> fieldOwnerPermissionIds = new HashSet<>();
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<FieldOwnerPermission> permissions = fieldOwnerPermissionRepository
-                .findAllByItemTypeConfiguration(config);
-            
+            List<FieldOwnerPermission> permissions = fieldOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
+            fieldOwnerPermissionsByConfig.put(config, permissions);
+            for (FieldOwnerPermission permission : permissions) {
+                fieldOwnerPermissionIds.add(permission.getId());
+            }
+        }
+        Map<Long, PermissionAssignment> fieldOwnerAssignments = permissionAssignmentService.getAssignments(
+                "FieldOwnerPermission", fieldOwnerPermissionIds, tenant);
+        Map<Long, PermissionAssignment> fieldOwnerProjectAssignments = projectId != null
+                ? projectPermissionAssignmentService.getProjectAssignments("FieldOwnerPermission", fieldOwnerPermissionIds, projectId, tenant)
+                : Collections.emptyMap();
+        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+            List<FieldOwnerPermission> permissions = fieldOwnerPermissionsByConfig.getOrDefault(config, Collections.emptyList());
             for (FieldOwnerPermission perm : permissions) {
                 Map<String, Object> fieldOwner = new HashMap<>();
                 fieldOwner.put("id", perm.getId());
                 fieldOwner.put("name", "Field Owners");
                 fieldOwner.put("permissionType", "FieldOwnerPermission"); // Aggiunto per il frontend
                 Map<String, Object> fieldConfigMap = new HashMap<>();
-                // IMPORTANTE: Le permission sono ora associate al Field, non alla FieldConfiguration
                 fieldConfigMap.put("id", perm.getField().getId());
                 fieldConfigMap.put("name", perm.getField().getName());
                 fieldConfigMap.put("fieldType", null); // Field non ha fieldType, potrebbe essere nella FieldConfiguration
@@ -232,63 +243,45 @@ public class ItemTypeSetPermissionService {
                 itemTypeMap3.put("id", config.getItemType().getId());
                 itemTypeMap3.put("name", config.getItemType().getName());
                 fieldOwner.put("itemType", itemTypeMap3);
-                // Recupera PermissionAssignment invece di ItemTypeSetRole
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "FieldOwnerPermission", perm.getId(), tenant);
                 
-                Set<Role> assignedRolesSet = assignmentOpt.map(PermissionAssignment::getRoles)
-                        .orElse(new HashSet<>());
+                PermissionAssignment assignment = fieldOwnerAssignments.get(perm.getId());
+                PermissionAssignment projectAssignment = fieldOwnerProjectAssignments.get(perm.getId());
+                
+                Set<Role> assignedRolesSet = assignment != null && assignment.getRoles() != null
+                        ? assignment.getRoles()
+                        : Collections.emptySet();
                 fieldOwner.put("assignedRolesCount", assignedRolesSet.size());
                 
-                // Aggiungi informazioni su Grant se presente
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    Grant grant = assignmentOpt.get().getGrant();
+                Grant grant = assignment != null ? assignment.getGrant() : null;
+                if (grant != null) {
                     fieldOwner.put("grantId", grant.getId());
                     fieldOwner.put("grantName", "Grant diretto");
                 }
                 
-                // Aggiungi informazioni su Grant di progetto se disponibile
-                if (projectId != null) {
-                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
-                            "FieldOwnerPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
+                boolean hasAssignments = !assignedRolesSet.isEmpty() || grant != null;
+                
+                if (projectAssignment != null) {
+                    Grant projectGrant = projectAssignment.getGrant();
+                    if (projectGrant != null) {
                         fieldOwner.put("projectGrantId", projectGrant.getId());
                         fieldOwner.put("projectGrantName", "Grant di progetto");
+                        hasAssignments = true;
                     }
-                    // Aggiungi ruoli di progetto
-                    if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
-                        List<Map<String, Object>> projectRolesList = new ArrayList<>();
-                        for (Role role : projectRoles) {
-                            Map<String, Object> roleMap = new HashMap<>();
-                            roleMap.put("id", role.getId());
-                            roleMap.put("name", role.getName());
-                            roleMap.put("description", role.getDescription());
-                            projectRolesList.add(roleMap);
-                        }
-                        fieldOwner.put("projectAssignedRoles", projectRolesList);
-                        fieldOwner.put("hasProjectRoles", !projectRoles.isEmpty());
+                    
+                    Set<Role> projectRoles = projectAssignment.getRoles() != null
+                            ? projectAssignment.getRoles()
+                            : Collections.emptySet();
+                    if (!projectRoles.isEmpty()) {
+                        fieldOwner.put("projectAssignedRoles", mapRoles(projectRoles));
+                        fieldOwner.put("hasProjectRoles", true);
+                        hasAssignments = true;
+                    } else {
+                        fieldOwner.put("hasProjectRoles", false);
                     }
                 }
                 
-                // Calcola se ci sono effettivamente assegnazioni (ruoli custom o grant)
-                boolean hasAssignments = !assignedRolesSet.isEmpty();
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    hasAssignments = true;
-                }
                 fieldOwner.put("hasAssignments", hasAssignments);
-
-                // Aggiungi i dati delle assegnazioni esistenti
-                List<Map<String, Object>> assignedRoles = new ArrayList<>();
-                for (Role role : assignedRolesSet) {
-                    Map<String, Object> roleMap = new HashMap<>();
-                    roleMap.put("id", role.getId());
-                    roleMap.put("name", role.getName());
-                    roleMap.put("description", role.getDescription());
-                    assignedRoles.add(roleMap);
-                }
-                fieldOwner.put("assignedRoles", assignedRoles);
+                fieldOwner.put("assignedRoles", mapRoles(assignedRolesSet));
                 
                 fieldOwners.add(fieldOwner);
             }
@@ -297,10 +290,22 @@ public class ItemTypeSetPermissionService {
         
         // Creator permissions
         List<Map<String, Object>> creators = new ArrayList<>();
+        Map<ItemTypeConfiguration, List<CreatorPermission>> creatorPermissionsByConfig = new LinkedHashMap<>();
+        Set<Long> creatorPermissionIds = new HashSet<>();
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<CreatorPermission> permissions = creatorPermissionRepository
-                .findAllByItemTypeConfiguration(config);
-            
+            List<CreatorPermission> permissions = creatorPermissionRepository.findAllByItemTypeConfiguration(config);
+            creatorPermissionsByConfig.put(config, permissions);
+            for (CreatorPermission permission : permissions) {
+                creatorPermissionIds.add(permission.getId());
+            }
+        }
+        Map<Long, PermissionAssignment> creatorAssignments = permissionAssignmentService.getAssignments(
+                "CreatorPermission", creatorPermissionIds, tenant);
+        Map<Long, PermissionAssignment> creatorProjectAssignments = projectId != null
+                ? projectPermissionAssignmentService.getProjectAssignments("CreatorPermission", creatorPermissionIds, projectId, tenant)
+                : Collections.emptyMap();
+        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+            List<CreatorPermission> permissions = creatorPermissionsByConfig.getOrDefault(config, Collections.emptyList());
             for (CreatorPermission perm : permissions) {
                 Map<String, Object> creator = new HashMap<>();
                 creator.put("id", perm.getId());
@@ -315,63 +320,45 @@ public class ItemTypeSetPermissionService {
                 itemTypeMap4.put("id", config.getItemType().getId());
                 itemTypeMap4.put("name", config.getItemType().getName());
                 creator.put("itemType", itemTypeMap4);
-                // Recupera PermissionAssignment invece di ItemTypeSetRole
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "CreatorPermission", perm.getId(), tenant);
                 
-                Set<Role> assignedRolesSet = assignmentOpt.map(PermissionAssignment::getRoles)
-                        .orElse(new HashSet<>());
+                PermissionAssignment assignment = creatorAssignments.get(perm.getId());
+                PermissionAssignment projectAssignment = creatorProjectAssignments.get(perm.getId());
+                
+                Set<Role> assignedRolesSet = assignment != null && assignment.getRoles() != null
+                        ? assignment.getRoles()
+                        : Collections.emptySet();
                 creator.put("assignedRolesCount", assignedRolesSet.size());
                 
-                // Aggiungi informazioni su Grant se presente
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    Grant grant = assignmentOpt.get().getGrant();
+                Grant grant = assignment != null ? assignment.getGrant() : null;
+                if (grant != null) {
                     creator.put("grantId", grant.getId());
                     creator.put("grantName", "Grant diretto");
                 }
                 
-                // Aggiungi informazioni su Grant di progetto se disponibile
-                if (projectId != null) {
-                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
-                            "CreatorPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
+                boolean hasAssignments = !assignedRolesSet.isEmpty() || grant != null;
+                
+                if (projectAssignment != null) {
+                    Grant projectGrant = projectAssignment.getGrant();
+                    if (projectGrant != null) {
                         creator.put("projectGrantId", projectGrant.getId());
                         creator.put("projectGrantName", "Grant di progetto");
+                        hasAssignments = true;
                     }
-                    // Aggiungi ruoli di progetto
-                    if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
-                        List<Map<String, Object>> projectRolesList = new ArrayList<>();
-                        for (Role role : projectRoles) {
-                            Map<String, Object> roleMap = new HashMap<>();
-                            roleMap.put("id", role.getId());
-                            roleMap.put("name", role.getName());
-                            roleMap.put("description", role.getDescription());
-                            projectRolesList.add(roleMap);
-                        }
-                        creator.put("projectAssignedRoles", projectRolesList);
-                        creator.put("hasProjectRoles", !projectRoles.isEmpty());
+                    
+                    Set<Role> projectRoles = projectAssignment.getRoles() != null
+                            ? projectAssignment.getRoles()
+                            : Collections.emptySet();
+                    if (!projectRoles.isEmpty()) {
+                        creator.put("projectAssignedRoles", mapRoles(projectRoles));
+                        creator.put("hasProjectRoles", true);
+                        hasAssignments = true;
+                    } else {
+                        creator.put("hasProjectRoles", false);
                     }
                 }
                 
-                // Calcola se ci sono effettivamente assegnazioni (ruoli custom o grant)
-                boolean hasAssignments = !assignedRolesSet.isEmpty();
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    hasAssignments = true;
-                }
                 creator.put("hasAssignments", hasAssignments);
-                
-                // Aggiungi i dati delle assegnazioni esistenti
-                List<Map<String, Object>> assignedRoles = new ArrayList<>();
-                for (Role role : assignedRolesSet) {
-                    Map<String, Object> roleMap = new HashMap<>();
-                    roleMap.put("id", role.getId());
-                    roleMap.put("name", role.getName());
-                    roleMap.put("description", role.getDescription());
-                    assignedRoles.add(roleMap);
-                }
-                creator.put("assignedRoles", assignedRoles);
+                creator.put("assignedRoles", mapRoles(assignedRolesSet));
                 
                 creators.add(creator);
             }
@@ -380,10 +367,22 @@ public class ItemTypeSetPermissionService {
         
         // Executor permissions
         List<Map<String, Object>> executors = new ArrayList<>();
+        Map<ItemTypeConfiguration, List<ExecutorPermission>> executorPermissionsByConfig = new LinkedHashMap<>();
+        Set<Long> executorPermissionIds = new HashSet<>();
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<ExecutorPermission> permissions = executorPermissionRepository
-                .findAllByItemTypeConfiguration(config);
-            
+            List<ExecutorPermission> permissions = executorPermissionRepository.findAllByItemTypeConfiguration(config);
+            executorPermissionsByConfig.put(config, permissions);
+            for (ExecutorPermission permission : permissions) {
+                executorPermissionIds.add(permission.getId());
+            }
+        }
+        Map<Long, PermissionAssignment> executorAssignments = permissionAssignmentService.getAssignments(
+                "ExecutorPermission", executorPermissionIds, tenant);
+        Map<Long, PermissionAssignment> executorProjectAssignments = projectId != null
+                ? projectPermissionAssignmentService.getProjectAssignments("ExecutorPermission", executorPermissionIds, projectId, tenant)
+                : Collections.emptyMap();
+        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+            List<ExecutorPermission> permissions = executorPermissionsByConfig.getOrDefault(config, Collections.emptyList());
             for (ExecutorPermission perm : permissions) {
                 Map<String, Object> executor = new HashMap<>();
                 executor.put("id", perm.getId());
@@ -421,63 +420,45 @@ public class ItemTypeSetPermissionService {
                 itemTypeMap5.put("id", config.getItemType().getId());
                 itemTypeMap5.put("name", config.getItemType().getName());
                 executor.put("itemType", itemTypeMap5);
-                // Recupera PermissionAssignment invece di ItemTypeSetRole
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "ExecutorPermission", perm.getId(), tenant);
                 
-                Set<Role> assignedRolesSet = assignmentOpt.map(PermissionAssignment::getRoles)
-                        .orElse(new HashSet<>());
+                PermissionAssignment assignment = executorAssignments.get(perm.getId());
+                PermissionAssignment projectAssignment = executorProjectAssignments.get(perm.getId());
+                
+                Set<Role> assignedRolesSet = assignment != null && assignment.getRoles() != null
+                        ? assignment.getRoles()
+                        : Collections.emptySet();
                 executor.put("assignedRolesCount", assignedRolesSet.size());
                 
-                // Aggiungi informazioni su Grant se presente
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    Grant grant = assignmentOpt.get().getGrant();
+                Grant grant = assignment != null ? assignment.getGrant() : null;
+                if (grant != null) {
                     executor.put("grantId", grant.getId());
                     executor.put("grantName", "Grant diretto");
                 }
                 
-                // Aggiungi informazioni su Grant di progetto se disponibile
-                if (projectId != null) {
-                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
-                            "ExecutorPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
+                boolean hasAssignments = !assignedRolesSet.isEmpty() || grant != null;
+                
+                if (projectAssignment != null) {
+                    Grant projectGrant = projectAssignment.getGrant();
+                    if (projectGrant != null) {
                         executor.put("projectGrantId", projectGrant.getId());
                         executor.put("projectGrantName", "Grant di progetto");
+                        hasAssignments = true;
                     }
-                    // Aggiungi ruoli di progetto
-                    if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
-                        List<Map<String, Object>> projectRolesList = new ArrayList<>();
-                        for (Role role : projectRoles) {
-                            Map<String, Object> roleMap = new HashMap<>();
-                            roleMap.put("id", role.getId());
-                            roleMap.put("name", role.getName());
-                            roleMap.put("description", role.getDescription());
-                            projectRolesList.add(roleMap);
-                        }
-                        executor.put("projectAssignedRoles", projectRolesList);
-                        executor.put("hasProjectRoles", !projectRoles.isEmpty());
+                    
+                    Set<Role> projectRoles = projectAssignment.getRoles() != null
+                            ? projectAssignment.getRoles()
+                            : Collections.emptySet();
+                    if (!projectRoles.isEmpty()) {
+                        executor.put("projectAssignedRoles", mapRoles(projectRoles));
+                        executor.put("hasProjectRoles", true);
+                        hasAssignments = true;
+                    } else {
+                        executor.put("hasProjectRoles", false);
                     }
                 }
                 
-                // Calcola se ci sono effettivamente assegnazioni (ruoli custom o grant)
-                boolean hasAssignments = !assignedRolesSet.isEmpty();
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    hasAssignments = true;
-                }
                 executor.put("hasAssignments", hasAssignments);
-                
-                // Aggiungi i dati delle assegnazioni esistenti
-                List<Map<String, Object>> assignedRoles = new ArrayList<>();
-                for (Role role : assignedRolesSet) {
-                    Map<String, Object> roleMap = new HashMap<>();
-                    roleMap.put("id", role.getId());
-                    roleMap.put("name", role.getName());
-                    roleMap.put("description", role.getDescription());
-                    assignedRoles.add(roleMap);
-                }
-                executor.put("assignedRoles", assignedRoles);
+                executor.put("assignedRoles", mapRoles(assignedRolesSet));
                 
                 executors.add(executor);
             }
@@ -486,17 +467,29 @@ public class ItemTypeSetPermissionService {
         
         // Editor permissions
         List<Map<String, Object>> editors = new ArrayList<>();
+        Map<ItemTypeConfiguration, List<FieldStatusPermission>> editorPermissionsByConfig = new LinkedHashMap<>();
+        Set<Long> editorPermissionIds = new HashSet<>();
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
             List<FieldStatusPermission> permissions = fieldStatusPermissionRepository
-                .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.EDITORS);
-            
+                    .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.EDITORS);
+            editorPermissionsByConfig.put(config, permissions);
+            for (FieldStatusPermission permission : permissions) {
+                editorPermissionIds.add(permission.getId());
+            }
+        }
+        Map<Long, PermissionAssignment> editorAssignments = permissionAssignmentService.getAssignments(
+                "FieldStatusPermission", editorPermissionIds, tenant);
+        Map<Long, PermissionAssignment> editorProjectAssignments = projectId != null
+                ? projectPermissionAssignmentService.getProjectAssignments("FieldStatusPermission", editorPermissionIds, projectId, tenant)
+                : Collections.emptyMap();
+        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+            List<FieldStatusPermission> permissions = editorPermissionsByConfig.getOrDefault(config, Collections.emptyList());
             for (FieldStatusPermission perm : permissions) {
                 Map<String, Object> editor = new HashMap<>();
                 editor.put("id", perm.getId());
                 editor.put("name", "Editors");
                 editor.put("permissionType", "FieldStatusPermission"); // Aggiunto per il frontend
                 Map<String, Object> fieldConfigMap2 = new HashMap<>();
-                // IMPORTANTE: Le permission sono ora associate al Field, non alla FieldConfiguration
                 fieldConfigMap2.put("id", perm.getField().getId());
                 fieldConfigMap2.put("name", perm.getField().getName());
                 editor.put("fieldConfiguration", fieldConfigMap2);
@@ -510,63 +503,45 @@ public class ItemTypeSetPermissionService {
                 itemTypeMap6.put("id", config.getItemType().getId());
                 itemTypeMap6.put("name", config.getItemType().getName());
                 editor.put("itemType", itemTypeMap6);
-                // Recupera PermissionAssignment invece di ItemTypeSetRole
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "FieldStatusPermission", perm.getId(), tenant);
                 
-                Set<Role> assignedRolesSet = assignmentOpt.map(PermissionAssignment::getRoles)
-                        .orElse(new HashSet<>());
+                PermissionAssignment assignment = editorAssignments.get(perm.getId());
+                PermissionAssignment projectAssignment = editorProjectAssignments.get(perm.getId());
+                
+                Set<Role> assignedRolesSet = assignment != null && assignment.getRoles() != null
+                        ? assignment.getRoles()
+                        : Collections.emptySet();
                 editor.put("assignedRolesCount", assignedRolesSet.size());
                 
-                // Aggiungi informazioni su Grant se presente
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    Grant grant = assignmentOpt.get().getGrant();
+                Grant grant = assignment != null ? assignment.getGrant() : null;
+                if (grant != null) {
                     editor.put("grantId", grant.getId());
                     editor.put("grantName", "Grant diretto");
                 }
                 
-                // Aggiungi informazioni su Grant di progetto se disponibile
-                if (projectId != null) {
-                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
-                            "FieldStatusPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
+                boolean hasAssignments = !assignedRolesSet.isEmpty() || grant != null;
+                
+                if (projectAssignment != null) {
+                    Grant projectGrant = projectAssignment.getGrant();
+                    if (projectGrant != null) {
                         editor.put("projectGrantId", projectGrant.getId());
                         editor.put("projectGrantName", "Grant di progetto");
+                        hasAssignments = true;
                     }
-                    // Aggiungi ruoli di progetto
-                    if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
-                        List<Map<String, Object>> projectRolesList = new ArrayList<>();
-                        for (Role role : projectRoles) {
-                            Map<String, Object> roleMap = new HashMap<>();
-                            roleMap.put("id", role.getId());
-                            roleMap.put("name", role.getName());
-                            roleMap.put("description", role.getDescription());
-                            projectRolesList.add(roleMap);
-                        }
-                        editor.put("projectAssignedRoles", projectRolesList);
-                        editor.put("hasProjectRoles", !projectRoles.isEmpty());
+                    
+                    Set<Role> projectRoles = projectAssignment.getRoles() != null
+                            ? projectAssignment.getRoles()
+                            : Collections.emptySet();
+                    if (!projectRoles.isEmpty()) {
+                        editor.put("projectAssignedRoles", mapRoles(projectRoles));
+                        editor.put("hasProjectRoles", true);
+                        hasAssignments = true;
+                    } else {
+                        editor.put("hasProjectRoles", false);
                     }
                 }
                 
-                // Calcola se ci sono effettivamente assegnazioni (ruoli custom o grant)
-                boolean hasAssignments = !assignedRolesSet.isEmpty();
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    hasAssignments = true;
-                }
                 editor.put("hasAssignments", hasAssignments);
-                
-                // Aggiungi i dati delle assegnazioni esistenti
-                List<Map<String, Object>> assignedRoles = new ArrayList<>();
-                for (Role role : assignedRolesSet) {
-                    Map<String, Object> roleMap = new HashMap<>();
-                    roleMap.put("id", role.getId());
-                    roleMap.put("name", role.getName());
-                    roleMap.put("description", role.getDescription());
-                    assignedRoles.add(roleMap);
-                }
-                editor.put("assignedRoles", assignedRoles);
+                editor.put("assignedRoles", mapRoles(assignedRolesSet));
                 
                 editors.add(editor);
             }
@@ -575,17 +550,29 @@ public class ItemTypeSetPermissionService {
         
         // Viewer permissions
         List<Map<String, Object>> viewers = new ArrayList<>();
+        Map<ItemTypeConfiguration, List<FieldStatusPermission>> viewerPermissionsByConfig = new LinkedHashMap<>();
+        Set<Long> viewerPermissionIds = new HashSet<>();
         for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
             List<FieldStatusPermission> permissions = fieldStatusPermissionRepository
-                .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.VIEWERS);
-            
+                    .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.VIEWERS);
+            viewerPermissionsByConfig.put(config, permissions);
+            for (FieldStatusPermission permission : permissions) {
+                viewerPermissionIds.add(permission.getId());
+            }
+        }
+        Map<Long, PermissionAssignment> viewerAssignments = permissionAssignmentService.getAssignments(
+                "FieldStatusPermission", viewerPermissionIds, tenant);
+        Map<Long, PermissionAssignment> viewerProjectAssignments = projectId != null
+                ? projectPermissionAssignmentService.getProjectAssignments("FieldStatusPermission", viewerPermissionIds, projectId, tenant)
+                : Collections.emptyMap();
+        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+            List<FieldStatusPermission> permissions = viewerPermissionsByConfig.getOrDefault(config, Collections.emptyList());
             for (FieldStatusPermission perm : permissions) {
                 Map<String, Object> viewer = new HashMap<>();
                 viewer.put("id", perm.getId());
                 viewer.put("name", "Viewers");
                 viewer.put("permissionType", "FieldStatusPermission"); // Aggiunto per il frontend
                 Map<String, Object> fieldConfigMap3 = new HashMap<>();
-                // IMPORTANTE: Le permission sono ora associate al Field, non alla FieldConfiguration
                 fieldConfigMap3.put("id", perm.getField().getId());
                 fieldConfigMap3.put("name", perm.getField().getName());
                 viewer.put("fieldConfiguration", fieldConfigMap3);
@@ -599,63 +586,45 @@ public class ItemTypeSetPermissionService {
                 itemTypeMap7.put("id", config.getItemType().getId());
                 itemTypeMap7.put("name", config.getItemType().getName());
                 viewer.put("itemType", itemTypeMap7);
-                // Recupera PermissionAssignment invece di ItemTypeSetRole
-                Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                        "FieldStatusPermission", perm.getId(), tenant);
                 
-                Set<Role> assignedRolesSet = assignmentOpt.map(PermissionAssignment::getRoles)
-                        .orElse(new HashSet<>());
+                PermissionAssignment assignment = viewerAssignments.get(perm.getId());
+                PermissionAssignment projectAssignment = viewerProjectAssignments.get(perm.getId());
+                
+                Set<Role> assignedRolesSet = assignment != null && assignment.getRoles() != null
+                        ? assignment.getRoles()
+                        : Collections.emptySet();
                 viewer.put("assignedRolesCount", assignedRolesSet.size());
                 
-                // Aggiungi informazioni su Grant se presente
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    Grant grant = assignmentOpt.get().getGrant();
+                Grant grant = assignment != null ? assignment.getGrant() : null;
+                if (grant != null) {
                     viewer.put("grantId", grant.getId());
                     viewer.put("grantName", "Grant diretto");
                 }
                 
-                // Aggiungi informazioni su Grant di progetto se disponibile
-                if (projectId != null) {
-                    Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
-                            "FieldStatusPermission", perm.getId(), projectId, tenant);
-                    if (projectAssignmentOpt.isPresent() && projectAssignmentOpt.get().getGrant() != null) {
-                        Grant projectGrant = projectAssignmentOpt.get().getGrant();
+                boolean hasAssignments = !assignedRolesSet.isEmpty() || grant != null;
+                
+                if (projectAssignment != null) {
+                    Grant projectGrant = projectAssignment.getGrant();
+                    if (projectGrant != null) {
                         viewer.put("projectGrantId", projectGrant.getId());
                         viewer.put("projectGrantName", "Grant di progetto");
+                        hasAssignments = true;
                     }
-                    // Aggiungi ruoli di progetto
-                    if (projectAssignmentOpt.isPresent()) {
-                        Set<Role> projectRoles = projectAssignmentOpt.get().getRoles();
-                        List<Map<String, Object>> projectRolesList = new ArrayList<>();
-                        for (Role role : projectRoles) {
-                            Map<String, Object> roleMap = new HashMap<>();
-                            roleMap.put("id", role.getId());
-                            roleMap.put("name", role.getName());
-                            roleMap.put("description", role.getDescription());
-                            projectRolesList.add(roleMap);
-                        }
-                        viewer.put("projectAssignedRoles", projectRolesList);
-                        viewer.put("hasProjectRoles", !projectRoles.isEmpty());
+                    
+                    Set<Role> projectRoles = projectAssignment.getRoles() != null
+                            ? projectAssignment.getRoles()
+                            : Collections.emptySet();
+                    if (!projectRoles.isEmpty()) {
+                        viewer.put("projectAssignedRoles", mapRoles(projectRoles));
+                        viewer.put("hasProjectRoles", true);
+                        hasAssignments = true;
+                    } else {
+                        viewer.put("hasProjectRoles", false);
                     }
                 }
                 
-                // Calcola se ci sono effettivamente assegnazioni (ruoli custom o grant)
-                boolean hasAssignments = !assignedRolesSet.isEmpty();
-                if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-                    hasAssignments = true;
-                }
                 viewer.put("hasAssignments", hasAssignments);
-                
-                // Aggiungi i dati delle assegnazioni esistenti
-                List<Map<String, Object>> assignedRoles = new ArrayList<>();
-                for (Role role : assignedRolesSet) {
-                    Map<String, Object> roleMap = new HashMap<>();
-                    roleMap.put("id", role.getId());
-                    roleMap.put("name", role.getName());
-                    roleMap.put("description", role.getDescription());
-                    assignedRoles.add(roleMap);
-                }
-                viewer.put("assignedRoles", assignedRoles);
+                viewer.put("assignedRoles", mapRoles(assignedRolesSet));
                 
                 viewers.add(viewer);
             }
@@ -719,4 +688,19 @@ public class ItemTypeSetPermissionService {
     
     // RIMOSSO: Metodi obsoleti - ItemTypeSetRole e ProjectItemTypeSetRoleGrant/ProjectItemTypeSetRoleRole eliminate
     // Le grant di progetto sono ora gestite tramite ProjectPermissionAssignmentService
+    
+    private List<Map<String, Object>> mapRoles(Set<Role> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Map<String, Object>> roleDtos = new ArrayList<>();
+        for (Role role : roles) {
+            Map<String, Object> roleMap = new HashMap<>();
+            roleMap.put("id", role.getId());
+            roleMap.put("name", role.getName());
+            roleMap.put("description", role.getDescription());
+            roleDtos.add(roleMap);
+        }
+        return roleDtos;
+    }
 }

@@ -8,9 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Servizio per gestire PermissionAssignment (assegnazioni globali di ruoli e grant a Permission).
@@ -113,6 +112,22 @@ public class PermissionAssignmentService {
             Tenant tenant) {
         return permissionAssignmentRepository
                 .findByPermissionTypeAndPermissionIdAndTenantWithCollections(permissionType, permissionId, tenant);
+    }
+    
+    @Transactional(readOnly = true)
+    public Map<Long, PermissionAssignment> getAssignments(
+            String permissionType,
+            Collection<Long> permissionIds,
+            Tenant tenant
+    ) {
+        if (permissionIds == null || permissionIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<Long> ids = permissionIds instanceof List<Long> list ? list : new ArrayList<>(permissionIds);
+        List<PermissionAssignment> assignments = permissionAssignmentRepository
+                .findAllByPermissionTypeAndPermissionIdInAndTenantWithCollections(permissionType, ids, tenant);
+        return assignments.stream()
+                .collect(Collectors.toMap(PermissionAssignment::getPermissionId, assignment -> assignment));
     }
     
     /**

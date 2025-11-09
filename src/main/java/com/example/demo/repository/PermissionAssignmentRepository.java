@@ -74,6 +74,41 @@ public interface PermissionAssignmentRepository extends JpaRepository<Permission
         @Param("project") Project project
     );
     
+    @Query("SELECT pa FROM PermissionAssignment pa " +
+           "LEFT JOIN FETCH pa.roles " +
+           "LEFT JOIN FETCH pa.grant g " +
+           "LEFT JOIN FETCH g.users " +
+           "LEFT JOIN FETCH g.groups " +
+           "LEFT JOIN FETCH g.negatedUsers " +
+           "LEFT JOIN FETCH g.negatedGroups " +
+           "WHERE pa.permissionType = :permissionType " +
+           "AND pa.permissionId IN :permissionIds " +
+           "AND pa.tenant = :tenant " +
+           "AND pa.project IS NULL")
+    List<PermissionAssignment> findAllByPermissionTypeAndPermissionIdInAndTenantWithCollections(
+        @Param("permissionType") String permissionType,
+        @Param("permissionIds") List<Long> permissionIds,
+        @Param("tenant") Tenant tenant
+    );
+    
+    @Query("SELECT pa FROM PermissionAssignment pa " +
+           "LEFT JOIN FETCH pa.roles " +
+           "LEFT JOIN FETCH pa.grant g " +
+           "LEFT JOIN FETCH g.users " +
+           "LEFT JOIN FETCH g.groups " +
+           "LEFT JOIN FETCH g.negatedUsers " +
+           "LEFT JOIN FETCH g.negatedGroups " +
+           "WHERE pa.permissionType = :permissionType " +
+           "AND pa.permissionId IN :permissionIds " +
+           "AND pa.tenant = :tenant " +
+           "AND pa.project = :project")
+    List<PermissionAssignment> findAllByPermissionTypeAndPermissionIdInAndTenantAndProjectWithCollections(
+        @Param("permissionType") String permissionType,
+        @Param("permissionIds") List<Long> permissionIds,
+        @Param("tenant") Tenant tenant,
+        @Param("project") Project project
+    );
+    
     /**
      * Trova tutte le PermissionAssignment per un tenant.
      */

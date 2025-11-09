@@ -7,10 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Servizio per gestire PermissionAssignment di progetto (assegnazioni specifiche per progetto).
@@ -132,6 +129,28 @@ public class ProjectPermissionAssignmentService {
         
         return permissionAssignmentRepository
                 .findByPermissionTypeAndPermissionIdAndTenantAndProjectWithCollections(permissionType, permissionId, tenant, project);
+    }
+    
+    @Transactional(readOnly = true)
+    public Map<Long, PermissionAssignment> getProjectAssignments(
+            String permissionType,
+            Collection<Long> permissionIds,
+            Long projectId,
+            Tenant tenant
+    ) {
+        if (permissionIds == null || permissionIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        
+        Project project = projectRepository.findByIdAndTenant(projectId, tenant)
+                .orElseThrow(() -> new ApiException("Project not found"));
+        
+        List<Long> ids = permissionIds instanceof List<Long> list ? list : new ArrayList<>(permissionIds);
+        List<PermissionAssignment> assignments = permissionAssignmentRepository
+                .findAllByPermissionTypeAndPermissionIdInAndTenantAndProjectWithCollections(permissionType, ids, tenant, project);
+        
+        return assignments.stream()
+                .collect(java.util.stream.Collectors.toMap(PermissionAssignment::getPermissionId, assignment -> assignment));
     }
     
     /**
