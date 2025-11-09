@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -133,21 +134,57 @@ public class FieldSetService {
 
         if (fieldSet.isDefaultFieldSet()) throw new ApiException("Default Field Set cannot be edited");
 
-        // Salva i Field IDs esistenti per confronto (non FieldConfiguration!)
+        // Salva le FieldConfiguration e i Field IDs esistenti per confronto
+        Set<Long> existingConfigIds = fieldSet.getFieldSetEntries().stream()
+                .map(entry -> entry.getFieldConfiguration().getId())
+                .collect(Collectors.toSet());
         Set<Long> existingFieldIds = fieldSet.getFieldSetEntries().stream()
                 .map(entry -> entry.getFieldConfiguration().getField().getId())
                 .collect(Collectors.toSet());
 
+        List<FieldSetEntryCreateDto> entryDtos = dto.entries() != null ? dto.entries() : List.of();
+        Set<Long> requestedConfigIds = entryDtos.stream()
+                .map(FieldSetEntryCreateDto::fieldConfigurationId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<Long> removedConfigIds = new HashSet<>(existingConfigIds);
+        removedConfigIds.removeAll(requestedConfigIds);
+
+        Set<Long> addedConfigIds = new HashSet<>(requestedConfigIds);
+        addedConfigIds.removeAll(existingConfigIds);
+
+        if (!removedConfigIds.isEmpty()) {
+            FieldSetRemovalImpactDto impact = analyzeFieldSetRemovalImpact(
+                    tenant,
+                    id,
+                    removedConfigIds,
+                    addedConfigIds
+            );
+
+            boolean hasAssignments = (impact.getFieldOwnerPermissions() != null
+                    && impact.getFieldOwnerPermissions().stream().anyMatch(FieldSetRemovalImpactDto.PermissionImpact::isHasAssignments))
+                    || (impact.getFieldStatusPermissions() != null
+                    && impact.getFieldStatusPermissions().stream().anyMatch(FieldSetRemovalImpactDto.PermissionImpact::isHasAssignments));
+
+            if (hasAssignments) {
+                throw new ApiException("FIELDSET_REMOVAL_IMPACT: detected permissions with assignments for removed fields");
+            }
+
+            // Se non ci sono assegnazioni, rimuovi automaticamente le permission orfane
+            removeOrphanedPermissionsWithoutAssignments(tenant, id, removedConfigIds, addedConfigIds);
+        }
+
         fieldSet.setName(dto.name());
         fieldSet.setDescription(dto.description());
 
-        applyFieldSetEntries(tenant, fieldSet, dto.entries());
+        applyFieldSetEntries(tenant, fieldSet, entryDtos);
 
         FieldSet saved = fieldSetRepository.save(fieldSet);
         
         // ✅ IMPORTANTE: Calcola i Field IDs FINALI (dopo le modifiche) basandosi sulle FieldConfiguration del DTO
         // Questo ci permette di identificare correttamente quali Field sono veramente nuovi
-        Set<Long> finalFieldIds = dto.entries().stream()
+        Set<Long> finalFieldIds = entryDtos.stream()
                 .map(entryDto -> {
                     try {
                         FieldConfiguration config = fieldConfigurationLookup.getById(entryDto.fieldConfigurationId(), tenant);

@@ -105,11 +105,12 @@ public class WorkflowImpactController {
             // Header del CSV
             csv.append("Permission Type,ItemTypeSet ID,ItemTypeSet Name,Project ID,Project Name,");
             csv.append("Transition ID,Transition Name,From Status,To Status,");
+            csv.append("Field ID,Field Name,Workflow Status ID,Workflow Status Name,");
             csv.append("Assigned Roles,Has Assignments\n");
             
             // Executor Permissions
             for (TransitionRemovalImpactDto.PermissionImpact perm : impact.getExecutorPermissions()) {
-                csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
                     CsvUtils.escapeCsv(perm.getPermissionType()),
                     perm.getItemTypeSetId(),
                     CsvUtils.escapeCsv(perm.getItemTypeSetName()),
@@ -119,6 +120,31 @@ public class WorkflowImpactController {
                     CsvUtils.escapeCsv(perm.getTransitionName() != null ? perm.getTransitionName() : ""),
                     CsvUtils.escapeCsv(perm.getFromStatusName() != null ? perm.getFromStatusName() : ""),
                     CsvUtils.escapeCsv(perm.getToStatusName() != null ? perm.getToStatusName() : ""),
+                    "",
+                    "",
+                    "",
+                    "",
+                    CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
+                    perm.isHasAssignments()
+                ));
+            }
+
+            // Field Status Permissions (EDITORS/VIEWERS)
+            for (TransitionRemovalImpactDto.FieldStatusPermissionImpact perm : impact.getFieldStatusPermissions()) {
+                csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                    CsvUtils.escapeCsv(perm.getPermissionType()),
+                    perm.getItemTypeSetId(),
+                    CsvUtils.escapeCsv(perm.getItemTypeSetName()),
+                    perm.getProjectId() != null ? perm.getProjectId().toString() : "",
+                    perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    CsvUtils.escapeCsv(perm.getFieldId() != null ? perm.getFieldId().toString() : ""),
+                    CsvUtils.escapeCsv(perm.getFieldName() != null ? perm.getFieldName() : ""),
+                    perm.getWorkflowStatusId() != null ? perm.getWorkflowStatusId().toString() : "",
+                    CsvUtils.escapeCsv(perm.getWorkflowStatusName() != null ? perm.getWorkflowStatusName() : ""),
                     CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
                     perm.isHasAssignments()
                 ));
@@ -242,22 +268,79 @@ public class WorkflowImpactController {
             // Header del CSV
             csv.append("Permission Type,ItemTypeSet ID,ItemTypeSet Name,Project ID,Project Name,");
             csv.append("Workflow Status ID,Status Name,Status Category,");
-            csv.append("Assigned Roles,Has Assignments\n");
+            csv.append("Transition ID,Transition Name,From Status,To Status,");
+            csv.append("Field ID,Field Name,Assigned Roles,Has Assignments\n");
             
             // Status Owner Permissions
-            for (StatusRemovalImpactDto.PermissionImpact perm : impact.getStatusOwnerPermissions()) {
-                csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-                    CsvUtils.escapeCsv(perm.getPermissionType()),
-                    perm.getItemTypeSetId(),
-                    CsvUtils.escapeCsv(perm.getItemTypeSetName()),
-                    perm.getProjectId() != null ? perm.getProjectId().toString() : "",
-                    perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
-                    perm.getWorkflowStatusId() != null ? perm.getWorkflowStatusId().toString() : "",
-                    CsvUtils.escapeCsv(perm.getStatusName() != null ? perm.getStatusName() : ""),
-                    CsvUtils.escapeCsv(perm.getStatusCategory() != null ? perm.getStatusCategory() : ""),
-                    CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
-                    perm.isHasAssignments()
-                ));
+            if (impact.getStatusOwnerPermissions() != null) {
+                for (StatusRemovalImpactDto.PermissionImpact perm : impact.getStatusOwnerPermissions()) {
+                    csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                        CsvUtils.escapeCsv(perm.getPermissionType()),
+                        perm.getItemTypeSetId(),
+                        CsvUtils.escapeCsv(perm.getItemTypeSetName()),
+                        perm.getProjectId() != null ? perm.getProjectId().toString() : "",
+                        perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
+                        perm.getWorkflowStatusId() != null ? perm.getWorkflowStatusId().toString() : "",
+                        CsvUtils.escapeCsv(perm.getStatusName() != null ? perm.getStatusName() : ""),
+                        CsvUtils.escapeCsv(perm.getStatusCategory() != null ? perm.getStatusCategory() : ""),
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
+                        perm.isHasAssignments()
+                    ));
+                }
+            }
+
+            // Executor Permissions derivanti dagli status rimossi
+            if (impact.getExecutorPermissions() != null) {
+                for (StatusRemovalImpactDto.ExecutorPermissionImpact perm : impact.getExecutorPermissions()) {
+                    csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                        CsvUtils.escapeCsv(perm.getPermissionType()),
+                        perm.getItemTypeSetId(),
+                        CsvUtils.escapeCsv(perm.getItemTypeSetName()),
+                        perm.getProjectId() != null ? perm.getProjectId().toString() : "",
+                        perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
+                        "",
+                        "",
+                        "",
+                        perm.getTransitionId() != null ? perm.getTransitionId().toString() : "",
+                        CsvUtils.escapeCsv(perm.getTransitionName() != null ? perm.getTransitionName() : ""),
+                        CsvUtils.escapeCsv(perm.getFromStatusName() != null ? perm.getFromStatusName() : ""),
+                        CsvUtils.escapeCsv(perm.getToStatusName() != null ? perm.getToStatusName() : ""),
+                        "",
+                        "",
+                        CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
+                        perm.isHasAssignments()
+                    ));
+                }
+            }
+
+            // Field Status Permissions (EDITORS/VIEWERS)
+            if (impact.getFieldStatusPermissions() != null) {
+                for (StatusRemovalImpactDto.FieldStatusPermissionImpact perm : impact.getFieldStatusPermissions()) {
+                    csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                        CsvUtils.escapeCsv(perm.getPermissionType()),
+                        perm.getItemTypeSetId(),
+                        CsvUtils.escapeCsv(perm.getItemTypeSetName()),
+                        perm.getProjectId() != null ? perm.getProjectId().toString() : "",
+                        perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
+                        perm.getWorkflowStatusId() != null ? perm.getWorkflowStatusId().toString() : "",
+                        CsvUtils.escapeCsv(perm.getStatusName() != null ? perm.getStatusName() : ""),
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        perm.getFieldId() != null ? perm.getFieldId().toString() : "",
+                        CsvUtils.escapeCsv(perm.getFieldName() != null ? perm.getFieldName() : ""),
+                        CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
+                        perm.isHasAssignments()
+                    ));
+                }
             }
             
             return CsvUtils.createCsvResponse(csv.toString(), "workflow_status_removal_impact", workflowId);

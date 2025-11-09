@@ -1,5 +1,6 @@
 package com.example.demo.controller;
 
+import com.example.demo.dto.ItemTypeConfigurationRemovalImpactDto;
 import com.example.demo.dto.ItemTypeSetCreateDto;
 import com.example.demo.dto.ItemTypeSetUpdateDto;
 import com.example.demo.dto.ItemTypeSetViewDto;
@@ -8,6 +9,7 @@ import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.security.CurrentTenant;
 import com.example.demo.service.ItemTypeSetService;
 import com.example.demo.service.ItemTypeSetPermissionService;
+import com.example.demo.util.CsvUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -184,6 +186,74 @@ public class ItemTypeSetController {
         com.example.demo.dto.ItemTypeConfigurationRemovalImpactDto impact = itemTypeSetService.analyzeItemTypeConfigurationRemovalImpact(
                 tenant, itemTypeSetId, configIdsSet);
         return ResponseEntity.ok(impact);
+    }
+
+    /**
+     * Esporta il report degli impatti della rimozione di ItemTypeConfiguration in formato CSV
+     */
+    @PostMapping("/{itemTypeSetId}/export-itemtypeconfiguration-removal-impact-csv")
+    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    public ResponseEntity<byte[]> exportItemTypeConfigurationRemovalImpactCsv(
+            @PathVariable Long itemTypeSetId,
+            @RequestBody java.util.List<Long> removedItemTypeConfigurationIds,
+            @CurrentTenant Tenant tenant
+    ) {
+        try {
+            java.util.Set<Long> configIdsSet = new java.util.HashSet<>(removedItemTypeConfigurationIds);
+            ItemTypeConfigurationRemovalImpactDto impact = itemTypeSetService.analyzeItemTypeConfigurationRemovalImpact(
+                    tenant, itemTypeSetId, configIdsSet);
+
+            StringBuilder csv = new StringBuilder();
+            csv.append("Permission Type,ItemTypeSet ID,ItemTypeSet Name,Project ID,Project Name,");
+            csv.append("ItemTypeConfiguration ID,ItemType Name,ItemType Category,");
+            csv.append("Field Configuration ID,Field Configuration Name,Workflow Status ID,Workflow Status Name,");
+            csv.append("Transition ID,Transition Name,Assigned Roles,Has Assignments\n");
+
+            java.util.function.Consumer<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> exporter = perm -> {
+                csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                        CsvUtils.escapeCsv(perm.getPermissionType()),
+                        perm.getItemTypeSetId(),
+                        CsvUtils.escapeCsv(perm.getItemTypeSetName()),
+                        perm.getProjectId() != null ? perm.getProjectId().toString() : "",
+                        perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
+                        perm.getItemTypeConfigurationId() != null ? perm.getItemTypeConfigurationId().toString() : "",
+                        CsvUtils.escapeCsv(perm.getItemTypeName() != null ? perm.getItemTypeName() : ""),
+                        CsvUtils.escapeCsv(perm.getItemTypeCategory() != null ? perm.getItemTypeCategory() : ""),
+                        perm.getFieldConfigurationId() != null ? perm.getFieldConfigurationId().toString() : "",
+                        CsvUtils.escapeCsv(perm.getFieldConfigurationName() != null ? perm.getFieldConfigurationName() : ""),
+                        perm.getWorkflowStatusId() != null ? perm.getWorkflowStatusId().toString() : "",
+                        CsvUtils.escapeCsv(perm.getWorkflowStatusName() != null ? perm.getWorkflowStatusName() : ""),
+                        perm.getTransitionId() != null ? perm.getTransitionId().toString() : "",
+                        CsvUtils.escapeCsv(perm.getTransitionName() != null ? perm.getTransitionName() : ""),
+                        CsvUtils.escapeCsv(perm.getAssignedRoles() != null ? String.join(";", perm.getAssignedRoles()) : ""),
+                        perm.isHasAssignments()
+                ));
+            };
+
+            if (impact.getWorkerPermissions() != null) {
+                impact.getWorkerPermissions().forEach(exporter);
+            }
+            if (impact.getCreatorPermissions() != null) {
+                impact.getCreatorPermissions().forEach(exporter);
+            }
+            if (impact.getStatusOwnerPermissions() != null) {
+                impact.getStatusOwnerPermissions().forEach(exporter);
+            }
+            if (impact.getFieldOwnerPermissions() != null) {
+                impact.getFieldOwnerPermissions().forEach(exporter);
+            }
+            if (impact.getFieldStatusPermissions() != null) {
+                impact.getFieldStatusPermissions().forEach(exporter);
+            }
+            if (impact.getExecutorPermissions() != null) {
+                impact.getExecutorPermissions().forEach(exporter);
+            }
+
+            return CsvUtils.createCsvResponse(csv.toString(), "itemtypeset_removal_impact", itemTypeSetId);
+        } catch (Exception e) {
+            log.error("Error generating CSV export for ItemTypeSet removal impact", e);
+            throw new com.example.demo.exception.ApiException("Error generating CSV export: " + e.getMessage(), e);
+        }
     }
     
     /**

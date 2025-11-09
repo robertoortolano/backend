@@ -19,10 +19,12 @@ public class TransitionRemovalImpactDto {
     
     // Permissions che verranno rimosse
     private List<PermissionImpact> executorPermissions;
+    private List<FieldStatusPermissionImpact> fieldStatusPermissions;
     
     // Statistiche
     private int totalAffectedItemTypeSets;
     private int totalExecutorPermissions;
+    private int totalFieldStatusPermissions;
     private int totalGrantAssignments;
     private int totalRoleAssignments;
     
@@ -77,6 +79,29 @@ public class TransitionRemovalImpactDto {
         private boolean defaultPreserve; // true se dovrebbe essere preservata di default
         
         // Grant di progetto per questa permission
+        private List<ProjectGrantInfo> projectGrants;
+    }
+    
+    @Data
+    @Builder
+    public static class FieldStatusPermissionImpact {
+        private Long permissionId;
+        private String permissionType; // "EDITORS" o "VIEWERS"
+        private Long itemTypeSetId;
+        private String itemTypeSetName;
+        private Long projectId;
+        private String projectName;
+        private Long fieldId;
+        private String fieldName;
+        private Long workflowStatusId;
+        private String workflowStatusName;
+        private Long statusId;
+        private String statusName;
+        private Long grantId;
+        private String grantName;
+        private List<String> assignedRoles;
+        private List<ProjectRoleInfo> projectAssignedRoles;
+        private boolean hasAssignments;
         private List<ProjectGrantInfo> projectGrants;
     }
     

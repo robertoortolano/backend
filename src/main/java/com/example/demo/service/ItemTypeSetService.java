@@ -20,7 +20,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Collections;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -162,8 +164,53 @@ public class ItemTypeSetService {
             throw new ApiException("Default Item Type Set cannot be edited");
         }
 
+        List<ItemTypeConfigurationCreateDto> dtoConfigurations = dto.itemTypeConfigurations() != null
+                ? new ArrayList<>(dto.itemTypeConfigurations())
+                : List.of();
+
+        Set<Long> existingConfigurationIds = set.getItemTypeConfigurations().stream()
+                .map(ItemTypeConfiguration::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<Long> requestedConfigurationIds = dtoConfigurations.stream()
+                .map(ItemTypeConfigurationCreateDto::id)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<Long> removedConfigurationIds = new HashSet<>(existingConfigurationIds);
+        removedConfigurationIds.removeAll(requestedConfigurationIds);
+
+        if (!removedConfigurationIds.isEmpty()) {
+            ItemTypeConfigurationRemovalImpactDto impact = analyzeItemTypeConfigurationRemovalImpact(
+                    tenant,
+                    id,
+                    removedConfigurationIds
+            );
+
+            boolean hasAssignments =
+                    (impact.getFieldOwnerPermissions() != null && impact.getFieldOwnerPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments))
+                    || (impact.getStatusOwnerPermissions() != null && impact.getStatusOwnerPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments))
+                    || (impact.getFieldStatusPermissions() != null && impact.getFieldStatusPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments))
+                    || (impact.getExecutorPermissions() != null && impact.getExecutorPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments))
+                    || (impact.getWorkerPermissions() != null && impact.getWorkerPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments))
+                    || (impact.getCreatorPermissions() != null && impact.getCreatorPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments));
+
+            if (hasAssignments) {
+                throw new ApiException("ITEMTYPESET_REMOVAL_IMPACT: rilevate permission con assegnazioni per le configurazioni rimosse");
+            }
+
+            // Nessuna assegnazione: rimuovi automaticamente le permission orfane prima di procedere con l'aggiornamento
+            removeOrphanedPermissionsForItemTypeConfigurations(
+                    tenant,
+                    id,
+                    removedConfigurationIds,
+                    Collections.emptySet()
+            );
+        }
+
         Set<ItemTypeConfiguration> updatedConfigurations = new HashSet<>();
-        
+
         // Mappa delle configurazioni esistenti per ID per aggiornamento efficiente
         Map<Long, ItemTypeConfiguration> existingConfigsMap = set.getItemTypeConfigurations().stream()
                 .collect(java.util.stream.Collectors.toMap(ItemTypeConfiguration::getId, config -> config));
@@ -171,7 +218,7 @@ public class ItemTypeSetService {
         // Recupera il FieldSet di default del tenant (per clonazioni)
         FieldSet defaultFieldSet = fieldSetLookup.getFirstDefault(tenant);
 
-        for (ItemTypeConfigurationCreateDto entryDto : dto.itemTypeConfigurations()) {
+        for (ItemTypeConfigurationCreateDto entryDto : dtoConfigurations) {
             ItemType itemType = itemTypeLookup.getById(tenant, entryDto.itemTypeId());
             Workflow workflow = workflowLookup.getByIdEntity(tenant, entryDto.workflowId());
             FieldSet fieldSet = fieldSetLookup.getById(entryDto.fieldSetId(), tenant);
@@ -232,7 +279,7 @@ public class ItemTypeSetService {
         }
         
         // Rimuovi le configurazioni che non sono più nel DTO
-        Set<Long> newConfigIds = dto.itemTypeConfigurations().stream()
+        Set<Long> newConfigIds = dtoConfigurations.stream()
                 .filter(e -> e.id() != null)
                 .map(ItemTypeConfigurationCreateDto::id)
                 .collect(java.util.stream.Collectors.toSet());
@@ -985,6 +1032,24 @@ public class ItemTypeSetService {
             List<FieldOwnerPermission> fieldOwnerPermissions = fieldOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
             for (FieldOwnerPermission perm : fieldOwnerPermissions) {
                 if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
+                    permissionAssignmentService.deleteAssignment("FieldOwnerPermission", perm.getId(), tenant);
+                    if (itemTypeSet.getProject() != null) {
+                        projectPermissionAssignmentService.deleteProjectAssignment(
+                                "FieldOwnerPermission",
+                                perm.getId(),
+                                itemTypeSet.getProject().getId(),
+                                tenant
+                        );
+                    } else {
+                        for (Project project : itemTypeSet.getProjectsAssociation()) {
+                            projectPermissionAssignmentService.deleteProjectAssignment(
+                                    "FieldOwnerPermission",
+                                    perm.getId(),
+                                    project.getId(),
+                                    tenant
+                            );
+                        }
+                    }
                     fieldOwnerPermissionRepository.delete(perm);
                 }
             }
@@ -993,6 +1058,24 @@ public class ItemTypeSetService {
             List<StatusOwnerPermission> statusOwnerPermissions = statusOwnerPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
             for (StatusOwnerPermission perm : statusOwnerPermissions) {
                 if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
+                    permissionAssignmentService.deleteAssignment("StatusOwnerPermission", perm.getId(), tenant);
+                    if (itemTypeSet.getProject() != null) {
+                        projectPermissionAssignmentService.deleteProjectAssignment(
+                                "StatusOwnerPermission",
+                                perm.getId(),
+                                itemTypeSet.getProject().getId(),
+                                tenant
+                        );
+                    } else {
+                        for (Project project : itemTypeSet.getProjectsAssociation()) {
+                            projectPermissionAssignmentService.deleteProjectAssignment(
+                                    "StatusOwnerPermission",
+                                    perm.getId(),
+                                    project.getId(),
+                                    tenant
+                            );
+                        }
+                    }
                     statusOwnerPermissionRepository.delete(perm);
                 }
             }
@@ -1001,6 +1084,24 @@ public class ItemTypeSetService {
             List<FieldStatusPermission> fieldStatusPermissions = fieldStatusPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
             for (FieldStatusPermission perm : fieldStatusPermissions) {
                 if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
+                    permissionAssignmentService.deleteAssignment("FieldStatusPermission", perm.getId(), tenant);
+                    if (itemTypeSet.getProject() != null) {
+                        projectPermissionAssignmentService.deleteProjectAssignment(
+                                "FieldStatusPermission",
+                                perm.getId(),
+                                itemTypeSet.getProject().getId(),
+                                tenant
+                        );
+                    } else {
+                        for (Project project : itemTypeSet.getProjectsAssociation()) {
+                            projectPermissionAssignmentService.deleteProjectAssignment(
+                                    "FieldStatusPermission",
+                                    perm.getId(),
+                                    project.getId(),
+                                    tenant
+                            );
+                        }
+                    }
                     fieldStatusPermissionRepository.delete(perm);
                 }
             }
@@ -1009,6 +1110,24 @@ public class ItemTypeSetService {
             List<ExecutorPermission> executorPermissions = executorPermissionRepository.findAllByItemTypeConfiguration(config);
             for (ExecutorPermission perm : executorPermissions) {
                 if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
+                    permissionAssignmentService.deleteAssignment("ExecutorPermission", perm.getId(), tenant);
+                    if (itemTypeSet.getProject() != null) {
+                        projectPermissionAssignmentService.deleteProjectAssignment(
+                                "ExecutorPermission",
+                                perm.getId(),
+                                itemTypeSet.getProject().getId(),
+                                tenant
+                        );
+                    } else {
+                        for (Project project : itemTypeSet.getProjectsAssociation()) {
+                            projectPermissionAssignmentService.deleteProjectAssignment(
+                                    "ExecutorPermission",
+                                    perm.getId(),
+                                    project.getId(),
+                                    tenant
+                            );
+                        }
+                    }
                     executorPermissionRepository.delete(perm);
                 }
             }
