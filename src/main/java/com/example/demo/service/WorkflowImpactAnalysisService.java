@@ -475,9 +475,13 @@ public class WorkflowImpactAnalysisService {
                             boolean canBePreserved = false;
                             boolean defaultPreserve = false;
                             
+                            String permissionType = perm.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS
+                                    ? "FIELD_EDITORS"
+                                    : "FIELD_VIEWERS";
+
                             impacts.add(StatusRemovalImpactDto.FieldStatusPermissionImpact.builder()
                                     .permissionId(perm.getId())
-                                    .permissionType(perm.getPermissionType().toString()) // "EDITORS" or "VIEWERS"
+                                    .permissionType(permissionType)
                                     .itemTypeSetId(itemTypeSet.getId())
                                     .itemTypeSetName(itemTypeSet.getName())
                                     .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)

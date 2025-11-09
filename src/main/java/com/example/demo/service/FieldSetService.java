@@ -1091,7 +1091,7 @@ public class FieldSetService {
                             boolean defaultPreserve = canBePreserved && assignmentDetails.hasAssignments();
                             
                             String permissionType = permission.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS 
-                                    ? "EDITORS" : "VIEWERS";
+                                    ? "FIELD_EDITORS" : "FIELD_VIEWERS";
 
                             Long primaryProjectId = null;
                             String primaryProjectName = null;

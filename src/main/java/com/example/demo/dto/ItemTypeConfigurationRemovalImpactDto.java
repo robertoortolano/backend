@@ -64,7 +64,7 @@ public class ItemTypeConfigurationRemovalImpactDto {
     @Builder
     public static class PermissionImpact {
         private Long permissionId;
-        private String permissionType; // "FIELD_OWNERS", "STATUS_OWNERS", "EDITORS", "VIEWERS", "EXECUTORS", "WORKERS", "CREATORS"
+        private String permissionType; // "FIELD_OWNERS", "STATUS_OWNERS", "FIELD_EDITORS", "FIELD_VIEWERS", "EXECUTORS", "WORKERS", "CREATORS"
         private Long itemTypeSetId;
         private String itemTypeSetName;
         private Long projectId;

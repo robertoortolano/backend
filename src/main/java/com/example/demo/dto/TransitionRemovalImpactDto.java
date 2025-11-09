@@ -19,11 +19,13 @@ public class TransitionRemovalImpactDto {
     
     // Permissions che verranno rimosse
     private List<PermissionImpact> executorPermissions;
+    private List<StatusOwnerPermissionImpact> statusOwnerPermissions;
     private List<FieldStatusPermissionImpact> fieldStatusPermissions;
     
     // Statistiche
     private int totalAffectedItemTypeSets;
     private int totalExecutorPermissions;
+    private int totalStatusOwnerPermissions;
     private int totalFieldStatusPermissions;
     private int totalGrantAssignments;
     private int totalRoleAssignments;
@@ -86,13 +88,34 @@ public class TransitionRemovalImpactDto {
     @Builder
     public static class FieldStatusPermissionImpact {
         private Long permissionId;
-        private String permissionType; // "EDITORS" o "VIEWERS"
+        private String permissionType; // "FIELD_EDITORS" o "FIELD_VIEWERS"
         private Long itemTypeSetId;
         private String itemTypeSetName;
         private Long projectId;
         private String projectName;
         private Long fieldId;
         private String fieldName;
+        private Long workflowStatusId;
+        private String workflowStatusName;
+        private Long statusId;
+        private String statusName;
+        private Long grantId;
+        private String grantName;
+        private List<String> assignedRoles;
+        private List<ProjectRoleInfo> projectAssignedRoles;
+        private boolean hasAssignments;
+        private List<ProjectGrantInfo> projectGrants;
+    }
+    
+    @Data
+    @Builder
+    public static class StatusOwnerPermissionImpact {
+        private Long permissionId;
+        private String permissionType; // "STATUS_OWNERS"
+        private Long itemTypeSetId;
+        private String itemTypeSetName;
+        private Long projectId;
+        private String projectName;
         private Long workflowStatusId;
         private String workflowStatusName;
         private Long statusId;

@@ -56,7 +56,7 @@ public class FieldSetRemovalImpactDto {
     @Builder
     public static class PermissionImpact {
         private Long permissionId;
-        private String permissionType; // "FIELD_OWNERS", "EDITORS", "VIEWERS", "ITEMTYPESET_ROLE"
+        private String permissionType; // "FIELD_OWNERS", "FIELD_EDITORS", "FIELD_VIEWERS"
         private Long itemTypeSetId;
         private String itemTypeSetName;
         private Long projectId;

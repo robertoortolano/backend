@@ -744,9 +744,13 @@ public class ItemTypeConfigurationMigrationService {
                     
                     String suggestedAction = canPreserve ? "PRESERVE" : "REMOVE";
                     
+                    String permissionType = perm.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS
+                            ? "FIELD_EDITORS"
+                            : "FIELD_VIEWERS";
+
                     return ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact.builder()
                             .permissionId(perm.getId())
-                            .permissionType(perm.getPermissionType().toString()) // "EDITORS" o "VIEWERS"
+                            .permissionType(permissionType)
                             .entityId(null) // Non applicabile per FieldStatus
                             .entityName(null)
                             .fieldId(fieldId)

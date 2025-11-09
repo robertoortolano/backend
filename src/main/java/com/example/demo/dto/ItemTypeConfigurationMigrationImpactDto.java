@@ -94,7 +94,7 @@ public class ItemTypeConfigurationMigrationImpactDto {
     @Builder
     public static class SelectablePermissionImpact {
         private Long permissionId;
-        private String permissionType; // "FIELD_OWNERS", "STATUS_OWNERS", "EDITORS", "VIEWERS", "EXECUTORS", "WORKERS", "CREATORS"
+        private String permissionType; // "FIELD_OWNERS", "STATUS_OWNERS", "FIELD_EDITORS", "FIELD_VIEWERS", "EXECUTORS", "WORKERS", "CREATORS"
         
         // Info entity attuale (Field, WorkflowStatus, Transition)
         private Long entityId; // FieldId, WorkflowStatusId, TransitionId

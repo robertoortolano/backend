@@ -925,12 +925,20 @@ public class WorkflowService {
                                 tenant
                         );
         
+        List<TransitionRemovalImpactDto.StatusOwnerPermissionImpact> statusOwnerPermissions =
+                relatedWorkflowStatusIds.isEmpty()
+                        ? new ArrayList<>()
+                        : analyzeStatusOwnerPermissionImpactsForTransitions(
+                                allItemTypeSetsUsingWorkflow,
+                                relatedWorkflowStatusIds,
+                                tenant
+                        );
+        
         // Calcola solo gli ItemTypeSet che hanno effettivamente impatti (permissions con ruoli assegnati)
-        Set<Long> itemTypeSetIdsWithImpact = Stream.concat(
-                        executorPermissions.stream().map(TransitionRemovalImpactDto.PermissionImpact::getItemTypeSetId),
-                        fieldStatusPermissions.stream().map(TransitionRemovalImpactDto.FieldStatusPermissionImpact::getItemTypeSetId)
-                )
-                .collect(Collectors.toSet());
+        Set<Long> itemTypeSetIdsWithImpact = new HashSet<>();
+        executorPermissions.forEach(perm -> itemTypeSetIdsWithImpact.add(perm.getItemTypeSetId()));
+        statusOwnerPermissions.forEach(perm -> itemTypeSetIdsWithImpact.add(perm.getItemTypeSetId()));
+        fieldStatusPermissions.forEach(perm -> itemTypeSetIdsWithImpact.add(perm.getItemTypeSetId()));
         
         List<ItemTypeSet> affectedItemTypeSets = allItemTypeSetsUsingWorkflow.stream()
                 .filter(its -> itemTypeSetIdsWithImpact.contains(its.getId()))
@@ -938,8 +946,12 @@ public class WorkflowService {
         
         // Calcola le statistiche usando assignedRoles dal DTO (già popolato da PermissionAssignment)
         int totalExecutorPermissions = executorPermissions.size();
+        int totalStatusOwnerPermissions = statusOwnerPermissions.size();
         int totalFieldStatusPermissions = fieldStatusPermissions.size();
         int totalRoleAssignments = executorPermissions.stream()
+                .mapToInt(perm -> perm.getAssignedRoles() != null ? perm.getAssignedRoles().size() : 0)
+                .sum()
+                + statusOwnerPermissions.stream()
                 .mapToInt(perm -> perm.getAssignedRoles() != null ? perm.getAssignedRoles().size() : 0)
                 .sum()
                 + fieldStatusPermissions.stream()
@@ -947,6 +959,9 @@ public class WorkflowService {
                 .sum();
         // Calcola totalGrantAssignments: conta i grant globali (solo se hanno assegnazioni)
         int totalGrantAssignments = (int) executorPermissions.stream()
+                .filter(perm -> perm.getGrantId() != null)
+                .count()
+                + (int) statusOwnerPermissions.stream()
                 .filter(perm -> perm.getGrantId() != null)
                 .count()
                 + (int) fieldStatusPermissions.stream()
@@ -961,11 +976,13 @@ public class WorkflowService {
                 .workflowName(workflow.getName())
                 .removedTransitionIds(new ArrayList<>(removedTransitionIds))
                 .removedTransitionNames(removedTransitionNames)
-                .affectedItemTypeSets(mapItemTypeSetImpacts(affectedItemTypeSets, executorPermissions, fieldStatusPermissions))
+                .affectedItemTypeSets(mapItemTypeSetImpacts(affectedItemTypeSets, executorPermissions, statusOwnerPermissions, fieldStatusPermissions))
                 .executorPermissions(executorPermissions)
+                .statusOwnerPermissions(statusOwnerPermissions)
                 .fieldStatusPermissions(fieldStatusPermissions)
                 .totalAffectedItemTypeSets(affectedItemTypeSets.size()) // Solo quelli con impatti effettivi
                 .totalExecutorPermissions(totalExecutorPermissions)
+                .totalStatusOwnerPermissions(totalStatusOwnerPermissions)
                 .totalFieldStatusPermissions(totalFieldStatusPermissions)
                 .totalGrantAssignments(totalGrantAssignments)
                 .totalRoleAssignments(totalRoleAssignments)
@@ -1247,11 +1264,14 @@ public class WorkflowService {
                     boolean hasAssignments = hasGlobalRoles || hasProjectRoles || hasGlobalGrant || hasProjectGrant;
 
                     if (hasAssignments) {
+                        String permissionType = "FIELD_VIEWERS";
+                        if (permission.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS) {
+                            permissionType = "FIELD_EDITORS";
+                        }
+
                         impacts.add(TransitionRemovalImpactDto.FieldStatusPermissionImpact.builder()
                                 .permissionId(permission.getId())
-                                .permissionType(permission.getPermissionType() != null
-                                        ? permission.getPermissionType().name()
-                                        : "FIELD_STATUS")
+                                .permissionType(permissionType)
                                 .itemTypeSetId(itemTypeSet.getId())
                                 .itemTypeSetName(itemTypeSet.getName())
                                 .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
@@ -1277,6 +1297,145 @@ public class WorkflowService {
         return impacts;
     }
     
+    private List<TransitionRemovalImpactDto.StatusOwnerPermissionImpact> analyzeStatusOwnerPermissionImpactsForTransitions(
+            List<ItemTypeSet> itemTypeSets,
+            Set<Long> workflowStatusIds,
+            Tenant tenant
+    ) {
+        List<TransitionRemovalImpactDto.StatusOwnerPermissionImpact> impacts = new ArrayList<>();
+        if (workflowStatusIds == null || workflowStatusIds.isEmpty()) {
+            return impacts;
+        }
+
+        for (ItemTypeSet itemTypeSet : itemTypeSets) {
+            for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
+                List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository
+                        .findByItemTypeConfigurationAndWorkflowStatusIdIn(config, workflowStatusIds);
+
+                for (StatusOwnerPermission permission : permissions) {
+                    WorkflowStatus workflowStatus = permission.getWorkflowStatus();
+                    if (workflowStatus == null) {
+                        continue;
+                    }
+
+                    Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                            "StatusOwnerPermission", permission.getId(), itemTypeSet.getTenant());
+
+                    List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                            .map(Role::getName)
+                            .collect(Collectors.toList()))
+                            .orElse(new ArrayList<>());
+
+                    Long globalGrantId = null;
+                    String globalGrantName = null;
+                    if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
+                        Grant grant = assignmentOpt.get().getGrant();
+                        globalGrantId = grant.getId();
+                        globalGrantName = grant.getRole() != null
+                                ? grant.getRole().getName()
+                                : "Grant globale";
+                    }
+
+                    List<TransitionRemovalImpactDto.ProjectGrantInfo> projectGrantsList = new ArrayList<>();
+                    List<TransitionRemovalImpactDto.ProjectRoleInfo> projectRolesList = new ArrayList<>();
+
+                    if (itemTypeSet.getProject() != null) {
+                        Optional<PermissionAssignment> projectAssignmentOpt =
+                                projectPermissionAssignmentService.getProjectAssignment(
+                                        "StatusOwnerPermission",
+                                        permission.getId(),
+                                        itemTypeSet.getProject().getId(),
+                                        itemTypeSet.getTenant());
+                        if (projectAssignmentOpt.isPresent()) {
+                            PermissionAssignment projectAssignment = projectAssignmentOpt.get();
+                            if (projectAssignment.getGrant() != null) {
+                                projectGrantsList.add(TransitionRemovalImpactDto.ProjectGrantInfo.builder()
+                                        .projectId(itemTypeSet.getProject().getId())
+                                        .projectName(itemTypeSet.getProject().getName())
+                                        .build());
+                            }
+                            Set<Role> projectRoles = projectAssignment.getRoles();
+                            if (projectRoles != null && !projectRoles.isEmpty()) {
+                                List<String> projectRoleNames = projectRoles.stream()
+                                        .map(Role::getName)
+                                        .collect(Collectors.toList());
+                                projectRolesList.add(TransitionRemovalImpactDto.ProjectRoleInfo.builder()
+                                        .projectId(itemTypeSet.getProject().getId())
+                                        .projectName(itemTypeSet.getProject().getName())
+                                        .roles(projectRoleNames)
+                                        .build());
+                            }
+                        }
+                    } else {
+                        for (Project project : itemTypeSet.getProjectsAssociation()) {
+                            Optional<PermissionAssignment> projectAssignmentOpt =
+                                    projectPermissionAssignmentService.getProjectAssignment(
+                                            "StatusOwnerPermission",
+                                            permission.getId(),
+                                            project.getId(),
+                                            itemTypeSet.getTenant());
+                            if (projectAssignmentOpt.isPresent()) {
+                                PermissionAssignment projectAssignment = projectAssignmentOpt.get();
+                                if (projectAssignment.getGrant() != null) {
+                                    projectGrantsList.add(TransitionRemovalImpactDto.ProjectGrantInfo.builder()
+                                            .projectId(project.getId())
+                                            .projectName(project.getName())
+                                            .build());
+                                }
+                                Set<Role> projectRoles = projectAssignment.getRoles();
+                                if (projectRoles != null && !projectRoles.isEmpty()) {
+                                    List<String> projectRoleNames = projectRoles.stream()
+                                            .map(Role::getName)
+                                            .collect(Collectors.toList());
+                                    projectRolesList.add(TransitionRemovalImpactDto.ProjectRoleInfo.builder()
+                                            .projectId(project.getId())
+                                            .projectName(project.getName())
+                                            .roles(projectRoleNames)
+                                            .build());
+                                }
+                            }
+                        }
+                    }
+
+                    boolean hasGlobalRoles = !assignedRoles.isEmpty();
+                    boolean hasProjectRoles = !projectRolesList.isEmpty();
+                    boolean hasGlobalGrant = globalGrantId != null;
+                    boolean hasProjectGrant = !projectGrantsList.isEmpty();
+                    boolean hasAssignments = hasGlobalRoles || hasProjectRoles || hasGlobalGrant || hasProjectGrant;
+
+                    if (!hasAssignments) {
+                        continue;
+                    }
+
+                    Long statusId = workflowStatus.getStatus() != null ? workflowStatus.getStatus().getId() : null;
+                    String statusName = workflowStatus.getStatus() != null ? workflowStatus.getStatus().getName() : null;
+                    String workflowStatusName = workflowStatus.getStatus() != null ? workflowStatus.getStatus().getName() : null;
+
+                    impacts.add(TransitionRemovalImpactDto.StatusOwnerPermissionImpact.builder()
+                            .permissionId(permission.getId())
+                            .permissionType("STATUS_OWNERS")
+                            .itemTypeSetId(itemTypeSet.getId())
+                            .itemTypeSetName(itemTypeSet.getName())
+                            .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
+                            .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
+                            .workflowStatusId(workflowStatus.getId())
+                            .workflowStatusName(workflowStatusName)
+                            .statusId(statusId)
+                            .statusName(statusName)
+                            .grantId(globalGrantId)
+                            .grantName(globalGrantName)
+                            .assignedRoles(assignedRoles)
+                            .projectAssignedRoles(projectRolesList)
+                            .projectGrants(projectGrantsList)
+                            .hasAssignments(true)
+                            .build());
+                }
+            }
+        }
+
+        return impacts;
+    }
+
     /**
      * Rimuove le ExecutorPermissions orfane per le Transition rimosse
      */
@@ -2104,9 +2263,13 @@ public class WorkflowService {
                         boolean canBePreserved = false;
                         boolean defaultPreserve = false;
                         
+                        String permissionType = permission.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS
+                                ? "FIELD_EDITORS"
+                                : "FIELD_VIEWERS";
+
                         impacts.add(StatusRemovalImpactDto.FieldStatusPermissionImpact.builder()
                                 .permissionId(permission.getId())
-                                .permissionType(permission.getPermissionType().toString()) // "EDITORS" o "VIEWERS"
+                                .permissionType(permissionType)
                                 .itemTypeSetId(itemTypeSet.getId())
                                 .itemTypeSetName(itemTypeSet.getName())
                                 .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
@@ -2172,6 +2335,7 @@ public class WorkflowService {
     private List<TransitionRemovalImpactDto.ItemTypeSetImpact> mapItemTypeSetImpacts(
             List<ItemTypeSet> itemTypeSets,
             List<TransitionRemovalImpactDto.PermissionImpact> executorPermissions,
+            List<TransitionRemovalImpactDto.StatusOwnerPermissionImpact> statusOwnerPermissions,
             List<TransitionRemovalImpactDto.FieldStatusPermissionImpact> fieldStatusPermissions
     ) {
         return itemTypeSets.stream()
@@ -2182,13 +2346,20 @@ public class WorkflowService {
                             .filter(p -> p.getItemTypeSetId().equals(itemTypeSetId))
                             .collect(Collectors.toList());
 
+                    List<TransitionRemovalImpactDto.StatusOwnerPermissionImpact> itsStatusOwnerPermissions = statusOwnerPermissions.stream()
+                            .filter(p -> p.getItemTypeSetId().equals(itemTypeSetId))
+                            .collect(Collectors.toList());
+
                     List<TransitionRemovalImpactDto.FieldStatusPermissionImpact> itsFieldStatusPermissions = fieldStatusPermissions.stream()
                             .filter(p -> p.getItemTypeSetId().equals(itemTypeSetId))
                             .collect(Collectors.toList());
 
-                    int totalPermissions = itsExecutorPermissions.size() + itsFieldStatusPermissions.size();
+                    int totalPermissions = itsExecutorPermissions.size() + itsStatusOwnerPermissions.size() + itsFieldStatusPermissions.size();
 
                     int totalRoleAssignments = itsExecutorPermissions.stream()
+                            .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
+                            .sum()
+                            + itsStatusOwnerPermissions.stream()
                             .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
                             .sum()
                             + itsFieldStatusPermissions.stream()
@@ -2198,11 +2369,24 @@ public class WorkflowService {
                     int totalGlobalGrants = (int) itsExecutorPermissions.stream()
                             .filter(p -> p.getGrantId() != null)
                             .count()
+                            + (int) itsStatusOwnerPermissions.stream()
+                            .filter(p -> p.getGrantId() != null)
+                            .count()
                             + (int) itsFieldStatusPermissions.stream()
                             .filter(p -> p.getGrantId() != null)
                             .count();
 
                     Map<Long, Integer> projectGrantsCount = new HashMap<>();
+
+                    for (TransitionRemovalImpactDto.StatusOwnerPermissionImpact perm : itsStatusOwnerPermissions) {
+                        if (perm.getProjectGrants() != null) {
+                            for (TransitionRemovalImpactDto.ProjectGrantInfo pg : perm.getProjectGrants()) {
+                                if (pg.getProjectId() != null) {
+                                    projectGrantsCount.merge(pg.getProjectId(), 1, Integer::sum);
+                                }
+                            }
+                        }
+                    }
 
                     for (TransitionRemovalImpactDto.PermissionImpact perm : itsExecutorPermissions) {
                         if (perm.getProjectGrants() != null) {

@@ -139,7 +139,7 @@ public class StatusRemovalImpactDto {
     @Builder
     public static class FieldStatusPermissionImpact {
         private Long permissionId;
-        private String permissionType; // "EDITORS" o "VIEWERS"
+        private String permissionType; // "FIELD_EDITORS" o "FIELD_VIEWERS"
         private Long itemTypeSetId;
         private String itemTypeSetName;
         private Long projectId;
