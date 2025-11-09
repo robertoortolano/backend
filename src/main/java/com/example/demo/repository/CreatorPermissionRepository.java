@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -28,4 +29,8 @@ public interface CreatorPermissionRepository extends JpaRepository<CreatorPermis
     List<CreatorPermission> findAllByItemTypeConfigurationAndTenant(@Param("config") ItemTypeConfiguration itemTypeConfiguration, @Param("tenant") com.example.demo.entity.Tenant tenant);
     
     boolean existsByItemTypeConfigurationId(Long itemTypeConfigurationId);
+
+    @Query("SELECT p FROM CreatorPermission p WHERE p.itemTypeConfiguration.id IN :itemTypeConfigurationIds AND p.itemTypeConfiguration.tenant = :tenant")
+    List<CreatorPermission> findAllByItemTypeConfigurationIdInAndTenant(@Param("itemTypeConfigurationIds") Collection<Long> itemTypeConfigurationIds,
+                                                                        @Param("tenant") com.example.demo.entity.Tenant tenant);
 }

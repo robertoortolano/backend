@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -70,4 +71,8 @@ public interface FieldStatusPermissionRepository extends JpaRepository<FieldStat
             @Param("config") ItemTypeConfiguration config,
             @Param("workflowStatusIds") Set<Long> workflowStatusIds
     );
+
+    @Query("SELECT p FROM FieldStatusPermission p WHERE p.itemTypeConfiguration.id IN :itemTypeConfigurationIds AND p.itemTypeConfiguration.tenant = :tenant")
+    List<FieldStatusPermission> findAllByItemTypeConfigurationIdInAndTenant(@Param("itemTypeConfigurationIds") Collection<Long> itemTypeConfigurationIds,
+                                                                            @Param("tenant") com.example.demo.entity.Tenant tenant);
 }

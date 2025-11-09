@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.*;
+import com.example.demo.enums.ScopeType;
 import com.example.demo.exception.ApiException;
 import com.example.demo.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,12 @@ public class ProjectPermissionAssignmentService {
     private final UserRepository userRepository;
     private final GroupRepository groupRepository;
     private final UserRoleRepository userRoleRepository;
+    private final WorkerPermissionRepository workerPermissionRepository;
+    private final StatusOwnerPermissionRepository statusOwnerPermissionRepository;
+    private final FieldOwnerPermissionRepository fieldOwnerPermissionRepository;
+    private final CreatorPermissionRepository creatorPermissionRepository;
+    private final ExecutorPermissionRepository executorPermissionRepository;
+    private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
     
     /**
      * Crea o aggiorna un PermissionAssignment per una Permission e un progetto.
@@ -57,6 +64,7 @@ public class ProjectPermissionAssignmentService {
                 .orElseThrow(() -> new ApiException("Project not found"));
         
         ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, itemTypeSetId);
+        resolveAndValidatePermissionForProject(permissionType, permissionId, tenant, project, itemTypeSet);
         
         // Trova o crea PermissionAssignment di progetto
         Optional<PermissionAssignment> existingOpt = permissionAssignmentRepository
@@ -128,6 +136,8 @@ public class ProjectPermissionAssignmentService {
         
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
+        ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, project.getItemTypeSet() != null ? project.getItemTypeSet().getId() : null);
+        resolveAndValidatePermissionForProject(permissionType, permissionId, tenant, project, itemTypeSet);
         
         return permissionAssignmentRepository
                 .findByPermissionTypeAndPermissionIdAndTenantAndProjectWithCollections(permissionType, permissionId, tenant, project);
@@ -172,6 +182,8 @@ public class ProjectPermissionAssignmentService {
         
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
+        ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, project.getItemTypeSet() != null ? project.getItemTypeSet().getId() : null);
+        resolveAndValidatePermissionForProject(permissionType, permissionId, tenant, project, itemTypeSet);
         
         Optional<PermissionAssignment> assignmentOpt = permissionAssignmentRepository
                 .findByPermissionTypeAndPermissionIdAndTenantAndProject(permissionType, permissionId, tenant, project);
@@ -225,6 +237,7 @@ public class ProjectPermissionAssignmentService {
                 .orElseThrow(() -> new ApiException("Project not found"));
         
         ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, itemTypeSetId);
+        resolveAndValidatePermissionForProject(permissionType, permissionId, tenant, project, itemTypeSet);
         
         // Trova o crea PermissionAssignment di progetto
         Optional<PermissionAssignment> existingOpt = permissionAssignmentRepository
@@ -364,6 +377,57 @@ public class ProjectPermissionAssignmentService {
             // Elimina PermissionAssignment
             permissionAssignmentRepository.delete(assignment);
         }
+    }
+    
+    private ItemTypeConfiguration resolveAndValidatePermissionForProject(
+            String permissionType,
+            Long permissionId,
+            Tenant tenant,
+            Project project,
+            ItemTypeSet itemTypeSet
+    ) {
+        ItemTypeConfiguration configuration = resolveItemTypeConfiguration(permissionType, permissionId);
+        if (configuration == null) {
+            throw new ApiException("Permission not found: " + permissionType + " #" + permissionId);
+        }
+        if (!configuration.getTenant().getId().equals(tenant.getId())) {
+            throw new ApiException("Permission does not belong to tenant");
+        }
+        boolean belongsToItemTypeSet = itemTypeSet.getItemTypeConfigurations().stream()
+                .anyMatch(config -> Objects.equals(config.getId(), configuration.getId()));
+        if (!belongsToItemTypeSet) {
+            throw new ApiException("Permission does not belong to the project's ItemTypeSet");
+        }
+        if (configuration.getScope() == ScopeType.PROJECT) {
+            if (configuration.getProject() == null || !Objects.equals(configuration.getProject().getId(), project.getId())) {
+                throw new ApiException("Permission belongs to a different project");
+            }
+        }
+        return configuration;
+    }
+    
+    private ItemTypeConfiguration resolveItemTypeConfiguration(String permissionType, Long permissionId) {
+        return switch (permissionType) {
+            case "WorkerPermission" -> workerPermissionRepository.findById(permissionId)
+                    .map(WorkerPermission::getItemTypeConfiguration)
+                    .orElse(null);
+            case "StatusOwnerPermission" -> statusOwnerPermissionRepository.findById(permissionId)
+                    .map(StatusOwnerPermission::getItemTypeConfiguration)
+                    .orElse(null);
+            case "FieldOwnerPermission" -> fieldOwnerPermissionRepository.findById(permissionId)
+                    .map(FieldOwnerPermission::getItemTypeConfiguration)
+                    .orElse(null);
+            case "CreatorPermission" -> creatorPermissionRepository.findById(permissionId)
+                    .map(CreatorPermission::getItemTypeConfiguration)
+                    .orElse(null);
+            case "ExecutorPermission" -> executorPermissionRepository.findById(permissionId)
+                    .map(ExecutorPermission::getItemTypeConfiguration)
+                    .orElse(null);
+            case "FieldStatusPermission" -> fieldStatusPermissionRepository.findById(permissionId)
+                    .map(FieldStatusPermission::getItemTypeConfiguration)
+                    .orElse(null);
+            default -> throw new ApiException("Unsupported permission type: " + permissionType);
+        };
     }
     
 }

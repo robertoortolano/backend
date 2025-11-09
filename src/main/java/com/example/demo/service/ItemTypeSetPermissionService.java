@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -54,25 +55,105 @@ public class ItemTypeSetPermissionService {
                     .orElseThrow(() -> new ApiException("ItemTypeSet not found"));
             
             Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
+            
+            List<ItemTypeConfiguration> configurations = new ArrayList<>(itemTypeSet.getItemTypeConfigurations());
+            Set<Long> configurationIds = configurations.stream()
+                    .map(ItemTypeConfiguration::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            
+            Map<Long, List<WorkerPermission>> workerPermissionsByConfigId = Collections.emptyMap();
+            Set<Long> workerPermissionIds = Collections.emptySet();
+            if (!configurationIds.isEmpty()) {
+                List<WorkerPermission> workerPermissions = workerPermissionRepository
+                        .findAllByItemTypeConfigurationIdInAndTenant(configurationIds, tenant);
+                workerPermissionsByConfigId = workerPermissions.stream()
+                        .collect(Collectors.groupingBy(perm -> perm.getItemTypeConfiguration().getId()));
+                workerPermissionIds = workerPermissions.stream()
+                        .map(WorkerPermission::getId)
+                        .collect(Collectors.toSet());
+            }
         
         // Worker permissions
         List<Map<String, Object>> workers = new ArrayList<>();
-        Map<ItemTypeConfiguration, List<WorkerPermission>> workerPermissionsByConfig = new LinkedHashMap<>();
-        Set<Long> workerPermissionIds = new HashSet<>();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<WorkerPermission> permissions = workerPermissionRepository.findAllByItemTypeConfiguration(config);
-            workerPermissionsByConfig.put(config, permissions);
-            for (WorkerPermission permission : permissions) {
-                workerPermissionIds.add(permission.getId());
+            Map<Long, List<StatusOwnerPermission>> statusPermissionsByConfigId = Collections.emptyMap();
+            Set<Long> statusPermissionIds = Collections.emptySet();
+            if (!configurationIds.isEmpty()) {
+                List<StatusOwnerPermission> statusPermissions = statusOwnerPermissionRepository
+                        .findAllByItemTypeConfigurationIdInAndTenant(configurationIds, tenant);
+                statusPermissionsByConfigId = statusPermissions.stream()
+                        .collect(Collectors.groupingBy(perm -> perm.getItemTypeConfiguration().getId()));
+                statusPermissionIds = statusPermissions.stream()
+                        .map(StatusOwnerPermission::getId)
+                        .collect(Collectors.toSet());
             }
-        }
-        Map<Long, PermissionAssignment> workerAssignments = permissionAssignmentService.getAssignments(
+            
+            Map<Long, List<FieldOwnerPermission>> fieldOwnerPermissionsByConfigId = Collections.emptyMap();
+            Set<Long> fieldOwnerPermissionIds = Collections.emptySet();
+            if (!configurationIds.isEmpty()) {
+                List<FieldOwnerPermission> fieldOwnerPermissions = fieldOwnerPermissionRepository
+                        .findAllByItemTypeConfigurationIdInAndTenant(configurationIds, tenant);
+                fieldOwnerPermissionsByConfigId = fieldOwnerPermissions.stream()
+                        .collect(Collectors.groupingBy(perm -> perm.getItemTypeConfiguration().getId()));
+                fieldOwnerPermissionIds = fieldOwnerPermissions.stream()
+                        .map(FieldOwnerPermission::getId)
+                        .collect(Collectors.toSet());
+            }
+            
+            Map<Long, List<CreatorPermission>> creatorPermissionsByConfigId = Collections.emptyMap();
+            Set<Long> creatorPermissionIds = Collections.emptySet();
+            if (!configurationIds.isEmpty()) {
+                List<CreatorPermission> creatorPermissions = creatorPermissionRepository
+                        .findAllByItemTypeConfigurationIdInAndTenant(configurationIds, tenant);
+                creatorPermissionsByConfigId = creatorPermissions.stream()
+                        .collect(Collectors.groupingBy(perm -> perm.getItemTypeConfiguration().getId()));
+                creatorPermissionIds = creatorPermissions.stream()
+                        .map(CreatorPermission::getId)
+                        .collect(Collectors.toSet());
+            }
+            
+            Map<Long, List<ExecutorPermission>> executorPermissionsByConfigId = Collections.emptyMap();
+            Set<Long> executorPermissionIds = Collections.emptySet();
+            if (!configurationIds.isEmpty()) {
+                List<ExecutorPermission> executorPermissions = executorPermissionRepository
+                        .findAllByItemTypeConfigurationIdInAndTenant(configurationIds, tenant);
+                executorPermissionsByConfigId = executorPermissions.stream()
+                        .collect(Collectors.groupingBy(perm -> perm.getItemTypeConfiguration().getId()));
+                executorPermissionIds = executorPermissions.stream()
+                        .map(ExecutorPermission::getId)
+                        .collect(Collectors.toSet());
+            }
+            
+            Map<Long, List<FieldStatusPermission>> editorsByConfigId = Collections.emptyMap();
+            Map<Long, List<FieldStatusPermission>> viewersByConfigId = Collections.emptyMap();
+            Set<Long> editorPermissionIds = Collections.emptySet();
+            Set<Long> viewerPermissionIds = Collections.emptySet();
+            if (!configurationIds.isEmpty()) {
+                List<FieldStatusPermission> fieldStatusPermissions = fieldStatusPermissionRepository
+                        .findAllByItemTypeConfigurationIdInAndTenant(configurationIds, tenant);
+                editorsByConfigId = fieldStatusPermissions.stream()
+                        .filter(perm -> perm.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS)
+                        .collect(Collectors.groupingBy(perm -> perm.getItemTypeConfiguration().getId()));
+                viewersByConfigId = fieldStatusPermissions.stream()
+                        .filter(perm -> perm.getPermissionType() == FieldStatusPermission.PermissionType.VIEWERS)
+                        .collect(Collectors.groupingBy(perm -> perm.getItemTypeConfiguration().getId()));
+                editorPermissionIds = fieldStatusPermissions.stream()
+                        .filter(perm -> perm.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS)
+                        .map(FieldStatusPermission::getId)
+                        .collect(Collectors.toSet());
+                viewerPermissionIds = fieldStatusPermissions.stream()
+                        .filter(perm -> perm.getPermissionType() == FieldStatusPermission.PermissionType.VIEWERS)
+                        .map(FieldStatusPermission::getId)
+                        .collect(Collectors.toSet());
+            }
+            
+            Map<Long, PermissionAssignment> workerAssignments = permissionAssignmentService.getAssignments(
                 "WorkerPermission", workerPermissionIds, tenant);
         Map<Long, PermissionAssignment> workerProjectAssignments = projectId != null
                 ? projectPermissionAssignmentService.getProjectAssignments("WorkerPermission", workerPermissionIds, projectId, tenant)
                 : Collections.emptyMap();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<WorkerPermission> permissions = workerPermissionsByConfig.getOrDefault(config, Collections.emptyList());
+        for (ItemTypeConfiguration config : configurations) {
+            List<WorkerPermission> permissions = workerPermissionsByConfigId.getOrDefault(config.getId(), Collections.emptyList());
             for (WorkerPermission perm : permissions) {
                 Map<String, Object> worker = new HashMap<>();
                 worker.put("id", perm.getId());
@@ -129,22 +210,13 @@ public class ItemTypeSetPermissionService {
         
         // StatusOwner permissions
         List<Map<String, Object>> statusOwners = new ArrayList<>();
-        Map<ItemTypeConfiguration, List<StatusOwnerPermission>> statusPermissionsByConfig = new LinkedHashMap<>();
-        Set<Long> statusPermissionIds = new HashSet<>();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
-            statusPermissionsByConfig.put(config, permissions);
-            for (StatusOwnerPermission permission : permissions) {
-                statusPermissionIds.add(permission.getId());
-            }
-        }
         Map<Long, PermissionAssignment> statusAssignments = permissionAssignmentService.getAssignments(
                 "StatusOwnerPermission", statusPermissionIds, tenant);
         Map<Long, PermissionAssignment> statusProjectAssignments = projectId != null
                 ? projectPermissionAssignmentService.getProjectAssignments("StatusOwnerPermission", statusPermissionIds, projectId, tenant)
                 : Collections.emptyMap();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<StatusOwnerPermission> permissions = statusPermissionsByConfig.getOrDefault(config, Collections.emptyList());
+        for (ItemTypeConfiguration config : configurations) {
+            List<StatusOwnerPermission> permissions = statusPermissionsByConfigId.getOrDefault(config.getId(), Collections.emptyList());
             for (StatusOwnerPermission perm : permissions) {
                 Map<String, Object> statusOwner = new HashMap<>();
                 statusOwner.put("id", perm.getId());
@@ -212,22 +284,13 @@ public class ItemTypeSetPermissionService {
         
         // FieldOwner permissions
         List<Map<String, Object>> fieldOwners = new ArrayList<>();
-        Map<ItemTypeConfiguration, List<FieldOwnerPermission>> fieldOwnerPermissionsByConfig = new LinkedHashMap<>();
-        Set<Long> fieldOwnerPermissionIds = new HashSet<>();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<FieldOwnerPermission> permissions = fieldOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
-            fieldOwnerPermissionsByConfig.put(config, permissions);
-            for (FieldOwnerPermission permission : permissions) {
-                fieldOwnerPermissionIds.add(permission.getId());
-            }
-        }
         Map<Long, PermissionAssignment> fieldOwnerAssignments = permissionAssignmentService.getAssignments(
                 "FieldOwnerPermission", fieldOwnerPermissionIds, tenant);
         Map<Long, PermissionAssignment> fieldOwnerProjectAssignments = projectId != null
                 ? projectPermissionAssignmentService.getProjectAssignments("FieldOwnerPermission", fieldOwnerPermissionIds, projectId, tenant)
                 : Collections.emptyMap();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<FieldOwnerPermission> permissions = fieldOwnerPermissionsByConfig.getOrDefault(config, Collections.emptyList());
+        for (ItemTypeConfiguration config : configurations) {
+            List<FieldOwnerPermission> permissions = fieldOwnerPermissionsByConfigId.getOrDefault(config.getId(), Collections.emptyList());
             for (FieldOwnerPermission perm : permissions) {
                 Map<String, Object> fieldOwner = new HashMap<>();
                 fieldOwner.put("id", perm.getId());
@@ -290,22 +353,13 @@ public class ItemTypeSetPermissionService {
         
         // Creator permissions
         List<Map<String, Object>> creators = new ArrayList<>();
-        Map<ItemTypeConfiguration, List<CreatorPermission>> creatorPermissionsByConfig = new LinkedHashMap<>();
-        Set<Long> creatorPermissionIds = new HashSet<>();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<CreatorPermission> permissions = creatorPermissionRepository.findAllByItemTypeConfiguration(config);
-            creatorPermissionsByConfig.put(config, permissions);
-            for (CreatorPermission permission : permissions) {
-                creatorPermissionIds.add(permission.getId());
-            }
-        }
         Map<Long, PermissionAssignment> creatorAssignments = permissionAssignmentService.getAssignments(
                 "CreatorPermission", creatorPermissionIds, tenant);
         Map<Long, PermissionAssignment> creatorProjectAssignments = projectId != null
                 ? projectPermissionAssignmentService.getProjectAssignments("CreatorPermission", creatorPermissionIds, projectId, tenant)
                 : Collections.emptyMap();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<CreatorPermission> permissions = creatorPermissionsByConfig.getOrDefault(config, Collections.emptyList());
+        for (ItemTypeConfiguration config : configurations) {
+            List<CreatorPermission> permissions = creatorPermissionsByConfigId.getOrDefault(config.getId(), Collections.emptyList());
             for (CreatorPermission perm : permissions) {
                 Map<String, Object> creator = new HashMap<>();
                 creator.put("id", perm.getId());
@@ -367,22 +421,13 @@ public class ItemTypeSetPermissionService {
         
         // Executor permissions
         List<Map<String, Object>> executors = new ArrayList<>();
-        Map<ItemTypeConfiguration, List<ExecutorPermission>> executorPermissionsByConfig = new LinkedHashMap<>();
-        Set<Long> executorPermissionIds = new HashSet<>();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<ExecutorPermission> permissions = executorPermissionRepository.findAllByItemTypeConfiguration(config);
-            executorPermissionsByConfig.put(config, permissions);
-            for (ExecutorPermission permission : permissions) {
-                executorPermissionIds.add(permission.getId());
-            }
-        }
         Map<Long, PermissionAssignment> executorAssignments = permissionAssignmentService.getAssignments(
                 "ExecutorPermission", executorPermissionIds, tenant);
         Map<Long, PermissionAssignment> executorProjectAssignments = projectId != null
                 ? projectPermissionAssignmentService.getProjectAssignments("ExecutorPermission", executorPermissionIds, projectId, tenant)
                 : Collections.emptyMap();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<ExecutorPermission> permissions = executorPermissionsByConfig.getOrDefault(config, Collections.emptyList());
+        for (ItemTypeConfiguration config : configurations) {
+            List<ExecutorPermission> permissions = executorPermissionsByConfigId.getOrDefault(config.getId(), Collections.emptyList());
             for (ExecutorPermission perm : permissions) {
                 Map<String, Object> executor = new HashMap<>();
                 executor.put("id", perm.getId());
@@ -467,23 +512,13 @@ public class ItemTypeSetPermissionService {
         
         // Editor permissions
         List<Map<String, Object>> editors = new ArrayList<>();
-        Map<ItemTypeConfiguration, List<FieldStatusPermission>> editorPermissionsByConfig = new LinkedHashMap<>();
-        Set<Long> editorPermissionIds = new HashSet<>();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<FieldStatusPermission> permissions = fieldStatusPermissionRepository
-                    .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.EDITORS);
-            editorPermissionsByConfig.put(config, permissions);
-            for (FieldStatusPermission permission : permissions) {
-                editorPermissionIds.add(permission.getId());
-            }
-        }
         Map<Long, PermissionAssignment> editorAssignments = permissionAssignmentService.getAssignments(
                 "FieldStatusPermission", editorPermissionIds, tenant);
         Map<Long, PermissionAssignment> editorProjectAssignments = projectId != null
                 ? projectPermissionAssignmentService.getProjectAssignments("FieldStatusPermission", editorPermissionIds, projectId, tenant)
                 : Collections.emptyMap();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<FieldStatusPermission> permissions = editorPermissionsByConfig.getOrDefault(config, Collections.emptyList());
+        for (ItemTypeConfiguration config : configurations) {
+            List<FieldStatusPermission> permissions = editorsByConfigId.getOrDefault(config.getId(), Collections.emptyList());
             for (FieldStatusPermission perm : permissions) {
                 Map<String, Object> editor = new HashMap<>();
                 editor.put("id", perm.getId());
@@ -550,23 +585,13 @@ public class ItemTypeSetPermissionService {
         
         // Viewer permissions
         List<Map<String, Object>> viewers = new ArrayList<>();
-        Map<ItemTypeConfiguration, List<FieldStatusPermission>> viewerPermissionsByConfig = new LinkedHashMap<>();
-        Set<Long> viewerPermissionIds = new HashSet<>();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<FieldStatusPermission> permissions = fieldStatusPermissionRepository
-                    .findAllByItemTypeConfigurationAndPermissionType(config, FieldStatusPermission.PermissionType.VIEWERS);
-            viewerPermissionsByConfig.put(config, permissions);
-            for (FieldStatusPermission permission : permissions) {
-                viewerPermissionIds.add(permission.getId());
-            }
-        }
         Map<Long, PermissionAssignment> viewerAssignments = permissionAssignmentService.getAssignments(
                 "FieldStatusPermission", viewerPermissionIds, tenant);
         Map<Long, PermissionAssignment> viewerProjectAssignments = projectId != null
                 ? projectPermissionAssignmentService.getProjectAssignments("FieldStatusPermission", viewerPermissionIds, projectId, tenant)
                 : Collections.emptyMap();
-        for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-            List<FieldStatusPermission> permissions = viewerPermissionsByConfig.getOrDefault(config, Collections.emptyList());
+        for (ItemTypeConfiguration config : configurations) {
+            List<FieldStatusPermission> permissions = viewersByConfigId.getOrDefault(config.getId(), Collections.emptyList());
             for (FieldStatusPermission perm : permissions) {
                 Map<String, Object> viewer = new HashMap<>();
                 viewer.put("id", perm.getId());

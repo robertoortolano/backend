@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -38,4 +39,8 @@ public interface ExecutorPermissionRepository extends JpaRepository<ExecutorPerm
      */
     @Query("SELECT p FROM ExecutorPermission p JOIN p.transition t JOIN t.workflow w WHERE t.id = :transitionId AND w.tenant = :tenant")
     List<ExecutorPermission> findByTransitionIdAndTenant(@Param("transitionId") Long transitionId, @Param("tenant") com.example.demo.entity.Tenant tenant);
+
+    @Query("SELECT p FROM ExecutorPermission p WHERE p.itemTypeConfiguration.id IN :itemTypeConfigurationIds AND p.itemTypeConfiguration.tenant = :tenant")
+    List<ExecutorPermission> findAllByItemTypeConfigurationIdInAndTenant(@Param("itemTypeConfigurationIds") Collection<Long> itemTypeConfigurationIds,
+                                                                         @Param("tenant") com.example.demo.entity.Tenant tenant);
 }

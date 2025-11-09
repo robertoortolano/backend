@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -39,6 +40,10 @@ public interface StatusOwnerPermissionRepository extends JpaRepository<StatusOwn
            "LEFT JOIN FETCH ws.status " +
            "WHERE p.itemTypeConfiguration = :config AND p.itemTypeConfiguration.tenant = :tenant")
     List<StatusOwnerPermission> findAllByItemTypeConfigurationAndTenant(@Param("config") ItemTypeConfiguration itemTypeConfiguration, @Param("tenant") com.example.demo.entity.Tenant tenant);
+
+    @Query("SELECT p FROM StatusOwnerPermission p WHERE p.itemTypeConfiguration.id IN :itemTypeConfigurationIds AND p.itemTypeConfiguration.tenant = :tenant")
+    List<StatusOwnerPermission> findAllByItemTypeConfigurationIdInAndTenant(@Param("itemTypeConfigurationIds") Collection<Long> itemTypeConfigurationIds,
+                                                                            @Param("tenant") com.example.demo.entity.Tenant tenant);
     
     boolean existsByItemTypeConfigurationIdAndWorkflowStatusId(Long itemTypeConfigurationId, Long workflowStatusId);
     StatusOwnerPermission findByItemTypeConfigurationAndWorkflowStatusId(ItemTypeConfiguration itemTypeConfiguration, Long workflowStatusId);
