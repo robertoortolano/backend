@@ -25,7 +25,6 @@ public class ProjectPermissionAssignmentService {
     
     private final PermissionAssignmentRepository permissionAssignmentRepository;
     private final ProjectRepository projectRepository;
-    private final ItemTypeSetRepository itemTypeSetRepository;
     private final RoleRepository roleRepository;
     private final GrantRepository grantRepository;
     private final GrantCleanupService grantCleanupService;
@@ -57,9 +56,7 @@ public class ProjectPermissionAssignmentService {
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
         
-        // Verifica che l'ItemTypeSet esista
-        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdAndTenant(itemTypeSetId, tenant)
-                .orElseThrow(() -> new ApiException("ItemTypeSet not found"));
+        ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, itemTypeSetId);
         
         // Trova o crea PermissionAssignment di progetto
         Optional<PermissionAssignment> existingOpt = permissionAssignmentRepository
@@ -205,9 +202,7 @@ public class ProjectPermissionAssignmentService {
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
         
-        // Verifica che l'ItemTypeSet esista
-        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdAndTenant(itemTypeSetId, tenant)
-                .orElseThrow(() -> new ApiException("ItemTypeSet not found"));
+        ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, itemTypeSetId);
         
         // Trova o crea PermissionAssignment di progetto
         Optional<PermissionAssignment> existingOpt = permissionAssignmentRepository
@@ -243,6 +238,19 @@ public class ProjectPermissionAssignmentService {
         assignment.setItemTypeSet(itemTypeSet);
         
         return permissionAssignmentRepository.save(assignment);
+    }
+
+    private ItemTypeSet resolveProjectItemTypeSet(Project project, Long requestedItemTypeSetId) {
+        ItemTypeSet projectItemTypeSet = project.getItemTypeSet();
+        if (projectItemTypeSet == null) {
+            throw new ApiException("Project has no ItemTypeSet assigned");
+        }
+
+        if (requestedItemTypeSetId != null && !projectItemTypeSet.getId().equals(requestedItemTypeSetId)) {
+            throw new ApiException("ItemTypeSet not assigned to project");
+        }
+
+        return projectItemTypeSet;
     }
     
     private Grant resolveGrant(PermissionAssignment assignment) {

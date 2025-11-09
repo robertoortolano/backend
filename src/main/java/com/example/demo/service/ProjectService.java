@@ -131,6 +131,13 @@ public class ProjectService {
 
         ItemTypeSet itemTypeSet = itemTypeSetLookup.getById(tenant, setId);
 
+        if (itemTypeSet.getScope() == ScopeType.PROJECT) {
+            Project ownerProject = itemTypeSet.getProject();
+            if (ownerProject == null || !ownerProject.getId().equals(project.getId())) {
+                throw new ApiException("ItemTypeSet non assegnabile: appartiene a un altro progetto");
+            }
+        }
+
         project.setItemTypeSet(itemTypeSet);
         projectRepository.save(project);
     }
