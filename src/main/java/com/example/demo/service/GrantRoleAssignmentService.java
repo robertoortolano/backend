@@ -106,13 +106,10 @@ public class GrantRoleAssignmentService {
     @Transactional(readOnly = true)
     public List<GrantRoleAssignment> getProjectGrantRoleAssignments(Long projectId, Tenant tenant) {
         // Verifica che il progetto esista
-        projectRepository.findByIdAndTenant(projectId, tenant)
+        Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
 
-        return grantRoleAssignmentRepository.findAll().stream()
-                .filter(gra -> gra.getProject() != null && gra.getProject().getId().equals(projectId))
-                .filter(gra -> gra.getTenant().getId().equals(tenant.getId()))
-                .toList();
+        return grantRoleAssignmentRepository.findAllByProjectAndTenant(project, tenant);
     }
 
     /**
@@ -125,17 +122,13 @@ public class GrantRoleAssignmentService {
             Tenant tenant
     ) {
         // Verifica che il progetto e il ruolo esistano
-        projectRepository.findByIdAndTenant(projectId, tenant)
+        Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
 
-        roleRepository.findByIdAndTenant(roleId, tenant)
+        Role role = roleRepository.findByIdAndTenant(roleId, tenant)
                 .orElseThrow(() -> new ApiException("Role not found"));
 
-        return grantRoleAssignmentRepository.findAll().stream()
-                .filter(gra -> gra.getProject() != null && gra.getProject().getId().equals(projectId))
-                .filter(gra -> gra.getRole().getId().equals(roleId))
-                .filter(gra -> gra.getTenant().getId().equals(tenant.getId()))
-                .toList();
+        return grantRoleAssignmentRepository.findAllByProjectAndTenantAndRole(project, tenant, role);
     }
 }
 

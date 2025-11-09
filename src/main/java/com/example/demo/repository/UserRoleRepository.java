@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
@@ -192,6 +193,12 @@ public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
     boolean existsByUserIdAndProjectIdAndScope(@Param("userId") Long userId, 
                                                  @Param("projectId") Long projectId, 
                                                  @Param("scope") ScopeType scope);
+
+    /**
+     * Restituisce gli ID degli utenti (subset di userIds) che hanno almeno un ruolo nella tenant.
+     */
+    @Query("SELECT DISTINCT ur.user.id FROM UserRole ur WHERE ur.user.id IN :userIds AND ur.tenant.id = :tenantId")
+    Set<Long> findUserIdsByTenantAndUserIdIn(@Param("tenantId") Long tenantId, @Param("userIds") Set<Long> userIds);
 }
 
 

@@ -153,4 +153,17 @@ public interface GrantRoleAssignmentRepository extends JpaRepository<GrantRoleAs
                                                     @Param("tenantId") Long tenantId,
                                                     @Param("roleName") String roleName);
 
+    /**
+     * Restituisce tutte le GrantRoleAssignment per un progetto e tenant.
+     */
+    @Query("SELECT ga FROM GrantRoleAssignment ga WHERE ga.project = :project AND ga.tenant = :tenant")
+    List<GrantRoleAssignment> findAllByProjectAndTenant(@Param("project") Project project, @Param("tenant") Tenant tenant);
+
+    /**
+     * Restituisce tutte le GrantRoleAssignment per un progetto, tenant e ruolo.
+     */
+    @Query("SELECT ga FROM GrantRoleAssignment ga WHERE ga.project = :project AND ga.tenant = :tenant AND ga.role = :role")
+    List<GrantRoleAssignment> findAllByProjectAndTenantAndRole(@Param("project") Project project,
+                                                               @Param("tenant") Tenant tenant,
+                                                               @Param("role") Role role);
 }

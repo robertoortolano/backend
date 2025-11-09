@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Servizio per gestire PermissionAssignment di progetto (assegnazioni specifiche per progetto).
@@ -288,14 +290,25 @@ public class ProjectPermissionAssignmentService {
         if (userIds == null || userIds.isEmpty()) {
             return new HashSet<>();
         }
-        Set<User> users = new HashSet<>();
-        for (Long userId : userIds) {
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new ApiException("User not found: " + userId));
-            validateUserBelongsToTenant(user, tenant);
-            users.add(user);
+
+        Set<Long> distinctIds = new HashSet<>(userIds);
+        Map<Long, User> usersById = userRepository.findAllById(distinctIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        if (usersById.size() != distinctIds.size()) {
+            Set<Long> missing = new HashSet<>(distinctIds);
+            missing.removeAll(usersById.keySet());
+            throw new ApiException("User not found: " + missing.iterator().next());
         }
-        return users;
+
+        Set<Long> allowedIds = userRoleRepository.findUserIdsByTenantAndUserIdIn(tenant.getId(), distinctIds);
+        if (allowedIds.size() != distinctIds.size()) {
+            Set<Long> missing = new HashSet<>(distinctIds);
+            missing.removeAll(allowedIds);
+            throw new ApiException("User " + missing.iterator().next() + " does not belong to tenant " + tenant.getId());
+        }
+
+        return new HashSet<>(usersById.values());
     }
 
     private Set<Group> buildGroupsSet(Set<Long> groupIds, Tenant tenant) {
@@ -329,13 +342,6 @@ public class ProjectPermissionAssignmentService {
         grant.getNegatedGroups().addAll(negatedGroups);
     }
 
-    private void validateUserBelongsToTenant(User user, Tenant tenant) {
-        boolean belongsToTenant = !userRoleRepository.findByUserIdAndTenantId(user.getId(), tenant.getId()).isEmpty();
-        if (!belongsToTenant) {
-            throw new ApiException("User " + user.getId() + " does not belong to tenant " + tenant.getId());
-        }
-    }
-    
     /**
      * Elimina tutte le PermissionAssignment di progetto per un ItemTypeSet.
      * Utile quando si elimina un ItemTypeSet.
