@@ -14,7 +14,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -211,32 +215,42 @@ public class TenantUserManagementService {
     @Transactional(readOnly = true)
     public List<TenantUserDto> getAllUsersWithAccess(Tenant tenant) {
         List<User> users = userRoleRepository.findUsersByTenantId(tenant.getId());
+        if (users.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> userIds = users.stream()
+                .map(User::getId)
+                .collect(Collectors.toSet());
+
+        Map<Long, List<String>> tenantRolesByUser = userRoleRepository
+                .findTenantRolesByUserIdsAndTenantId(tenant.getId(), userIds).stream()
+                .collect(Collectors.groupingBy(
+                        userRole -> userRole.getUser().getId(),
+                        Collectors.collectingAndThen(
+                                Collectors.mapping(UserRole::getRoleName, Collectors.toCollection(LinkedHashSet::new)),
+                                ArrayList::new
+                        )
+                ));
+
+        Map<Long, List<com.example.demo.dto.ProjectSummaryDto>> projectAdminsByUser = userRoleRepository
+                .findProjectRolesByUserIdsAndTenantIdAndRoleName(userIds, tenant.getId(), "ADMIN").stream()
+                .collect(Collectors.groupingBy(
+                        userRole -> userRole.getUser().getId(),
+                        Collectors.mapping(
+                                userRole -> dtoMapper.toProjectSummaryDto(userRole.getProject()),
+                                Collectors.toCollection(ArrayList::new)
+                        )
+                ));
 
         return users.stream()
-                .map(user -> {
-                    // Ottieni ruoli tenant
-                    List<String> roles = userRoleRepository.findTenantRolesByUserAndTenant(user.getId(), tenant.getId())
-                            .stream()
-                            .map(UserRole::getRoleName)
-                            .distinct()
-                            .collect(Collectors.toList());
-
-                    // Ottieni progetti per cui l'utente è PROJECT_ADMIN
-                    List<com.example.demo.dto.ProjectSummaryDto> projectAdminOf = 
-                            userRoleRepository.findProjectsByUserIdAndTenantIdAndRoleName(
-                                    user.getId(), tenant.getId(), "ADMIN")
-                            .stream()
-                            .map(dtoMapper::toProjectSummaryDto)
-                            .collect(Collectors.toList());
-
-                    return new TenantUserDto(
-                            user.getId(),
-                            user.getUsername(),
-                            user.getFullName(),
-                            roles,
-                            projectAdminOf
-                    );
-                })
+                .map(user -> new TenantUserDto(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getFullName(),
+                        tenantRolesByUser.getOrDefault(user.getId(), List.of()),
+                        projectAdminsByUser.getOrDefault(user.getId(), List.of())
+                ))
                 .collect(Collectors.toList());
     }
 

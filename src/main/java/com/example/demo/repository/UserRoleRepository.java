@@ -71,6 +71,15 @@ public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
            "WHERE ur.tenant.id = :tenantId AND ur.scope = 'TENANT'")
     List<User> findUsersByTenantId(@Param("tenantId") Long tenantId);
 
+    @Query("""
+            SELECT ur FROM UserRole ur
+            WHERE ur.tenant.id = :tenantId
+              AND ur.scope = 'TENANT'
+              AND ur.project IS NULL
+              AND ur.user.id IN :userIds
+            """)
+    List<UserRole> findTenantRolesByUserIdsAndTenantId(@Param("tenantId") Long tenantId, @Param("userIds") Set<Long> userIds);
+
     /**
      * Trova tutti gli utenti con un determinato ruolo specifico in una tenant
      */
@@ -136,6 +145,19 @@ public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
     List<Project> findProjectsByUserIdAndTenantIdAndRoleName(@Param("userId") Long userId, 
                                                                @Param("tenantId") Long tenantId, 
                                                                @Param("roleName") String roleName);
+
+    @Query("""
+            SELECT DISTINCT ur FROM UserRole ur
+            LEFT JOIN FETCH ur.project p
+            WHERE ur.tenant.id = :tenantId
+              AND ur.roleName = :roleName
+              AND ur.scope = 'PROJECT'
+              AND ur.user.id IN :userIds
+              AND p IS NOT NULL
+            """)
+    List<UserRole> findProjectRolesByUserIdsAndTenantIdAndRoleName(@Param("userIds") Set<Long> userIds,
+                                                                   @Param("tenantId") Long tenantId,
+                                                                   @Param("roleName") String roleName);
 
     /**
      * Elimina tutti i UserRole PROJECT-level di un utente in un progetto

@@ -88,17 +88,7 @@ public class PermissionAssignmentService {
         
         // Aggiorna ruoli
         if (roleIds != null) {
-            Set<Role> roles = new HashSet<>();
-            for (Long roleId : roleIds) {
-                Role role = roleRepository.findById(roleId)
-                        .orElseThrow(() -> new ApiException("Role not found: " + roleId));
-                // Verifica che il ruolo appartenga al tenant
-                if (!role.getTenant().getId().equals(tenant.getId())) {
-                    throw new ApiException("Role does not belong to tenant");
-                }
-                roles.add(role);
-            }
-            assignment.setRoles(roles);
+            assignment.setRoles(resolveRoles(roleIds, tenant));
         }
         
         // Aggiorna grant
@@ -352,13 +342,26 @@ public class PermissionAssignmentService {
         if (groupIds == null || groupIds.isEmpty()) {
             return new HashSet<>();
         }
-        Set<Group> groups = new HashSet<>();
-        for (Long groupId : groupIds) {
-            Group group = groupRepository.findByIdAndTenant(groupId, tenant)
-                    .orElseThrow(() -> new ApiException("Group not found: " + groupId));
-            groups.add(group);
+        Set<Long> distinctIds = new HashSet<>(groupIds);
+        Map<Long, Group> groupsById = groupRepository.findAllById(distinctIds).stream()
+                .collect(Collectors.toMap(
+                        Group::getId,
+                        Function.identity(),
+                        (existing, duplicate) -> existing));
+
+        if (groupsById.size() != distinctIds.size()) {
+            Set<Long> missing = new HashSet<>(distinctIds);
+            missing.removeAll(groupsById.keySet());
+            throw new ApiException("Group not found: " + missing.iterator().next());
         }
-        return groups;
+
+        groupsById.values().forEach(group -> {
+            if (group.getTenant() == null || !group.getTenant().getId().equals(tenant.getId())) {
+                throw new ApiException("Group not found: " + group.getId());
+            }
+        });
+
+        return new HashSet<>(groupsById.values());
     }
 
     private void replaceGrantCollections(Grant grant,
@@ -412,6 +415,33 @@ public class PermissionAssignmentService {
                     .orElse(null);
             default -> throw new ApiException("Unsupported permission type: " + permissionType);
         };
+    }
+
+    private Set<Role> resolveRoles(Set<Long> roleIds, Tenant tenant) {
+        if (roleIds == null || roleIds.isEmpty()) {
+            return new HashSet<>();
+        }
+
+        Set<Long> distinctIds = new HashSet<>(roleIds);
+        Map<Long, Role> rolesById = roleRepository.findAllById(distinctIds).stream()
+                .collect(Collectors.toMap(
+                        Role::getId,
+                        Function.identity(),
+                        (existing, duplicate) -> existing));
+
+        if (rolesById.size() != distinctIds.size()) {
+            Set<Long> missing = new HashSet<>(distinctIds);
+            missing.removeAll(rolesById.keySet());
+            throw new ApiException("Role not found: " + missing.iterator().next());
+        }
+
+        for (Role role : rolesById.values()) {
+            if (role.getTenant() == null || !role.getTenant().getId().equals(tenant.getId())) {
+                throw new ApiException("Role does not belong to tenant");
+            }
+        }
+
+        return new HashSet<>(rolesById.values());
     }
 }
 

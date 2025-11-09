@@ -42,7 +42,13 @@ public interface TransitionRepository extends JpaRepository<Transition, Long> {
     /**
      * Trova tutte le Transition di un Workflow, filtrate per Tenant (sicurezza)
      */
-    @Query("SELECT t FROM Transition t WHERE t.workflow = :workflow AND t.workflow.tenant = :tenant")
+    @Query("""
+        SELECT DISTINCT t
+        FROM Transition t
+        LEFT JOIN FETCH t.fromStatus
+        LEFT JOIN FETCH t.toStatus
+        WHERE t.workflow = :workflow AND t.workflow.tenant = :tenant
+    """)
     List<Transition> findByWorkflowAndTenant(@Param("workflow") Workflow workflow, @Param("tenant") com.example.demo.entity.Tenant tenant);
 
     /**

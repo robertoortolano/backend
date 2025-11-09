@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.function.Function;
 
 /**
  * Service for analyzing the impact of workflow changes (status/transition removal)
@@ -49,27 +50,47 @@ public class WorkflowImpactAnalysisService {
         List<ItemTypeSet> allItemTypeSetsUsingWorkflow = findItemTypeSetsUsingWorkflow(workflowId, tenant);
         
         // Find all WorkflowStatuses that will be removed
-        List<WorkflowStatus> removedWorkflowStatuses = workflow.getStatuses().stream()
-                .filter(ws -> removedStatusIds.contains(ws.getId()))
+        Map<Long, WorkflowStatus> workflowStatusById = workflow.getStatuses().stream()
+                .filter(ws -> ws.getId() != null)
+                .collect(Collectors.toMap(
+                        WorkflowStatus::getId,
+                        Function.identity(),
+                        (existing, duplicate) -> existing));
+        List<WorkflowStatus> removedWorkflowStatuses = removedStatusIds.stream()
+                .map(workflowStatusById::get)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-        
-        // Find all transitions that will be removed (incoming and outgoing from removed statuses)
-        Set<Long> removedTransitionIds = new HashSet<>();
-        for (WorkflowStatus workflowStatus : removedWorkflowStatuses) {
-            // Outgoing transitions (fromStatus)
-            List<Transition> outgoingTransitions = transitionRepository.findByFromStatusAndTenant(workflowStatus, tenant);
-            removedTransitionIds.addAll(outgoingTransitions.stream()
-                    .map(Transition::getId)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet()));
-            
-            // Incoming transitions (toStatus)
-            List<Transition> incomingTransitions = transitionRepository.findByToStatusAndTenant(workflowStatus, tenant);
-            removedTransitionIds.addAll(incomingTransitions.stream()
-                    .map(Transition::getId)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet()));
+
+        // Preload all transitions for this workflow once and index them by status
+        List<Transition> workflowTransitions = transitionRepository.findByWorkflowAndTenant(workflow, tenant);
+        Map<Long, Set<Long>> transitionIdsByStatus = new HashMap<>();
+        for (Transition transition : workflowTransitions) {
+            Long transitionId = transition.getId();
+            if (transitionId == null) {
+                continue;
+            }
+
+            WorkflowStatus fromStatus = transition.getFromStatus();
+            if (fromStatus != null && fromStatus.getId() != null) {
+                transitionIdsByStatus
+                        .computeIfAbsent(fromStatus.getId(), ignore -> new HashSet<>())
+                        .add(transitionId);
+            }
+
+            WorkflowStatus toStatus = transition.getToStatus();
+            if (toStatus != null && toStatus.getId() != null) {
+                transitionIdsByStatus
+                        .computeIfAbsent(toStatus.getId(), ignore -> new HashSet<>())
+                        .add(transitionId);
+            }
         }
+
+        // Collect all transition IDs impacted by removed statuses
+        Set<Long> removedTransitionIds = removedWorkflowStatuses.stream()
+                .map(WorkflowStatus::getId)
+                .filter(Objects::nonNull)
+                .flatMap(statusId -> transitionIdsByStatus.getOrDefault(statusId, Collections.emptySet()).stream())
+                .collect(Collectors.toSet());
         
         // Analyze StatusOwnerPermissions that will be removed
         List<StatusRemovalImpactDto.PermissionImpact> statusOwnerPermissions = 
@@ -82,8 +103,15 @@ public class WorkflowImpactAnalysisService {
                     : new ArrayList<>();
         
         // Analyze FieldStatusPermissions (EDITORS/VIEWERS) for removed WorkflowStatuses
+        Set<Long> removedStatusEntityIds = removedWorkflowStatuses.stream()
+                .map(WorkflowStatus::getStatus)
+                .filter(Objects::nonNull)
+                .map(Status::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
         List<StatusRemovalImpactDto.FieldStatusPermissionImpact> fieldStatusPermissions = 
-                analyzeFieldStatusPermissionImpacts(tenant, allItemTypeSetsUsingWorkflow, removedStatusIds);
+                analyzeFieldStatusPermissionImpacts(allItemTypeSetsUsingWorkflow, removedStatusIds, removedStatusEntityIds);
         
         // Convert TransitionRemovalImpactDto.PermissionImpact to StatusRemovalImpactDto.ExecutorPermissionImpact
         List<StatusRemovalImpactDto.ExecutorPermissionImpact> executorPermissions = executorPermissionImpacts.stream()
@@ -348,23 +376,12 @@ public class WorkflowImpactAnalysisService {
      * Analyzes FieldStatusPermission impacts (EDITORS/VIEWERS)
      */
     private List<StatusRemovalImpactDto.FieldStatusPermissionImpact> analyzeFieldStatusPermissionImpacts(
-            Tenant tenant,
             List<ItemTypeSet> itemTypeSets,
-            Set<Long> removedStatusIds
+            Set<Long> removedWorkflowStatusIds,
+            Set<Long> removedStatusEntityIds
     ) {
         List<StatusRemovalImpactDto.FieldStatusPermissionImpact> impacts = new ArrayList<>();
-        
-        // Create a Set of Status IDs (not WorkflowStatus) that will be removed
-        // To find permissions, we need to search by Status.id, not WorkflowStatus.id
-        Set<Long> removedStatusEntityIds = new HashSet<>();
-        // Load removed WorkflowStatuses directly from repository
-        for (Long workflowStatusId : removedStatusIds) {
-            WorkflowStatus ws = workflowStatusRepository.findByIdAndTenant(workflowStatusId, tenant).orElse(null);
-            if (ws != null && ws.getStatus() != null) {
-                removedStatusEntityIds.add(ws.getStatus().getId());
-            }
-        }
-        
+
         for (ItemTypeSet itemTypeSet : itemTypeSets) {
             for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
                 // Find all FieldStatusPermissions for this configuration
@@ -384,7 +401,7 @@ public class WorkflowImpactAnalysisService {
                     }
                     
                     // Also verify that WorkflowStatus.id is in the removed list
-                    if (!removedStatusIds.contains(workflowStatus.getId())) {
+                    if (!removedWorkflowStatusIds.contains(workflowStatus.getId())) {
                         continue;
                     }
                     
@@ -401,7 +418,7 @@ public class WorkflowImpactAnalysisService {
                         fieldConfig = null;
                     }
                     
-                    if (workflowStatus == null || !removedStatusIds.contains(workflowStatus.getId()) || fieldConfig == null) {
+                    if (!removedWorkflowStatusIds.contains(workflowStatus.getId()) || fieldConfig == null) {
                         continue;
                     }
                     
@@ -465,42 +482,35 @@ public class WorkflowImpactAnalysisService {
                         }
                         
                         // Calculate hasAssignments: true if has roles OR grant
-                        boolean hasRoles = !assignedRoles.isEmpty();
-                        boolean hasGrant = grantId != null || !projectGrants.isEmpty();
-                        boolean hasAssignments = hasRoles || hasGrant;
+                        boolean hasAssignments = !assignedRoles.isEmpty() || grantId != null || !projectGrants.isEmpty();
+                        boolean canBePreserved = hasAssignments;
+                        boolean defaultPreserve = canBePreserved;
                         
-                        // Only if has assignments (roles or grant)
-                        if (hasAssignments) {
-                            // For FieldStatus, canBePreserved is false because WorkflowStatus is being removed
-                            boolean canBePreserved = false;
-                            boolean defaultPreserve = false;
-                            
-                            String permissionType = perm.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS
-                                    ? "FIELD_EDITORS"
-                                    : "FIELD_VIEWERS";
+                        String permissionType = perm.getPermissionType() == FieldStatusPermission.PermissionType.EDITORS
+                                ? "FIELD_EDITORS"
+                                : "FIELD_VIEWERS";
 
-                            impacts.add(StatusRemovalImpactDto.FieldStatusPermissionImpact.builder()
-                                    .permissionId(perm.getId())
-                                    .permissionType(permissionType)
-                                    .itemTypeSetId(itemTypeSet.getId())
-                                    .itemTypeSetName(itemTypeSet.getName())
-                                    .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
-                                    .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
-                                    .fieldId(field.getId())
-                                    .fieldName(field.getName())
-                                    .workflowStatusId(workflowStatus.getId())
-                                    .workflowStatusName(workflowStatus.getStatus().getName())
-                                    .statusName(workflowStatus.getStatus().getName())
-                                    // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata
-                                    .grantId(grantId)
-                                    .grantName(grantName)
-                                    .assignedRoles(assignedRoles)
-                                    .hasAssignments(true)
-                                    .canBePreserved(canBePreserved)
-                                    .defaultPreserve(defaultPreserve)
-                                    .projectGrants(projectGrants)
-                                    .build());
-                        }
+                        impacts.add(StatusRemovalImpactDto.FieldStatusPermissionImpact.builder()
+                                .permissionId(perm.getId())
+                                .permissionType(permissionType)
+                                .itemTypeSetId(itemTypeSet.getId())
+                                .itemTypeSetName(itemTypeSet.getName())
+                                .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
+                                .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
+                                .fieldId(field.getId())
+                                .fieldName(field.getName())
+                                .workflowStatusId(workflowStatus.getId())
+                                .workflowStatusName(workflowStatus.getStatus().getName())
+                                .statusName(workflowStatus.getStatus().getName())
+                                // RIMOSSO: roleId e roleName - ItemTypeSetRole eliminata
+                                .grantId(grantId)
+                                .grantName(grantName)
+                                .assignedRoles(assignedRoles)
+                                .hasAssignments(hasAssignments)
+                                .canBePreserved(canBePreserved)
+                                .defaultPreserve(defaultPreserve)
+                                .projectGrants(projectGrants)
+                                .build());
                     }
                 }
             }
