@@ -30,6 +30,7 @@ public class ProjectPermissionAssignmentService {
     private final GrantCleanupService grantCleanupService;
     private final UserRepository userRepository;
     private final GroupRepository groupRepository;
+    private final UserRoleRepository userRoleRepository;
     
     /**
      * Crea o aggiorna un PermissionAssignment per una Permission e un progetto.
@@ -224,9 +225,9 @@ public class ProjectPermissionAssignmentService {
         
         Grant grant = resolveGrant(assignment);
 
-        Set<User> users = buildUsersSet(userIds);
+        Set<User> users = buildUsersSet(userIds, tenant);
         Set<Group> groups = buildGroupsSet(groupIds, tenant);
-        Set<User> negatedUsers = buildUsersSet(negatedUserIds);
+        Set<User> negatedUsers = buildUsersSet(negatedUserIds, tenant);
         Set<Group> negatedGroups = buildGroupsSet(negatedGroupIds, tenant);
 
         replaceGrantCollections(grant, users, groups, negatedUsers, negatedGroups);
@@ -264,7 +265,7 @@ public class ProjectPermissionAssignmentService {
         return grant;
     }
 
-    private Set<User> buildUsersSet(Set<Long> userIds) {
+    private Set<User> buildUsersSet(Set<Long> userIds, Tenant tenant) {
         if (userIds == null || userIds.isEmpty()) {
             return new HashSet<>();
         }
@@ -272,6 +273,7 @@ public class ProjectPermissionAssignmentService {
         for (Long userId : userIds) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ApiException("User not found: " + userId));
+            validateUserBelongsToTenant(user, tenant);
             users.add(user);
         }
         return users;
@@ -306,6 +308,13 @@ public class ProjectPermissionAssignmentService {
 
         grant.getNegatedGroups().clear();
         grant.getNegatedGroups().addAll(negatedGroups);
+    }
+
+    private void validateUserBelongsToTenant(User user, Tenant tenant) {
+        boolean belongsToTenant = !userRoleRepository.findByUserIdAndTenantId(user.getId(), tenant.getId()).isEmpty();
+        if (!belongsToTenant) {
+            throw new ApiException("User " + user.getId() + " does not belong to tenant " + tenant.getId());
+        }
     }
     
     /**
