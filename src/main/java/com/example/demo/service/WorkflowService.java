@@ -2,7 +2,6 @@ package com.example.demo.service;
 
 import com.example.demo.dto.*;
 import com.example.demo.entity.*;
-import com.example.demo.enums.ScopeType;
 import com.example.demo.exception.ApiException;
 import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.metadata.*;
@@ -13,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 @Transactional
@@ -25,14 +23,13 @@ public class WorkflowService {
     private final WorkflowNodeRepository workflowNodeRepository;
     private final TransitionRepository transitionRepository;
     private final WorkflowEdgeRepository workflowEdgeRepository;
+    private final WorkflowCreationService workflowCreationService;
     private final ItemTypeSetRepository itemTypeSetRepository;
     private final StatusLookup statusLookup;
     private final WorkflowLookup workflowLookup;
     private final FieldLookup fieldLookup;
     private final DtoMapperFacade dtoMapper;
-    private final ItemTypeConfigurationLookup itemTypeConfigurationLookup;
     private final ItemTypeSetLookup itemTypeSetLookup;
-    private final ProjectLookup projectLookup;
     private final StatusOwnerPermissionRepository statusOwnerPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
     private final ExecutorPermissionRepository executorPermissionRepository;
@@ -43,108 +40,7 @@ public class WorkflowService {
 
     @Transactional
     public WorkflowViewDto createGlobal(WorkflowCreateDto dto, Tenant tenant) {
-        Workflow workflow = createBaseWorkflow(dto, tenant, ScopeType.TENANT, null);
-
-        // Imposta lo status iniziale
-        Status initialStatus = statusLookup.getById(tenant, dto.initialStatusId());
-        workflow.setInitialStatus(initialStatus);
-
-        workflow = workflowRepository.save(workflow);
-
-        // ========================
-        // WORKFLOW STATUSES
-        // ========================
-        Map<Long, WorkflowStatus> statusMap = new HashMap<>();
-        for (WorkflowStatusCreateDto wsDto : dto.workflowStatuses()) {
-            Status statusEntity = statusLookup.getById(tenant, wsDto.statusId());
-            WorkflowStatus ws = new WorkflowStatus();
-            ws.setWorkflow(workflow);
-            ws.setStatus(statusEntity);
-            ws.setStatusCategory(wsDto.statusCategory());
-            ws.setInitial(wsDto.isInitial());
-            ws = workflowStatusRepository.save(ws);
-
-            statusMap.put(statusEntity.getId(), ws);
-            workflow.getStatuses().add(ws);
-        }
-
-        // ========================
-        // WORKFLOW NODES
-        // ========================
-        for (WorkflowNodeDto nodeDto : dto.workflowNodes()) {
-            WorkflowNode node = dtoMapper.toWorkflowNodeEntity(nodeDto);
-            node.setWorkflow(workflow);
-            node.setTenant(tenant);
-
-            WorkflowStatus ws = statusMap.get(nodeDto.statusId());
-            if (ws == null) throw new ApiException("StatusId non trovato per node " + nodeDto.statusId());
-            node.setWorkflowStatus(ws);
-            ws.setNode(node);
-
-            workflowNodeRepository.save(node);
-        }
-
-        // ========================
-        // TRANSITIONS
-        // ========================
-        Map<String, List<Transition>> transitionMap = new HashMap<>();
-        List<Transition> savedTransitions = new ArrayList<>();
-
-        for (WorkflowStatusCreateDto wsDto : dto.workflowStatuses()) {
-            WorkflowStatus fromWs = statusMap.get(wsDto.statusId());
-            if (fromWs == null || wsDto.outgoingTransitions() == null) continue;
-
-            for (TransitionCreateDto tDto : wsDto.outgoingTransitions()) {
-                WorkflowStatus toWs = statusMap.get(tDto.toStatusId());
-                if (toWs == null) throw new ApiException("ToStatusId non trovato: " + tDto.toStatusId());
-
-                Transition transition = new Transition();
-                transition.setWorkflow(workflow);
-                transition.setFromStatus(fromWs);
-                transition.setToStatus(toWs);
-                transition.setName(tDto.name() != null ? tDto.name() : "");
-                transition = transitionRepository.save(transition);
-
-                fromWs.getOutgoingTransitions().add(transition);
-                toWs.getIncomingTransitions().add(transition);
-                savedTransitions.add(transition);
-
-                String key = fromWs.getStatus().getId() + "-" + toWs.getStatus().getId();
-                transitionMap.computeIfAbsent(key, k -> new ArrayList<>()).add(transition);
-            }
-        }
-        workflow.getTransitions().addAll(savedTransitions);
-
-        // ========================
-        // EDGES
-        // ========================
-        Map<String, Integer> edgeCounter = new HashMap<>();
-        for (WorkflowEdgeDto edgeDto : dto.workflowEdges()) {
-            WorkflowEdge edge = dtoMapper.toWorkflowEdgeEntity(edgeDto);
-            edge.setWorkflow(workflow);
-            edge.setTenant(tenant);
-
-            String key = edgeDto.sourceId() + "-" + edgeDto.targetId();
-            List<Transition> transitionsBetween = transitionMap.get(key);
-            if (transitionsBetween == null || transitionsBetween.isEmpty()) {
-                throw new ApiException("Transition non trovata per edge: " + key);
-            }
-
-            int index = edgeCounter.getOrDefault(key, 0);
-            if (index >= transitionsBetween.size()) {
-                throw new ApiException("Non ci sono abbastanza transizioni per edge: " + key);
-            }
-
-            Transition transition = transitionsBetween.get(index);
-            edgeCounter.put(key, index + 1);
-
-            edge.setTransition(transition);
-            transition.setEdge(edge);
-
-            workflowEdgeRepository.save(edge);
-        }
-
-        return dtoMapper.toWorkflowViewDto(workflow);
+        return workflowCreationService.createGlobal(dto, tenant);
     }
 
     /**
@@ -153,110 +49,7 @@ public class WorkflowService {
      */
     @Transactional
     public WorkflowViewDto createForProject(WorkflowCreateDto dto, Tenant tenant, Long projectId) {
-        Project project = projectLookup.getById(tenant, projectId);
-        Workflow workflow = createBaseWorkflow(dto, tenant, ScopeType.PROJECT, project);
-
-        // IMPORTANTE: Gli Status sono globali, quindi usiamo quelli del tenant
-        Status initialStatus = statusLookup.getById(tenant, dto.initialStatusId());
-        workflow.setInitialStatus(initialStatus);
-
-        workflow = workflowRepository.save(workflow);
-
-        // ========================
-        // WORKFLOW STATUSES
-        // ========================
-        Map<Long, WorkflowStatus> statusMap = new HashMap<>();
-        for (WorkflowStatusCreateDto wsDto : dto.workflowStatuses()) {
-            // IMPORTANTE: Usa gli Status del tenant (globali), non del progetto
-            Status statusEntity = statusLookup.getById(tenant, wsDto.statusId());
-            WorkflowStatus ws = new WorkflowStatus();
-            ws.setWorkflow(workflow);
-            ws.setStatus(statusEntity);
-            ws.setStatusCategory(wsDto.statusCategory());
-            ws.setInitial(wsDto.isInitial());
-            ws = workflowStatusRepository.save(ws);
-
-            statusMap.put(statusEntity.getId(), ws);
-            workflow.getStatuses().add(ws);
-        }
-
-        // ========================
-        // WORKFLOW NODES
-        // ========================
-        for (WorkflowNodeDto nodeDto : dto.workflowNodes()) {
-            WorkflowNode node = dtoMapper.toWorkflowNodeEntity(nodeDto);
-            node.setWorkflow(workflow);
-            node.setTenant(tenant);
-
-            WorkflowStatus ws = statusMap.get(nodeDto.statusId());
-            if (ws == null) throw new ApiException("StatusId non trovato per node " + nodeDto.statusId());
-            node.setWorkflowStatus(ws);
-            ws.setNode(node);
-
-            workflowNodeRepository.save(node);
-        }
-
-        // ========================
-        // TRANSITIONS
-        // ========================
-        Map<String, List<Transition>> transitionMap = new HashMap<>();
-        List<Transition> savedTransitions = new ArrayList<>();
-
-        for (WorkflowStatusCreateDto wsDto : dto.workflowStatuses()) {
-            WorkflowStatus fromWs = statusMap.get(wsDto.statusId());
-            if (fromWs == null || wsDto.outgoingTransitions() == null) continue;
-
-            for (TransitionCreateDto tDto : wsDto.outgoingTransitions()) {
-                WorkflowStatus toWs = statusMap.get(tDto.toStatusId());
-                if (toWs == null) throw new ApiException("ToStatusId non trovato: " + tDto.toStatusId());
-
-                Transition transition = new Transition();
-                transition.setWorkflow(workflow);
-                transition.setFromStatus(fromWs);
-                transition.setToStatus(toWs);
-                transition.setName(tDto.name() != null ? tDto.name() : "");
-                transition = transitionRepository.save(transition);
-
-                fromWs.getOutgoingTransitions().add(transition);
-                toWs.getIncomingTransitions().add(transition);
-                savedTransitions.add(transition);
-
-                String key = fromWs.getStatus().getId() + "-" + toWs.getStatus().getId();
-                transitionMap.computeIfAbsent(key, k -> new ArrayList<>()).add(transition);
-            }
-        }
-        workflow.getTransitions().addAll(savedTransitions);
-
-        // ========================
-        // EDGES
-        // ========================
-        Map<String, Integer> edgeCounter = new HashMap<>();
-        for (WorkflowEdgeDto edgeDto : dto.workflowEdges()) {
-            WorkflowEdge edge = dtoMapper.toWorkflowEdgeEntity(edgeDto);
-            edge.setWorkflow(workflow);
-            edge.setTenant(tenant);
-
-            String key = edgeDto.sourceId() + "-" + edgeDto.targetId();
-            List<Transition> transitionsBetween = transitionMap.get(key);
-            if (transitionsBetween == null || transitionsBetween.isEmpty()) {
-                throw new ApiException("Transition non trovata per edge: " + key);
-            }
-
-            int index = edgeCounter.getOrDefault(key, 0);
-            if (index >= transitionsBetween.size()) {
-                throw new ApiException("Non ci sono abbastanza transizioni per edge: " + key);
-            }
-
-            Transition transition = transitionsBetween.get(index);
-            edgeCounter.put(key, index + 1);
-
-            edge.setTransition(transition);
-            transition.setEdge(edge);
-
-            workflowEdgeRepository.save(edge);
-        }
-
-        return dtoMapper.toWorkflowViewDto(workflow);
+        return workflowCreationService.createForProject(dto, tenant, projectId);
     }
 
     @Transactional
@@ -536,135 +329,6 @@ public class WorkflowService {
 
     // --- Helpers comuni ---
 
-    private Map<Long, WorkflowStatus> createWorkflowStatuses(Workflow workflow, List<WorkflowStatusCreateDto> statusDtos, Tenant tenant, Status initialStatus) {
-        Map<Long, WorkflowStatus> statusMap = new HashMap<>();
-        for (WorkflowStatusCreateDto wsDto : statusDtos) {
-            Status statusEntity = statusLookup.getById(tenant, wsDto.statusId());
-            WorkflowStatus ws = new WorkflowStatus();
-            ws.setWorkflow(workflow);
-            ws.setStatus(statusEntity);
-            ws.setStatusCategory(wsDto.statusCategory());
-            ws.setInitial(initialStatus != null && statusEntity.equals(initialStatus));
-
-            ws = workflowStatusRepository.save(ws);
-            statusMap.put(statusEntity.getId(), ws);
-            workflow.getStatuses().add(ws);
-        }
-        return statusMap;
-    }
-
-    private void createTransitionsAndMetadata(
-            Workflow workflow,
-            Tenant tenant,
-            List<WorkflowStatusCreateDto> statusDtos,
-            List<WorkflowNodeDto> nodeDtos,
-            List<WorkflowEdgeDto> edgeDtos,
-            Map<Long, WorkflowStatus> statusMap
-    ) {
-        createNodesAndLinkStatuses(workflow, tenant, nodeDtos, statusMap);
-        List<Transition> savedTransitions = new ArrayList<>();
-        Map<String, List<Transition>> transitionMap = createTransitions(workflow, statusDtos, statusMap, savedTransitions);
-        workflow.getTransitions().addAll(savedTransitions);
-        createEdgesAndLinkTransitions(workflow, tenant, edgeDtos, transitionMap);
-    }
-
-    private void createNodesAndLinkStatuses(
-            Workflow workflow,
-            Tenant tenant,
-            List<WorkflowNodeDto> nodeDtos,
-            Map<Long, WorkflowStatus> statusMap
-    ) {
-        for (WorkflowNodeDto nodeDto : nodeDtos) {
-            WorkflowNode node = dtoMapper.toWorkflowNodeEntity(nodeDto);
-            //node.setWorkflow(workflow);
-            node.setTenant(tenant);
-
-            WorkflowStatus ws = statusMap.get(nodeDto.statusId());
-            if (ws == null) throw new ApiException("StatusId non trovato per node " + nodeDto.statusId());
-            node.setWorkflowStatus(ws);
-            ws.setNode(node);
-        }
-    }
-
-    private Map<String, List<Transition>> createTransitions(
-            Workflow workflow,
-            List<WorkflowStatusCreateDto> statusDtos,
-            Map<Long, WorkflowStatus> statusMap,
-            List<Transition> savedTransitions
-    ) {
-        Map<String, List<Transition>> transitionMap = new HashMap<>();
-        for (WorkflowStatusCreateDto wsDto : statusDtos) {
-            WorkflowStatus fromWs = statusMap.get(wsDto.statusId());
-            if (fromWs == null) throw new ApiException("WorkflowStatus non trovato per status " + wsDto.statusId());
-            if (wsDto.outgoingTransitions() == null) continue;
-
-            for (TransitionCreateDto tDto : wsDto.outgoingTransitions()) {
-                WorkflowStatus toWs = statusMap.get(tDto.toStatusId());
-                if (toWs == null) throw new ApiException("ToStatusId non trovato: " + tDto.toStatusId());
-
-                Transition transition = new Transition();
-                transition.setWorkflow(workflow);
-                transition.setFromStatus(fromWs);
-                transition.setToStatus(toWs);
-                transition.setName(tDto.name() != null ? tDto.name() : "");
-                transition = transitionRepository.save(transition);
-
-                String key = fromWs.getStatus().getId() + "-" + toWs.getStatus().getId();
-                transitionMap.computeIfAbsent(key, k -> new ArrayList<>()).add(transition);
-
-                fromWs.getOutgoingTransitions().add(transition);
-                toWs.getIncomingTransitions().add(transition);
-                savedTransitions.add(transition);
-            }
-        }
-        return transitionMap;
-    }
-
-    private void createEdgesAndLinkTransitions(
-            Workflow workflow,
-            Tenant tenant,
-            List<WorkflowEdgeDto> edgeDtos,
-            Map<String, List<Transition>> transitionMap
-    ) {
-        Map<String, Integer> edgeCounter = new HashMap<>();
-        for (WorkflowEdgeDto edgeDto : edgeDtos) {
-            WorkflowEdge edge = dtoMapper.toWorkflowEdgeEntity(edgeDto);
-            edge.setWorkflow(workflow);
-            edge.setTenant(tenant);
-
-            String key = edgeDto.sourceId() + "-" + edgeDto.targetId();
-            List<Transition> transitionsBetween = transitionMap.get(key);
-            if (transitionsBetween == null || transitionsBetween.isEmpty()) {
-                throw new ApiException("Transition non trovata per edge: " + key);
-            }
-
-            int index = edgeCounter.getOrDefault(key, 0);
-            if (index >= transitionsBetween.size()) {
-                throw new ApiException("Non ci sono abbastanza transizioni per edge: " + key);
-            }
-
-            Transition transition = transitionsBetween.get(index);
-            edgeCounter.put(key, index + 1);
-
-            edge.setTransition(transition);
-            transition.setEdge(edge);
-
-            workflowEdgeRepository.save(edge);
-        }
-    }
-
-
-
-
-
-    private Workflow createBaseWorkflow(WorkflowCreateDto dto, Tenant tenant, ScopeType scope, Project project) {
-        Workflow workflow = new Workflow();
-        workflow.setTenant(tenant);
-        workflow.setScope(scope);
-        workflow.setProject(project); // null per tenant workflows, Project per project workflows
-        workflow.setName(dto.name());
-        return workflow;
-    }
 
     /**
      * Gestisce le permissions per i nuovi WorkflowStatus aggiunti al Workflow
@@ -978,7 +642,11 @@ public class WorkflowService {
                 .workflowName(workflow.getName())
                 .removedTransitionIds(new ArrayList<>(removedTransitionIds))
                 .removedTransitionNames(removedTransitionNames)
-                .affectedItemTypeSets(mapItemTypeSetImpacts(affectedItemTypeSets, executorPermissions, statusOwnerPermissions, fieldStatusPermissions))
+                .affectedItemTypeSets(mapItemTypeSetImpacts(
+                        affectedItemTypeSets,
+                        executorPermissions,
+                        statusOwnerPermissions,
+                        fieldStatusPermissions))
                 .executorPermissions(executorPermissions)
                 .statusOwnerPermissions(statusOwnerPermissions)
                 .fieldStatusPermissions(fieldStatusPermissions)
@@ -2239,18 +1907,6 @@ public class WorkflowService {
                     // Rimuovi la logica ItemTypeSetRole (obsoleta)
                     // Trova la FieldConfiguration nel FieldSet (per info, non più per ItemTypeSetRole)
                     Field field = permission.getField();
-                    final FieldConfiguration fieldConfig;
-                    if (config.getFieldSet() != null && config.getFieldSet().getFieldSetEntries() != null) {
-                        fieldConfig = config.getFieldSet().getFieldSetEntries().stream()
-                                .map(FieldSetEntry::getFieldConfiguration)
-                                .filter(fc -> fc.getField() != null && fc.getField().getId().equals(field.getId()))
-                                .findFirst()
-                                .orElse(null);
-                    } else {
-                        fieldConfig = null;
-                    }
-                    
-                    // fieldConfig è disponibile per info, ma non più necessario per ItemTypeSetRole
                     
                     // Calcola hasAssignments: true se ha ruoli O grant (globali o di progetto)
                     boolean hasGlobalRoles = !assignedRoles.isEmpty();
@@ -2451,17 +2107,6 @@ public class WorkflowService {
     /**
      * Mappa gli ItemTypeSet in impatti per Status
      */
-    private List<StatusRemovalImpactDto.ItemTypeSetImpact> mapItemTypeSetImpactsForStatus(List<ItemTypeSet> itemTypeSets) {
-        return itemTypeSets.stream()
-                .map(its -> StatusRemovalImpactDto.ItemTypeSetImpact.builder()
-                        .itemTypeSetId(its.getId())
-                        .itemTypeSetName(its.getName())
-                        .projectId(its.getProject() != null ? its.getProject().getId() : null)
-                        .projectName(its.getProject() != null ? its.getProject().getName() : null)
-                        .build())
-                .collect(Collectors.toList());
-    }
-    
     /**
      * Mappa gli ItemTypeSet con informazioni aggregate (permission, ruoli, grant globali e di progetto)
      */

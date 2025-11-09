@@ -42,6 +42,9 @@ class WorkflowServiceTest {
     
     @Mock
     private WorkflowEdgeRepository workflowEdgeRepository;
+
+    @Mock
+    private WorkflowCreationService workflowCreationService;
     
     @Mock
     private StatusLookup statusLookup;
@@ -133,40 +136,26 @@ class WorkflowServiceTest {
 
     @Test
     void testCreateGlobal_Success() {
-        // Given
-        when(statusLookup.getById(tenant, 1L)).thenReturn(status1);
-        when(statusLookup.getById(tenant, 2L)).thenReturn(status2);
-        when(statusLookup.getById(tenant, 3L)).thenReturn(status3);
-        when(workflowRepository.save(any(Workflow.class))).thenReturn(workflow);
-        WorkflowStatus mockWorkflowStatus = new WorkflowStatus();
-        mockWorkflowStatus.setStatus(status1);
-        when(workflowStatusRepository.save(any(WorkflowStatus.class))).thenReturn(mockWorkflowStatus);
-        when(workflowNodeRepository.save(any(WorkflowNode.class))).thenReturn(new WorkflowNode());
-        when(transitionRepository.save(any(Transition.class))).thenReturn(new Transition());
-        when(workflowEdgeRepository.save(any(WorkflowEdge.class))).thenReturn(new WorkflowEdge());
-        when(workflowMetaMapper.toEntity(any(WorkflowNodeDto.class))).thenReturn(new WorkflowNode());
-        when(workflowMetaMapper.toEntity(any(WorkflowEdgeDto.class))).thenReturn(new WorkflowEdge());
         WorkflowViewDto workflowViewDto = new WorkflowViewDto();
         workflowViewDto.setId(1L);
         workflowViewDto.setName("Test Workflow");
         workflowViewDto.setScope(ScopeType.TENANT);
         workflowViewDto.setDefaultWorkflow(false);
-        when(dtoMapper.toWorkflowViewDto(any(Workflow.class))).thenReturn(workflowViewDto);
+        when(workflowCreationService.createGlobal(createDto, tenant)).thenReturn(workflowViewDto);
 
         // When
         WorkflowViewDto result = workflowService.createGlobal(createDto, tenant);
 
         // Then
         assertNotNull(result);
-        verify(workflowRepository).save(any(Workflow.class));
-        verify(workflowStatusRepository, atLeastOnce()).save(any(WorkflowStatus.class));
-        verify(transitionRepository, atLeastOnce()).save(any(Transition.class));
+        assertSame(workflowViewDto, result);
+        verify(workflowCreationService).createGlobal(createDto, tenant);
     }
 
     @Test
     void testCreateGlobal_StatusNotFound_ThrowsException() {
         // Given
-        when(statusLookup.getById(tenant, 1L)).thenThrow(new ApiException("Status not found"));
+        when(workflowCreationService.createGlobal(createDto, tenant)).thenThrow(new ApiException("Status not found"));
 
         // When & Then
         assertThrows(ApiException.class, () -> workflowService.createGlobal(createDto, tenant));
