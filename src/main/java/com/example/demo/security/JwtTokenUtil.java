@@ -57,13 +57,33 @@ public class JwtTokenUtil {
         claims.put("userId", user.getId());
         claims.put("tenantId", tenantId);
 
-        // Ottieni i ruoli TENANT dell'utente per quella tenant
-        List<Map<String, String>> roles = userRoleRepository
+        // Ottieni i ruoli TENANT e PROJECT dell'utente per quella tenant
+        List<Map<String, Object>> tenantRoles = userRoleRepository
                 .findByUserIdAndTenantIdAndScope(user.getId(), tenantId, ScopeType.TENANT)
                 .stream()
-                .map(ur -> Map.of("name", ur.getRoleName(), "scope", ur.getScope().name()))
+                .map(ur -> Map.<String, Object>of(
+                        "name", ur.getRoleName(),
+                        "scope", ur.getScope().name()
+                ))
                 .toList();
-        
+
+        List<Map<String, Object>> projectRoles = userRoleRepository
+                .findByUserIdAndTenantIdAndScope(user.getId(), tenantId, ScopeType.PROJECT)
+                .stream()
+                .map(ur -> {
+                    Map<String, Object> roleEntry = new HashMap<>();
+                    roleEntry.put("name", ur.getRoleName());
+                    roleEntry.put("scope", ur.getScope().name());
+                    if (ur.getProject() != null) {
+                        roleEntry.put("projectId", ur.getProject().getId());
+                    }
+                    return roleEntry;
+                })
+                .toList();
+
+        List<Map<String, Object>> roles = new java.util.ArrayList<>(tenantRoles);
+        roles.addAll(projectRoles);
+
         claims.put(ROLES, roles);
 
         return buildToken(claims, userDetails.getUsername(), accessTokenExpirationMs);
