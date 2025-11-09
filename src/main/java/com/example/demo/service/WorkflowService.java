@@ -287,7 +287,9 @@ public class WorkflowService {
                     && impact.getExecutorPermissions().stream().anyMatch(TransitionRemovalImpactDto.PermissionImpact::isHasAssignments);
             boolean fieldStatusAssignments = impact.getFieldStatusPermissions() != null
                     && impact.getFieldStatusPermissions().stream().anyMatch(TransitionRemovalImpactDto.FieldStatusPermissionImpact::isHasAssignments);
-            if (executorAssignments || fieldStatusAssignments) {
+            boolean statusOwnerAssignments = impact.getStatusOwnerPermissions() != null
+                    && impact.getStatusOwnerPermissions().stream().anyMatch(TransitionRemovalImpactDto.StatusOwnerPermissionImpact::isHasAssignments);
+            if (executorAssignments || fieldStatusAssignments || statusOwnerAssignments) {
                 throw new ApiException("TRANSITION_REMOVAL_IMPACT: rilevate permission con assegnazioni per le transition rimosse");
             }
         }
