@@ -192,7 +192,7 @@ class WorkflowServiceTest {
 
         workflow.getStatuses().addAll(Arrays.asList(ws1, ws2, ws3));
 
-        when(workflowRepository.findById(1L)).thenReturn(Optional.of(workflow));
+        when(workflowRepository.findByIdAndTenant(1L, tenant)).thenReturn(Optional.of(workflow));
         when(statusLookup.getById(tenant, 1L)).thenReturn(status1);
         when(statusLookup.getById(tenant, 2L)).thenReturn(status2);
         when(statusLookup.getById(tenant, 3L)).thenReturn(status3);
@@ -223,7 +223,7 @@ class WorkflowServiceTest {
     @Test
     void testUpdateWorkflow_WorkflowNotFound_ThrowsException() {
         // Given
-        when(workflowRepository.findById(1L)).thenReturn(Optional.empty());
+        when(workflowRepository.findByIdAndTenant(1L, tenant)).thenReturn(Optional.empty());
 
         // When & Then
         assertThrows(ApiException.class, () -> workflowService.updateWorkflow(1L, updateDto, tenant));
@@ -236,10 +236,10 @@ class WorkflowServiceTest {
         otherTenant.setId(2L);
         workflow.setTenant(otherTenant);
 
-        when(workflowRepository.findById(1L)).thenReturn(Optional.of(workflow));
+        when(workflowRepository.findByIdAndTenant(1L, tenant)).thenReturn(Optional.empty());
 
         // When & Then
-        assertThrows(SecurityException.class, () -> workflowService.updateWorkflow(1L, updateDto, tenant));
+        assertThrows(ApiException.class, () -> workflowService.updateWorkflow(1L, updateDto, tenant));
     }
 
     @Test

@@ -28,13 +28,18 @@ public class SecurityServiceFacade {
     // General
     public boolean hasAccessToGlobals(Object principal, Tenant tenant) {
         User user = extractUser(principal);
-        return tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN") ||
-                projectSecurityService.hasRoleNameInAnyProject(user, tenant, "ADMIN");
+        return isTenantAdmin(user, tenant);
+    }
+
+    public boolean canAccessGlobalCatalog(Object principal, Tenant tenant) {
+        User user = extractUser(principal);
+        return hasTenantOrProjectAdmin(user, tenant);
     }
 
     // Field operations
     public boolean canCreateField(Object principal, Tenant tenant) {
-        return hasAccessToGlobals(principal, tenant);
+        User user = extractUser(principal);
+        return hasTenantOrProjectAdmin(user, tenant);
     }
 
     public boolean canDeleteField(Object principal, Tenant tenant, Long fieldId) {
@@ -42,10 +47,7 @@ public class SecurityServiceFacade {
 
         return (
                 !fieldConfigurationService.isFieldInAnyFieldConfiguration(tenant, fieldId) &&
-                (
-                        tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN") ||
-                        projectSecurityService.hasRoleNameInAnyProject(user, tenant, "ADMIN")
-                )
+                hasTenantOrProjectAdmin(user, tenant)
         );
     }
 
@@ -53,7 +55,7 @@ public class SecurityServiceFacade {
         User user = extractUser(principal);
 
         // Se è tenant admin, ha sempre diritto
-        if (tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN")) {
+        if (isTenantAdmin(user, tenant)) {
             return true;
         }
 
@@ -62,7 +64,7 @@ public class SecurityServiceFacade {
 
         // Se il field non è usato in alcuna FieldConfiguration → ok se è almeno project admin da qualche parte
         if (usedInProjects.isEmpty()) {
-            return projectSecurityService.hasRoleNameInAnyProject(user, tenant, "ADMIN");
+            return hasAnyProjectAdmin(user, tenant);
         }
 
         // Verifica che l’utente sia ADMIN in tutti i progetti dove il campo è usato
@@ -124,10 +126,10 @@ public class SecurityServiceFacade {
     public boolean canCreateFieldSet(Object principal, Tenant tenant, Long projectId) {
         User user = extractUser(principal);
 
-        return tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN") ||
+        return isTenantAdmin(user, tenant) ||
                 (
                         projectId != null &&
-                        projectSecurityService.hasProjectRole(user, tenant, projectId, "ADMIN")
+                        isProjectAdmin(user, tenant, projectId)
                 );
     }
 
@@ -161,17 +163,30 @@ public class SecurityServiceFacade {
 
         FieldSet fieldSet = fieldSetLookup.getById(fieldSetId, tenant);
 
-        return tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN") ||
+        return isTenantAdmin(user, tenant) ||
                 (
                         fieldSet.getProject() != null &&
-                        projectSecurityService.hasProjectRole(user, tenant, fieldSet.getProject().getId(), "ADMIN")
+                        isProjectAdmin(user, tenant, fieldSet.getProject().getId())
                 );
+    }
+
+    public boolean canViewFieldSet(Object principal, Tenant tenant, Long fieldSetId) {
+        User user = extractUser(principal);
+        FieldSet fieldSet = fieldSetLookup.getById(fieldSetId, tenant);
+
+        if (fieldSet.getProject() == null) {
+            return isTenantAdmin(user, tenant);
+        }
+
+        return isTenantAdmin(user, tenant) ||
+                isProjectAdmin(user, tenant, fieldSet.getProject().getId());
     }
 
 
     // Item Type operations
     public boolean canCreateItemType(Object principal, Tenant tenant) {
-        return hasAccessToGlobals(principal, tenant);
+        User user = extractUser(principal);
+        return hasTenantOrProjectAdmin(user, tenant);
     }
 
     public boolean canDeleteItemType(Object principal, Tenant tenant, Long itemTypeId) {
@@ -179,10 +194,7 @@ public class SecurityServiceFacade {
 
         return (
                 !itemTypeConfigurationService.isItemTypeInAnyItemTypeConfiguration(tenant, itemTypeId) &&
-                        (
-                                tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN") ||
-                                projectSecurityService.hasRoleNameInAnyProject(user, tenant, "ADMIN")
-                        )
+                        hasTenantOrProjectAdmin(user, tenant)
         );
     }
 
@@ -190,7 +202,7 @@ public class SecurityServiceFacade {
         User user = extractUser(principal);
 
         // Se è tenant admin, ha sempre diritto
-        if (tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN")) {
+        if (isTenantAdmin(user, tenant)) {
             return true;
         }
 
@@ -199,7 +211,7 @@ public class SecurityServiceFacade {
 
         // Se il itemType non è usato in alcuna itemTypeConfiguration → ok se è almeno project admin da qualche parte
         if (usedInProjects.isEmpty()) {
-            return projectSecurityService.hasRoleNameInAnyProject(user, tenant, "ADMIN");
+            return hasAnyProjectAdmin(user, tenant);
         }
 
         // Verifica che l’utente sia ADMIN in tutti i progetti dove il itemType è usato
@@ -218,7 +230,8 @@ public class SecurityServiceFacade {
 
     // Status operations
     public boolean canCreateStatus(Object principal, Tenant tenant) {
-        return hasAccessToGlobals(principal, tenant);
+        User user = extractUser(principal);
+        return hasTenantOrProjectAdmin(user, tenant);
     }
 
     public boolean canDeleteStatus(Object principal, Tenant tenant, Long statusId) {
@@ -226,10 +239,7 @@ public class SecurityServiceFacade {
 
         return (
                 !workflowStatusService.isStatusUsedInAnyWorkflow(tenant, statusId) &&
-                        (
-                                tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN") ||
-                                        projectSecurityService.hasRoleNameInAnyProject(user, tenant, "ADMIN")
-                        )
+                        hasTenantOrProjectAdmin(user, tenant)
         );
     }
 
@@ -237,7 +247,7 @@ public class SecurityServiceFacade {
         User user = extractUser(principal);
 
         // Se è tenant admin, ha sempre diritto
-        if (tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN")) {
+        if (isTenantAdmin(user, tenant)) {
             return true;
         }
 
@@ -246,7 +256,7 @@ public class SecurityServiceFacade {
 
         // Se il statusId non è usato in alcuna workflow → ok se è almeno project admin da qualche parte
         if (usedInProjects.isEmpty()) {
-            return projectSecurityService.hasRoleNameInAnyProject(user, tenant, "ADMIN");
+            return hasAnyProjectAdmin(user, tenant);
         }
 
         // Verifica che l’utente sia ADMIN in tutti i progetti dove il itemType è usato
@@ -268,8 +278,8 @@ public class SecurityServiceFacade {
     public boolean canCreateWorkflow(Object principal, Tenant tenant, Long projectId) {
         User user = extractUser(principal);
 
-        return tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN") ||
-                (projectId != null && projectSecurityService.hasProjectRole(user, tenant, projectId, "ADMIN"));
+        return isTenantAdmin(user, tenant) ||
+                (projectId != null && isProjectAdmin(user, tenant, projectId));
     }
 
     public boolean canDeleteWorkflow(Object principal, Tenant tenant, Long workflowId) {
@@ -292,11 +302,19 @@ public class SecurityServiceFacade {
 
         Workflow workflow = workflowLookup.getByIdEntity(tenant, workflowId);
 
-        return tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN") ||
+        return isTenantAdmin(user, tenant) ||
                 (
                         workflow.getProject() != null &&
-                                projectSecurityService.hasProjectRole(user, tenant, workflow.getProject().getId(), "ADMIN")
+                                isProjectAdmin(user, tenant, workflow.getProject().getId())
                 );
+    }
+
+    public boolean canViewItemTypeSetPermissions(Object principal, Tenant tenant, Long projectId) {
+        User user = extractUser(principal);
+        if (isTenantAdmin(user, tenant)) {
+            return true;
+        }
+        return projectId != null && projectSecurityService.hasProjectRole(user, tenant, projectId, "ADMIN");
     }
 
 /*
@@ -374,6 +392,25 @@ public class SecurityServiceFacade {
             return customUserDetails.getUser();
         }
         throw new ApiException("Unexpected principal type");
+    }
+
+    private boolean isTenantAdmin(User user, Tenant tenant) {
+        return tenantSecurityService.hasTenantRoleName(user, tenant, "ADMIN");
+    }
+
+    private boolean hasAnyProjectAdmin(User user, Tenant tenant) {
+        return projectSecurityService.hasRoleNameInAnyProject(user, tenant, "ADMIN");
+    }
+
+    private boolean hasTenantOrProjectAdmin(User user, Tenant tenant) {
+        return isTenantAdmin(user, tenant) || hasAnyProjectAdmin(user, tenant);
+    }
+
+    private boolean isProjectAdmin(User user, Tenant tenant, Long projectId) {
+        if (projectId == null) {
+            return false;
+        }
+        return projectSecurityService.hasProjectRole(user, tenant, projectId, "ADMIN");
     }
 
 

@@ -28,7 +28,7 @@ public class ItemTypeSetPermissionController {
      * Se projectId è specificato come query param, include anche le grant di progetto.
      */
     @GetMapping("/itemtypeset/{itemTypeSetId}")
-    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    @PreAuthorize("@securityService.canViewItemTypeSetPermissions(principal, #tenant, #projectId)")
     public ResponseEntity<Map<String, List<Map<String, Object>>>> getPermissionsByItemTypeSet(
             @PathVariable Long itemTypeSetId,
             @RequestParam(required = false) Long projectId,

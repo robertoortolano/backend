@@ -28,6 +28,8 @@ public class ItemTypeConfigurationMigrationService {
     private final StatusOwnerPermissionRepository statusOwnerPermissionRepository;
     private final FieldStatusPermissionRepository fieldStatusPermissionRepository;
     private final ExecutorPermissionRepository executorPermissionRepository;
+    private final WorkerPermissionRepository workerPermissionRepository;
+    private final CreatorPermissionRepository creatorPermissionRepository;
     private final FieldRepository fieldRepository;
     private final WorkflowStatusRepository workflowStatusRepository;
     private final TransitionRepository transitionRepository;

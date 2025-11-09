@@ -60,9 +60,10 @@ public class ProjectController {
     public ResponseEntity<ProjectViewDto> updateProject(
             @PathVariable Long projectId,
             @RequestBody ProjectUpdateDto dto,
-            @CurrentTenant Tenant tenant
+            @CurrentTenant Tenant tenant,
+            @CurrentUser User user
     ) {
-        return ResponseEntity.ok(projectService.updateProject(tenant, projectId, dto));
+        return ResponseEntity.ok(projectService.updateProject(tenant, projectId, dto, user));
     }
 
 

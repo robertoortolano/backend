@@ -98,7 +98,7 @@ public class ProjectService {
 
 
 
-    public ProjectViewDto updateProject(Tenant tenant, Long projectId, ProjectUpdateDto dto) {
+    public ProjectViewDto updateProject(Tenant tenant, Long projectId, ProjectUpdateDto dto, User user) {
 
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found: " + projectId));
@@ -109,12 +109,34 @@ public class ProjectService {
                     throw new ApiException("Esiste già un project con questa key.");
                 });
 
+        boolean isTenantAdmin = grantRoleLookup.existsByUserGlobal(user, tenant, "ADMIN");
+        boolean isProjectAdmin = userRoleRepository.existsByUserIdAndProjectIdAndRoleName(
+                user.getId(), projectId, "ADMIN");
+
+        if (!isTenantAdmin && !isProjectAdmin) {
+            throw new ApiException("Accesso negato: non hai i permessi per modificare il progetto");
+        }
+
         // Applica le modifiche tramite mapper
         dtoMapper.updateProjectFromDto(dto, project);
         if (dto.itemTypeSetId() != null) {
+            ItemTypeSet currentItemTypeSet = project.getItemTypeSet();
+
+            if (!isTenantAdmin && isProjectAdmin
+                    && currentItemTypeSet != null
+                    && currentItemTypeSet.getScope() == ScopeType.TENANT
+                    && !currentItemTypeSet.getId().equals(dto.itemTypeSetId())) {
+                throw new ApiException("I Project Admin non possono cambiare un ItemTypeSet globale applicato al progetto");
+            }
+
             ItemTypeSet itemTypeSet = itemTypeSetLookup.getById(tenant, dto.itemTypeSetId());
 
             project.setItemTypeSet(itemTypeSet);
+        } else if (!isTenantAdmin && isProjectAdmin) {
+            ItemTypeSet currentItemTypeSet = project.getItemTypeSet();
+            if (currentItemTypeSet != null && currentItemTypeSet.getScope() == ScopeType.TENANT) {
+                throw new ApiException("I Project Admin non possono rimuovere l'ItemTypeSet globale dal progetto");
+            }
         }
 
 
@@ -130,6 +152,22 @@ public class ProjectService {
                 .orElseThrow(() -> new ApiException("Progetto non trovato"));
 
         ItemTypeSet itemTypeSet = itemTypeSetLookup.getById(tenant, setId);
+
+        boolean isTenantAdmin = grantRoleLookup.existsByUserGlobal(user, tenant, "ADMIN");
+        boolean isProjectAdmin = userRoleRepository.existsByUserIdAndProjectIdAndRoleName(
+                user.getId(), projectId, "ADMIN");
+
+        if (!isTenantAdmin && !isProjectAdmin) {
+            throw new ApiException("Accesso negato: non hai i permessi per modificare l'ItemTypeSet del progetto");
+        }
+
+        ItemTypeSet currentItemTypeSet = project.getItemTypeSet();
+        if (!isTenantAdmin && isProjectAdmin
+                && currentItemTypeSet != null
+                && currentItemTypeSet.getScope() == ScopeType.TENANT
+                && !currentItemTypeSet.getId().equals(itemTypeSet.getId())) {
+            throw new ApiException("I Project Admin non possono cambiare l'ItemTypeSet globale applicato al progetto");
+        }
 
         if (itemTypeSet.getScope() == ScopeType.PROJECT) {
             Project ownerProject = itemTypeSet.getProject();

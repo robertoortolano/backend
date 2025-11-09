@@ -51,7 +51,7 @@ public class FieldSetController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@securityService.canCreateFieldSet(principal, #tenant, #id)")
+    @PreAuthorize("@securityService.canViewFieldSet(principal, #tenant, #id)")
     public ResponseEntity<FieldSetViewDto> getById(
             @PathVariable Long id,
             @CurrentTenant Tenant tenant
