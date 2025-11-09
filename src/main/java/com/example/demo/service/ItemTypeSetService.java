@@ -443,6 +443,12 @@ public class ItemTypeSetService {
         
         List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> executorPermissions = 
                 analyzeExecutorPermissionImpacts(configsToRemove, itemTypeSet);
+        
+        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> workerPermissions =
+                analyzeWorkerPermissionImpacts(configsToRemove, itemTypeSet);
+        
+        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> creatorPermissions =
+                analyzeCreatorPermissionImpacts(configsToRemove, itemTypeSet);
 
         // Calcola statistiche
         int totalGrantAssignments =
@@ -450,20 +456,28 @@ public class ItemTypeSetService {
                         + countGlobalGrantAssignments(statusOwnerPermissions)
                         + countGlobalGrantAssignments(fieldStatusPermissions)
                         + countGlobalGrantAssignments(executorPermissions)
+                        + countGlobalGrantAssignments(workerPermissions)
+                        + countGlobalGrantAssignments(creatorPermissions)
                         + countProjectGrantAssignments(fieldOwnerPermissions)
                         + countProjectGrantAssignments(statusOwnerPermissions)
                         + countProjectGrantAssignments(fieldStatusPermissions)
-                        + countProjectGrantAssignments(executorPermissions);
+                        + countProjectGrantAssignments(executorPermissions)
+                        + countProjectGrantAssignments(workerPermissions)
+                        + countProjectGrantAssignments(creatorPermissions);
 
         int totalRoleAssignments =
                 countGlobalRoleAssignments(fieldOwnerPermissions)
                         + countGlobalRoleAssignments(statusOwnerPermissions)
                         + countGlobalRoleAssignments(fieldStatusPermissions)
                         + countGlobalRoleAssignments(executorPermissions)
+                        + countGlobalRoleAssignments(workerPermissions)
+                        + countGlobalRoleAssignments(creatorPermissions)
                         + countProjectRoleAssignments(fieldOwnerPermissions)
                         + countProjectRoleAssignments(statusOwnerPermissions)
                         + countProjectRoleAssignments(fieldStatusPermissions)
-                        + countProjectRoleAssignments(executorPermissions);
+                        + countProjectRoleAssignments(executorPermissions)
+                        + countProjectRoleAssignments(workerPermissions)
+                        + countProjectRoleAssignments(creatorPermissions);
 
         // ItemTypeSet coinvolto (sempre l'ItemTypeSet stesso)
         List<ItemTypeConfigurationRemovalImpactDto.ItemTypeSetImpact> affectedItemTypeSets = List.of(
@@ -485,11 +499,15 @@ public class ItemTypeSetService {
                 .statusOwnerPermissions(statusOwnerPermissions)
                 .fieldStatusPermissions(fieldStatusPermissions)
                 .executorPermissions(executorPermissions)
+                .workerPermissions(workerPermissions)
+                .creatorPermissions(creatorPermissions)
                 .totalAffectedItemTypeSets(affectedItemTypeSets.size())
                 .totalFieldOwnerPermissions(fieldOwnerPermissions.size())
                 .totalStatusOwnerPermissions(statusOwnerPermissions.size())
                 .totalFieldStatusPermissions(fieldStatusPermissions.size())
                 .totalExecutorPermissions(executorPermissions.size())
+                .totalWorkerPermissions(workerPermissions.size())
+                .totalCreatorPermissions(creatorPermissions.size())
                 .totalGrantAssignments(totalGrantAssignments)
                 .totalRoleAssignments(totalRoleAssignments)
                 .build();
@@ -823,6 +841,94 @@ public class ItemTypeSetService {
                             .projectAssignedRoles(assignmentDetails.projectRoles())
                             .projectGrants(assignmentDetails.projectGrants())
                             .hasAssignments(true)
+                            .build());
+                }
+            }
+        }
+        
+        return impacts;
+    }
+
+    private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeWorkerPermissionImpacts(
+            List<ItemTypeConfiguration> configsToRemove,
+            ItemTypeSet itemTypeSet
+    ) {
+        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
+        
+        for (ItemTypeConfiguration config : configsToRemove) {
+            List<WorkerPermission> permissions = workerPermissionRepository.findAllByItemTypeConfiguration(config);
+            
+            for (WorkerPermission permission : permissions) {
+                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
+                        "WorkerPermission",
+                        permission.getId(),
+                        itemTypeSet
+                );
+
+                if (assignmentDetails.hasAssignments()) {
+                    impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
+                            .permissionId(permission.getId())
+                            .permissionType("WORKERS")
+                            .itemTypeSetId(itemTypeSet.getId())
+                            .itemTypeSetName(itemTypeSet.getName())
+                            .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
+                            .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
+                            .itemTypeConfigurationId(config.getId())
+                            .itemTypeName(config.getItemType() != null ? config.getItemType().getName() : null)
+                            .itemTypeCategory(config.getCategory() != null ? config.getCategory().toString() : null)
+                            .grantId(assignmentDetails.globalGrantId())
+                            .grantName(assignmentDetails.globalGrantName())
+                            .assignedRoles(assignmentDetails.assignedRoles())
+                            .assignedGrants(assignmentDetails.assignedGrants())
+                            .projectAssignedRoles(assignmentDetails.projectRoles())
+                            .projectGrants(assignmentDetails.projectGrants())
+                            .hasAssignments(true)
+                            .canBePreserved(false)
+                            .defaultPreserve(false)
+                            .build());
+                }
+            }
+        }
+        
+        return impacts;
+    }
+
+    private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeCreatorPermissionImpacts(
+            List<ItemTypeConfiguration> configsToRemove,
+            ItemTypeSet itemTypeSet
+    ) {
+        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
+        
+        for (ItemTypeConfiguration config : configsToRemove) {
+            List<CreatorPermission> permissions = creatorPermissionRepository.findAllByItemTypeConfiguration(config);
+            
+            for (CreatorPermission permission : permissions) {
+                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
+                        "CreatorPermission",
+                        permission.getId(),
+                        itemTypeSet
+                );
+
+                if (assignmentDetails.hasAssignments()) {
+                    impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
+                            .permissionId(permission.getId())
+                            .permissionType("CREATORS")
+                            .itemTypeSetId(itemTypeSet.getId())
+                            .itemTypeSetName(itemTypeSet.getName())
+                            .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
+                            .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
+                            .itemTypeConfigurationId(config.getId())
+                            .itemTypeName(config.getItemType() != null ? config.getItemType().getName() : null)
+                            .itemTypeCategory(config.getCategory() != null ? config.getCategory().toString() : null)
+                            .grantId(assignmentDetails.globalGrantId())
+                            .grantName(assignmentDetails.globalGrantName())
+                            .assignedRoles(assignmentDetails.assignedRoles())
+                            .assignedGrants(assignmentDetails.assignedGrants())
+                            .projectAssignedRoles(assignmentDetails.projectRoles())
+                            .projectGrants(assignmentDetails.projectGrants())
+                            .hasAssignments(true)
+                            .canBePreserved(false)
+                            .defaultPreserve(false)
                             .build());
                 }
             }

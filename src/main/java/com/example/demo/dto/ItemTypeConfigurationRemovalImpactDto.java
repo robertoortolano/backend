@@ -22,6 +22,8 @@ public class ItemTypeConfigurationRemovalImpactDto {
     private List<PermissionImpact> statusOwnerPermissions;
     private List<PermissionImpact> fieldStatusPermissions;
     private List<PermissionImpact> executorPermissions;
+    private List<PermissionImpact> workerPermissions;
+    private List<PermissionImpact> creatorPermissions;
     
     // Statistiche
     private int totalAffectedItemTypeSets;
@@ -29,6 +31,8 @@ public class ItemTypeConfigurationRemovalImpactDto {
     private int totalStatusOwnerPermissions;
     private int totalFieldStatusPermissions;
     private int totalExecutorPermissions;
+    private int totalWorkerPermissions;
+    private int totalCreatorPermissions;
     private int totalGrantAssignments;
     private int totalRoleAssignments;
     

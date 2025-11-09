@@ -34,6 +34,8 @@ public class ItemTypeConfigurationMigrationImpactDto {
     private List<SelectablePermissionImpact> statusOwnerPermissions;
     private List<SelectablePermissionImpact> fieldStatusPermissions;
     private List<SelectablePermissionImpact> executorPermissions;
+    private List<SelectablePermissionImpact> workerPermissions;
+    private List<SelectablePermissionImpact> creatorPermissions;
     
     // Statistiche
     private int totalPreservablePermissions;
@@ -92,7 +94,7 @@ public class ItemTypeConfigurationMigrationImpactDto {
     @Builder
     public static class SelectablePermissionImpact {
         private Long permissionId;
-        private String permissionType; // "FIELD_OWNERS", "STATUS_OWNERS", "EDITORS", "VIEWERS", "EXECUTORS"
+        private String permissionType; // "FIELD_OWNERS", "STATUS_OWNERS", "EDITORS", "VIEWERS", "EXECUTORS", "WORKERS", "CREATORS"
         
         // Info entity attuale (Field, WorkflowStatus, Transition)
         private Long entityId; // FieldId, WorkflowStatusId, TransitionId

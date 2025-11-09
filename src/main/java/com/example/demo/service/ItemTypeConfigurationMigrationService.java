@@ -107,12 +107,22 @@ public class ItemTypeConfigurationMigrationService {
                 analyzeExecutorPermissions(oldConfig, oldWorkflowInfo, newWorkflowInfo, workflowChanged);
         
         // Calcola statistiche
-        int totalPreservable = countPreservable(fieldOwnerPermissions, statusOwnerPermissions, fieldStatusPermissions, executorPermissions);
-        int totalRemovable = countRemovable(fieldOwnerPermissions, statusOwnerPermissions, fieldStatusPermissions, executorPermissions);
-        int totalNew = countNew(fieldOwnerPermissions, statusOwnerPermissions, fieldStatusPermissions, executorPermissions);
-        int totalWithRoles = countWithRoles(fieldOwnerPermissions, statusOwnerPermissions, fieldStatusPermissions, executorPermissions);
-        
         Long itemTypeSetId = getItemTypeSetIdForConfiguration(oldConfig);
+        ItemTypeSet owningItemTypeSet = itemTypeSetId != null
+                ? itemTypeSetRepository.findById(itemTypeSetId).orElse(null)
+                : null;
+        
+        List<ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact> workerPermissions =
+                analyzeWorkerPermissions(oldConfig, owningItemTypeSet);
+        
+        List<ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact> creatorPermissions =
+                analyzeCreatorPermissions(oldConfig, owningItemTypeSet);
+        
+        int totalPreservable = countPreservable(fieldOwnerPermissions, statusOwnerPermissions, fieldStatusPermissions, executorPermissions, workerPermissions, creatorPermissions);
+        int totalRemovable = countRemovable(fieldOwnerPermissions, statusOwnerPermissions, fieldStatusPermissions, executorPermissions, workerPermissions, creatorPermissions);
+        int totalNew = countNew(fieldOwnerPermissions, statusOwnerPermissions, fieldStatusPermissions, executorPermissions, workerPermissions, creatorPermissions);
+        int totalWithRoles = countWithRoles(fieldOwnerPermissions, statusOwnerPermissions, fieldStatusPermissions, executorPermissions, workerPermissions, creatorPermissions);
+        
         String itemTypeSetName = getItemTypeSetNameForConfiguration(oldConfig);
         
         return ItemTypeConfigurationMigrationImpactDto.builder()
@@ -132,6 +142,8 @@ public class ItemTypeConfigurationMigrationService {
                 .statusOwnerPermissions(statusOwnerPermissions)
                 .fieldStatusPermissions(fieldStatusPermissions)
                 .executorPermissions(executorPermissions)
+                .workerPermissions(workerPermissions)
+                .creatorPermissions(creatorPermissions)
                 .totalPreservablePermissions(totalPreservable)
                 .totalRemovablePermissions(totalRemovable)
                 .totalNewPermissions(totalNew)
@@ -194,6 +206,8 @@ public class ItemTypeConfigurationMigrationService {
         migrateStatusOwnerPermissions(config, impact, permissionsToPreserve);
         migrateFieldStatusPermissions(config, impact, permissionsToPreserve);
         migrateExecutorPermissions(config, impact, permissionsToPreserve);
+        migrateWorkerPermissions(config, impact, permissionsToPreserve);
+        migrateCreatorPermissions(config, impact, permissionsToPreserve);
         
         // IMPORTANTE: Aggiorna la configurazione con i nuovi FieldSet e Workflow PRIMA di creare le nuove permission
         // Questo perché createNewPermissions legge FieldSet e Workflow dalla configurazione
@@ -908,6 +922,185 @@ public class ItemTypeConfigurationMigrationService {
                 .collect(Collectors.toList());
     }
     
+    private List<ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact> analyzeWorkerPermissions(
+            ItemTypeConfiguration config,
+            ItemTypeSet itemTypeSet
+    ) {
+        List<WorkerPermission> existingPermissions = workerPermissionRepository.findAllByItemTypeConfiguration(config);
+        if (existingPermissions.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Tenant tenant = config.getTenant();
+        Long itemTypeSetId = itemTypeSet != null ? itemTypeSet.getId() : getItemTypeSetIdForConfiguration(config);
+        String itemTypeSetName = itemTypeSet != null ? itemTypeSet.getName() : getItemTypeSetNameForConfiguration(config);
+
+        return existingPermissions.stream()
+                .map(perm -> {
+                    Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                            "WorkerPermission", perm.getId(), tenant);
+                    List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                                    .map(Role::getName)
+                                    .collect(Collectors.toList()))
+                            .orElse(new ArrayList<>());
+
+                    Long grantId = null;
+                    String grantName = null;
+                    if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
+                        Grant grant = assignmentOpt.get().getGrant();
+                        grantId = grant.getId();
+                        grantName = grant.getRole() != null ? grant.getRole().getName() : "Grant globale";
+                    }
+
+                    ProjectAssignmentSummary projectSummary = collectProjectAssignmentSummary(
+                            "WorkerPermission", perm.getId(), tenant, itemTypeSet);
+
+                    boolean hasAssignments = !assignedRoles.isEmpty()
+                            || grantId != null
+                            || projectSummary.hasProjectRoles()
+                            || !projectSummary.projectGrants().isEmpty();
+
+                    return ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact.builder()
+                            .permissionId(perm.getId())
+                            .permissionType("WORKERS")
+                            .entityId(config.getItemType() != null ? config.getItemType().getId() : null)
+                            .entityName(config.getItemType() != null ? config.getItemType().getName() : null)
+                            .matchingEntityId(config.getItemType() != null ? config.getItemType().getId() : null)
+                            .matchingEntityName(config.getItemType() != null ? config.getItemType().getName() : null)
+                            .assignedRoles(assignedRoles)
+                            .hasAssignments(hasAssignments)
+                            .canBePreserved(true)
+                            .defaultPreserve(hasAssignments)
+                            .suggestedAction("PRESERVE")
+                            .itemTypeSetId(itemTypeSetId)
+                            .itemTypeSetName(itemTypeSetName)
+                            .projectId(config.getProject() != null ? config.getProject().getId() : null)
+                            .projectName(config.getProject() != null ? config.getProject().getName() : null)
+                            .grantId(grantId)
+                            .grantName(grantName)
+                            .projectGrants(projectSummary.projectGrants())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    private List<ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact> analyzeCreatorPermissions(
+            ItemTypeConfiguration config,
+            ItemTypeSet itemTypeSet
+    ) {
+        List<CreatorPermission> existingPermissions = creatorPermissionRepository.findAllByItemTypeConfiguration(config);
+        if (existingPermissions.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Tenant tenant = config.getTenant();
+        Long itemTypeSetId = itemTypeSet != null ? itemTypeSet.getId() : getItemTypeSetIdForConfiguration(config);
+        String itemTypeSetName = itemTypeSet != null ? itemTypeSet.getName() : getItemTypeSetNameForConfiguration(config);
+
+        return existingPermissions.stream()
+                .map(perm -> {
+                    Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
+                            "CreatorPermission", perm.getId(), tenant);
+                    List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
+                                    .map(Role::getName)
+                                    .collect(Collectors.toList()))
+                            .orElse(new ArrayList<>());
+
+                    Long grantId = null;
+                    String grantName = null;
+                    if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
+                        Grant grant = assignmentOpt.get().getGrant();
+                        grantId = grant.getId();
+                        grantName = grant.getRole() != null ? grant.getRole().getName() : "Grant globale";
+                    }
+
+                    ProjectAssignmentSummary projectSummary = collectProjectAssignmentSummary(
+                            "CreatorPermission", perm.getId(), tenant, itemTypeSet);
+
+                    boolean hasAssignments = !assignedRoles.isEmpty()
+                            || grantId != null
+                            || projectSummary.hasProjectRoles()
+                            || !projectSummary.projectGrants().isEmpty();
+
+                    return ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact.builder()
+                            .permissionId(perm.getId())
+                            .permissionType("CREATORS")
+                            .entityId(config.getItemType() != null ? config.getItemType().getId() : null)
+                            .entityName(config.getItemType() != null ? config.getItemType().getName() : null)
+                            .matchingEntityId(config.getItemType() != null ? config.getItemType().getId() : null)
+                            .matchingEntityName(config.getItemType() != null ? config.getItemType().getName() : null)
+                            .assignedRoles(assignedRoles)
+                            .hasAssignments(hasAssignments)
+                            .canBePreserved(true)
+                            .defaultPreserve(hasAssignments)
+                            .suggestedAction("PRESERVE")
+                            .itemTypeSetId(itemTypeSetId)
+                            .itemTypeSetName(itemTypeSetName)
+                            .projectId(config.getProject() != null ? config.getProject().getId() : null)
+                            .projectName(config.getProject() != null ? config.getProject().getName() : null)
+                            .grantId(grantId)
+                            .grantName(grantName)
+                            .projectGrants(projectSummary.projectGrants())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+    
+    private ProjectAssignmentSummary collectProjectAssignmentSummary(
+            String permissionType,
+            Long permissionId,
+            Tenant tenant,
+            ItemTypeSet itemTypeSet
+    ) {
+        List<ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo> projectGrants = new ArrayList<>();
+        boolean hasProjectRoles = false;
+
+        if (itemTypeSet == null) {
+            return new ProjectAssignmentSummary(projectGrants, hasProjectRoles);
+        }
+
+        if (itemTypeSet.getProject() != null) {
+            Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
+                    permissionType, permissionId, itemTypeSet.getProject().getId(), tenant);
+            if (projectAssignmentOpt.isPresent()) {
+                PermissionAssignment assignment = projectAssignmentOpt.get();
+                if (assignment.getGrant() != null) {
+                    projectGrants.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
+                            .projectId(itemTypeSet.getProject().getId())
+                            .projectName(itemTypeSet.getProject().getName())
+                            .build());
+                }
+                if (assignment.getRoles() != null && !assignment.getRoles().isEmpty()) {
+                    hasProjectRoles = true;
+                }
+            }
+        } else if (itemTypeSet.getProjectsAssociation() != null) {
+            for (Project project : itemTypeSet.getProjectsAssociation()) {
+                Optional<PermissionAssignment> projectAssignmentOpt = projectPermissionAssignmentService.getProjectAssignment(
+                        permissionType, permissionId, project.getId(), tenant);
+                if (projectAssignmentOpt.isPresent()) {
+                    PermissionAssignment assignment = projectAssignmentOpt.get();
+                    if (assignment.getGrant() != null) {
+                        projectGrants.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
+                                .projectId(project.getId())
+                                .projectName(project.getName())
+                                .build());
+                    }
+                    if (assignment.getRoles() != null && !assignment.getRoles().isEmpty()) {
+                        hasProjectRoles = true;
+                    }
+                }
+            }
+        }
+
+        return new ProjectAssignmentSummary(projectGrants, hasProjectRoles);
+    }
+
+    private record ProjectAssignmentSummary(
+            List<ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo> projectGrants,
+            boolean hasProjectRoles
+    ) {}
+
     // ========== METODI PRIVATI DI MIGRAZIONE ==========
     
     private void migrateFieldOwnerPermissions(
@@ -967,6 +1160,36 @@ public class ItemTypeConfigurationMigrationService {
         }
     }
     
+    private void migrateWorkerPermissions(
+            ItemTypeConfiguration config,
+            ItemTypeConfigurationMigrationImpactDto impact,
+            Set<Long> permissionsToPreserve
+    ) {
+        if (impact.getWorkerPermissions() == null) {
+            return;
+        }
+        for (ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact permImpact : impact.getWorkerPermissions()) {
+            if (!permissionsToPreserve.contains(permImpact.getPermissionId())) {
+                workerPermissionRepository.deleteById(permImpact.getPermissionId());
+            }
+        }
+    }
+
+    private void migrateCreatorPermissions(
+            ItemTypeConfiguration config,
+            ItemTypeConfigurationMigrationImpactDto impact,
+            Set<Long> permissionsToPreserve
+    ) {
+        if (impact.getCreatorPermissions() == null) {
+            return;
+        }
+        for (ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact permImpact : impact.getCreatorPermissions()) {
+            if (!permissionsToPreserve.contains(permImpact.getPermissionId())) {
+                creatorPermissionRepository.deleteById(permImpact.getPermissionId());
+            }
+        }
+    }
+    
     private void createNewPermissions(
             ItemTypeConfiguration config,
             ItemTypeConfigurationMigrationImpactDto impact,
@@ -998,6 +1221,18 @@ public class ItemTypeConfigurationMigrationService {
         impact.getExecutorPermissions().stream()
                 .filter(ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact::isCanBePreserved)
                 .forEach(p -> preservable.add(p.getPermissionId()));
+        
+        if (impact.getWorkerPermissions() != null) {
+            impact.getWorkerPermissions().stream()
+                    .filter(ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact::isCanBePreserved)
+                    .forEach(p -> preservable.add(p.getPermissionId()));
+        }
+        
+        if (impact.getCreatorPermissions() != null) {
+            impact.getCreatorPermissions().stream()
+                    .filter(ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact::isCanBePreserved)
+                    .forEach(p -> preservable.add(p.getPermissionId()));
+        }
         
         return preservable;
     }
