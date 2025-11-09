@@ -58,6 +58,7 @@ public class WorkflowController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@securityService.canEditWorkflow(principal, #tenant, #id)")
     public ResponseEntity<WorkflowViewDto> updateWorkflow(
             @PathVariable Long id,
             @RequestBody WorkflowUpdateDto dto,
