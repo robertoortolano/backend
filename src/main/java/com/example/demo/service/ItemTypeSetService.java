@@ -8,9 +8,11 @@ import com.example.demo.dto.ItemTypeSetViewDto;
 import com.example.demo.entity.*;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.exception.ApiException;
-import com.example.demo.factory.FieldSetCloner;
 import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.repository.*;
+import com.example.demo.service.itemtypeset.ItemTypeSetFieldOrchestrator;
+import com.example.demo.service.itemtypeset.ItemTypeSetPermissionOrchestrator;
+import com.example.demo.service.itemtypeset.ItemTypeSetWorkflowOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,7 +23,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Collections;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,20 +36,17 @@ public class ItemTypeSetService {
     private final ItemTypeSetRepository itemTypeSetRepository;
     private final ProjectRepository projectRepository;
 
-    private final FieldSetRepository fieldSetRepository;
     private final ItemTypeConfigurationRepository itemTypeConfigurationRepository;
 
     private final FieldSetLookup fieldSetLookup;
-    private final ItemTypeLookup itemTypeLookup;
     private final ProjectLookup projectLookup;
     private final ItemTypeSetLookup itemTypeSetLookup;
-    private final WorkflowLookup workflowLookup;
 
     private final DtoMapperFacade dtoMapper;
 
-    private final FieldSetCloner fieldSetCloner;
-    private final ItemTypePermissionService itemTypePermissionService;
-    private final ItemTypeSetPermissionService itemTypeSetPermissionService;
+    private final ItemTypeSetWorkflowOrchestrator workflowOrchestrator;
+    private final ItemTypeSetFieldOrchestrator fieldOrchestrator;
+    private final ItemTypeSetPermissionOrchestrator permissionOrchestrator;
     
     // Repository per permission
     private final FieldOwnerPermissionRepository fieldOwnerPermissionRepository;
@@ -95,36 +93,24 @@ public class ItemTypeSetService {
 
         Set<ItemTypeConfiguration> configurations = new HashSet<>();
         for (ItemTypeConfigurationCreateDto entryDto : dto.itemTypeConfigurations()) {
-            ItemType itemType = itemTypeLookup.getById(tenant, entryDto.itemTypeId());
-            Workflow workflow = workflowLookup.getByIdEntity(tenant, entryDto.workflowId());
-            FieldSet fieldSet = fieldSetLookup.getById(entryDto.fieldSetId(), tenant);
+            ItemTypeConfiguration configuration = workflowOrchestrator.applyWorkflowUpdates(
+                    tenant,
+                    set,
+                    entryDto,
+                    null
+            );
 
-            ItemTypeConfiguration configuration = new ItemTypeConfiguration();
-            configuration.setTenant(tenant);
-            configuration.setScope(scopeType);
-            configuration.setItemType(itemType);
-            configuration.setCategory(entryDto.category());
-            configuration.setWorkflow(workflow);
-            configuration.setFieldSet(fieldSet);
-            
-            if (!scopeType.equals(ScopeType.TENANT) && project != null) {
-                configuration.setProject(project);
-            }
-
-            /*
-            if (!scopeType.equals(ScopeType.TENANT)) {
-                // Clona il FieldSet di default per ogni entry con il FieldSetCloner aggiornato
-                FieldSet clonedFieldSet = fieldSetCloner.cloneFieldSet(defaultFieldSet, " (copy for " + itemType.getName() + ")");
-                fieldSetRepository.save(clonedFieldSet);
-
-                configuration.setFieldSet(clonedFieldSet);
-            }
-             */
+            fieldOrchestrator.applyFieldSet(
+                    tenant,
+                    set,
+                    configuration,
+                    entryDto,
+                    defaultFieldSet
+            );
 
             itemTypeConfigurationRepository.save(configuration);
             
-            // Crea le permissions base per questa configurazione (Creator, Executor, ecc.)
-            itemTypePermissionService.createPermissionsForItemTypeConfiguration(configuration);
+            permissionOrchestrator.handlePermissionsForNewConfiguration(configuration);
             
             configurations.add(configuration);
         }
@@ -133,8 +119,7 @@ public class ItemTypeSetService {
 
         ItemTypeSet saved = itemTypeSetRepository.save(set);
         
-        // Crea tutte le permissions per l'ItemTypeSet (WORKER, STATUS_OWNER, FIELD_EDITOR, ecc.)
-        itemTypeSetPermissionService.createPermissionsForItemTypeSet(saved.getId(), tenant);
+        permissionOrchestrator.ensureItemTypeSetPermissions(saved.getId(), tenant);
         
         return dtoMapper.toItemTypeSetViewDto(saved);
     }
@@ -188,20 +173,12 @@ public class ItemTypeSetService {
                     removedConfigurationIds
             );
 
-            boolean hasAssignments =
-                    (impact.getFieldOwnerPermissions() != null && impact.getFieldOwnerPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments))
-                    || (impact.getStatusOwnerPermissions() != null && impact.getStatusOwnerPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments))
-                    || (impact.getFieldStatusPermissions() != null && impact.getFieldStatusPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments))
-                    || (impact.getExecutorPermissions() != null && impact.getExecutorPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments))
-                    || (impact.getWorkerPermissions() != null && impact.getWorkerPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments))
-                    || (impact.getCreatorPermissions() != null && impact.getCreatorPermissions().stream().anyMatch(ItemTypeConfigurationRemovalImpactDto.PermissionImpact::isHasAssignments));
-
-            if (hasAssignments) {
+            if (permissionOrchestrator.hasAssignments(impact)) {
                 throw new ApiException("ITEMTYPESET_REMOVAL_IMPACT: rilevate permission con assegnazioni per le configurazioni rimosse");
             }
 
             // Nessuna assegnazione: rimuovi automaticamente le permission orfane prima di procedere con l'aggiornamento
-            removeOrphanedPermissionsForItemTypeConfigurations(
+            permissionOrchestrator.removeOrphanedPermissionsForItemTypeConfigurations(
                     tenant,
                     id,
                     removedConfigurationIds,
@@ -219,60 +196,27 @@ public class ItemTypeSetService {
         FieldSet defaultFieldSet = fieldSetLookup.getFirstDefault(tenant);
 
         for (ItemTypeConfigurationCreateDto entryDto : dtoConfigurations) {
-            ItemType itemType = itemTypeLookup.getById(tenant, entryDto.itemTypeId());
-            Workflow workflow = workflowLookup.getByIdEntity(tenant, entryDto.workflowId());
-            FieldSet fieldSet = fieldSetLookup.getById(entryDto.fieldSetId(), tenant);
+            ItemTypeConfiguration existing = entryDto.id() != null ? existingConfigsMap.get(entryDto.id()) : null;
 
-            ItemTypeConfiguration entry;
-            
-            // Se esiste già una configurazione con questo ID, aggiornala invece di crearne una nuova
-            if (entryDto.id() != null && existingConfigsMap.containsKey(entryDto.id())) {
-                entry = existingConfigsMap.get(entryDto.id());
-                // Aggiorna solo i campi modificabili (non creare una nuova entità)
-                entry.setItemType(itemType);
-                entry.setCategory(entryDto.category());
-                entry.setWorkflow(workflow);
-                
-                if (!set.getScope().equals(ScopeType.TENANT)) {
-                    // Per scope non-TENANT, potrebbe essere necessario clonare
-                    // Ma se la configurazione esiste già, probabilmente ha già un FieldSet clonato
-                    // Per sicurezza, controlliamo se il FieldSet è diverso
-                    if (entry.getFieldSet() == null || !entry.getFieldSet().getId().equals(fieldSet.getId())) {
-                        // Clona solo se necessario
-                        FieldSet clonedFieldSet = fieldSetCloner.cloneFieldSet(defaultFieldSet, " (copy for " + itemType.getName() + ")");
-                        fieldSetRepository.save(clonedFieldSet);
-                        entry.setFieldSet(clonedFieldSet);
-                    }
-                } else {
-                    entry.setFieldSet(fieldSet);
-                }
-            } else {
-                // Crea una nuova configurazione solo se non esiste
-                entry = new ItemTypeConfiguration();
-                entry.setTenant(tenant);
-                entry.setScope(set.getScope());
-                entry.setItemType(itemType);
-                entry.setCategory(entryDto.category());
-                entry.setWorkflow(workflow);
+            ItemTypeConfiguration entry = workflowOrchestrator.applyWorkflowUpdates(
+                    tenant,
+                    set,
+                    entryDto,
+                    existing
+            );
 
-                if (!set.getScope().equals(ScopeType.TENANT)) {
-                    // Clona il FieldSet associato
-                    FieldSet clonedFieldSet = fieldSetCloner.cloneFieldSet(defaultFieldSet, " (copy for " + itemType.getName() + ")");
-                    fieldSetRepository.save(clonedFieldSet);
-                    entry.setFieldSet(clonedFieldSet);
-                } else {
-                    entry.setFieldSet(fieldSet);
-                }
-            }
+            fieldOrchestrator.applyFieldSet(
+                    tenant,
+                    set,
+                    entry,
+                    entryDto,
+                    defaultFieldSet
+            );
 
-            // salva subito la configuration (update o create)
             itemTypeConfigurationRepository.save(entry);
             
-            // Se è una nuova configurazione (non esisteva già), crea le permission
-            boolean isNewConfiguration = entryDto.id() == null || !existingConfigsMap.containsKey(entryDto.id());
-            if (isNewConfiguration) {
-                // Crea le permissions base per questa nuova configurazione
-                itemTypePermissionService.createPermissionsForItemTypeConfiguration(entry);
+            if (existing == null) {
+                permissionOrchestrator.handlePermissionsForNewConfiguration(entry);
             }
 
             updatedConfigurations.add(entry);
@@ -307,7 +251,7 @@ public class ItemTypeSetService {
         // Questo è importante quando si aggiungono nuove configurazioni
         // Le permission vengono create automaticamente tramite ItemTypeSetPermissionService
         try {
-            itemTypeSetPermissionService.createPermissionsForItemTypeSet(updated.getId(), tenant);
+            permissionOrchestrator.ensureItemTypeSetPermissions(updated.getId(), tenant);
         } catch (Exception e) {
             // Log dell'errore ma non bloccare l'aggiornamento
             log.error("Error creating/updating permissions for ItemTypeSet {}", updated.getId(), e);
@@ -449,558 +393,7 @@ public class ItemTypeSetService {
             Long itemTypeSetId,
             Set<Long> removedItemTypeConfigurationIds
     ) {
-        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdAndTenant(itemTypeSetId, tenant)
-                .orElseThrow(() -> new ApiException(ITEMTYPESET_NOT_FOUND + ": " + itemTypeSetId));
-
-        // Trova tutte le ItemTypeConfiguration da rimuovere
-        List<ItemTypeConfiguration> configsToRemove = itemTypeSet.getItemTypeConfigurations().stream()
-                .filter(config -> removedItemTypeConfigurationIds.contains(config.getId()))
-                .collect(Collectors.toList());
-
-        if (configsToRemove.isEmpty()) {
-            return ItemTypeConfigurationRemovalImpactDto.builder()
-                    .itemTypeSetId(itemTypeSetId)
-                    .itemTypeSetName(itemTypeSet.getName())
-                    .removedItemTypeConfigurationIds(new ArrayList<>(removedItemTypeConfigurationIds))
-                    .removedItemTypeConfigurationNames(getItemTypeConfigurationNames(removedItemTypeConfigurationIds, tenant))
-                    .affectedItemTypeSets(new ArrayList<>())
-                    .fieldOwnerPermissions(new ArrayList<>())
-                    .statusOwnerPermissions(new ArrayList<>())
-                    .fieldStatusPermissions(new ArrayList<>())
-                    .executorPermissions(new ArrayList<>())
-                    .totalAffectedItemTypeSets(0)
-                    .totalFieldOwnerPermissions(0)
-                    .totalStatusOwnerPermissions(0)
-                    .totalFieldStatusPermissions(0)
-                    .totalExecutorPermissions(0)
-                    .totalGrantAssignments(0)
-                    .totalRoleAssignments(0)
-                    .build();
-        }
-
-        // Analizza le permissions che verranno rimosse
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> fieldOwnerPermissions = 
-                analyzeFieldOwnerPermissionImpacts(configsToRemove, itemTypeSet);
-        
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> statusOwnerPermissions = 
-                analyzeStatusOwnerPermissionImpacts(configsToRemove, itemTypeSet);
-        
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> fieldStatusPermissions = 
-                analyzeFieldStatusPermissionImpacts(configsToRemove, itemTypeSet);
-        
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> executorPermissions = 
-                analyzeExecutorPermissionImpacts(configsToRemove, itemTypeSet);
-        
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> workerPermissions =
-                analyzeWorkerPermissionImpacts(configsToRemove, itemTypeSet);
-        
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> creatorPermissions =
-                analyzeCreatorPermissionImpacts(configsToRemove, itemTypeSet);
-
-        // Calcola statistiche
-        int totalGrantAssignments =
-                countGlobalGrantAssignments(fieldOwnerPermissions)
-                        + countGlobalGrantAssignments(statusOwnerPermissions)
-                        + countGlobalGrantAssignments(fieldStatusPermissions)
-                        + countGlobalGrantAssignments(executorPermissions)
-                        + countGlobalGrantAssignments(workerPermissions)
-                        + countGlobalGrantAssignments(creatorPermissions)
-                        + countProjectGrantAssignments(fieldOwnerPermissions)
-                        + countProjectGrantAssignments(statusOwnerPermissions)
-                        + countProjectGrantAssignments(fieldStatusPermissions)
-                        + countProjectGrantAssignments(executorPermissions)
-                        + countProjectGrantAssignments(workerPermissions)
-                        + countProjectGrantAssignments(creatorPermissions);
-
-        int totalRoleAssignments =
-                countGlobalRoleAssignments(fieldOwnerPermissions)
-                        + countGlobalRoleAssignments(statusOwnerPermissions)
-                        + countGlobalRoleAssignments(fieldStatusPermissions)
-                        + countGlobalRoleAssignments(executorPermissions)
-                        + countGlobalRoleAssignments(workerPermissions)
-                        + countGlobalRoleAssignments(creatorPermissions)
-                        + countProjectRoleAssignments(fieldOwnerPermissions)
-                        + countProjectRoleAssignments(statusOwnerPermissions)
-                        + countProjectRoleAssignments(fieldStatusPermissions)
-                        + countProjectRoleAssignments(executorPermissions)
-                        + countProjectRoleAssignments(workerPermissions)
-                        + countProjectRoleAssignments(creatorPermissions);
-
-        // ItemTypeSet coinvolto (sempre l'ItemTypeSet stesso)
-        List<ItemTypeConfigurationRemovalImpactDto.ItemTypeSetImpact> affectedItemTypeSets = List.of(
-                ItemTypeConfigurationRemovalImpactDto.ItemTypeSetImpact.builder()
-                        .itemTypeSetId(itemTypeSet.getId())
-                        .itemTypeSetName(itemTypeSet.getName())
-                        .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
-                        .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
-                        .build()
-        );
-
-        return ItemTypeConfigurationRemovalImpactDto.builder()
-                .itemTypeSetId(itemTypeSetId)
-                .itemTypeSetName(itemTypeSet.getName())
-                .removedItemTypeConfigurationIds(new ArrayList<>(removedItemTypeConfigurationIds))
-                .removedItemTypeConfigurationNames(getItemTypeConfigurationNames(removedItemTypeConfigurationIds, tenant))
-                .affectedItemTypeSets(affectedItemTypeSets)
-                .fieldOwnerPermissions(fieldOwnerPermissions)
-                .statusOwnerPermissions(statusOwnerPermissions)
-                .fieldStatusPermissions(fieldStatusPermissions)
-                .executorPermissions(executorPermissions)
-                .workerPermissions(workerPermissions)
-                .creatorPermissions(creatorPermissions)
-                .totalAffectedItemTypeSets(affectedItemTypeSets.size())
-                .totalFieldOwnerPermissions(fieldOwnerPermissions.size())
-                .totalStatusOwnerPermissions(statusOwnerPermissions.size())
-                .totalFieldStatusPermissions(fieldStatusPermissions.size())
-                .totalExecutorPermissions(executorPermissions.size())
-                .totalWorkerPermissions(workerPermissions.size())
-                .totalCreatorPermissions(creatorPermissions.size())
-                .totalGrantAssignments(totalGrantAssignments)
-                .totalRoleAssignments(totalRoleAssignments)
-                .build();
-    }
-
-    private AssignmentDetails resolveAssignmentDetails(String permissionType, Long permissionId, ItemTypeSet itemTypeSet) {
-        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentService.getAssignment(
-                permissionType,
-                permissionId,
-                itemTypeSet.getTenant()
-        );
-
-        List<String> assignedRoles = assignmentOpt.map(a -> a.getRoles().stream()
-                .map(Role::getName)
-                .collect(Collectors.toList()))
-                .orElseGet(ArrayList::new);
-
-        List<String> assignedGrants = new ArrayList<>();
-        Long globalGrantId = null;
-        String globalGrantName = null;
-        if (assignmentOpt.isPresent() && assignmentOpt.get().getGrant() != null) {
-            Grant grant = assignmentOpt.get().getGrant();
-            globalGrantId = grant.getId();
-            globalGrantName = grant.getRole() != null
-                    ? grant.getRole().getName()
-                    : "Grant globale";
-            assignedGrants.add(globalGrantName);
-        }
-
-        List<ItemTypeConfigurationRemovalImpactDto.ProjectGrantInfo> projectGrants = new ArrayList<>();
-        List<ItemTypeConfigurationRemovalImpactDto.ProjectRoleInfo> projectRoles = new ArrayList<>();
-
-        if (itemTypeSet.getProject() != null) {
-            appendProjectAssignmentDetails(
-                    permissionType,
-                    permissionId,
-                    itemTypeSet,
-                    itemTypeSet.getProject(),
-                    projectGrants,
-                    projectRoles
-            );
-        } else if (itemTypeSet.getProjectsAssociation() != null) {
-            for (Project project : itemTypeSet.getProjectsAssociation()) {
-                appendProjectAssignmentDetails(
-                        permissionType,
-                        permissionId,
-                        itemTypeSet,
-                        project,
-                        projectGrants,
-                        projectRoles
-                );
-            }
-        }
-
-        boolean hasAssignments = !assignedRoles.isEmpty()
-                || !assignedGrants.isEmpty()
-                || !projectGrants.isEmpty()
-                || !projectRoles.isEmpty();
-
-        return new AssignmentDetails(
-                assignedRoles,
-                assignedGrants,
-                globalGrantId,
-                globalGrantName,
-                projectGrants,
-                projectRoles,
-                hasAssignments
-        );
-    }
-
-    private void appendProjectAssignmentDetails(
-            String permissionType,
-            Long permissionId,
-            ItemTypeSet itemTypeSet,
-            Project project,
-            List<ItemTypeConfigurationRemovalImpactDto.ProjectGrantInfo> projectGrants,
-            List<ItemTypeConfigurationRemovalImpactDto.ProjectRoleInfo> projectRoles
-    ) {
-        if (project == null) {
-            return;
-        }
-
-        Optional<PermissionAssignment> projectAssignmentOpt =
-                projectPermissionAssignmentService.getProjectAssignment(
-                        permissionType,
-                        permissionId,
-                        project.getId(),
-                        itemTypeSet.getTenant()
-                );
-
-        if (projectAssignmentOpt.isEmpty()) {
-            return;
-        }
-
-        PermissionAssignment projectAssignment = projectAssignmentOpt.get();
-        if (projectAssignment.getGrant() != null) {
-            projectGrants.add(ItemTypeConfigurationRemovalImpactDto.ProjectGrantInfo.builder()
-                    .projectId(project.getId())
-                    .projectName(project.getName())
-                    .build());
-        }
-
-        Set<Role> projectRolesSet = projectAssignment.getRoles();
-        if (projectRolesSet != null && !projectRolesSet.isEmpty()) {
-            List<String> projectRoleNames = projectRolesSet.stream()
-                    .map(Role::getName)
-                    .collect(Collectors.toList());
-            projectRoles.add(ItemTypeConfigurationRemovalImpactDto.ProjectRoleInfo.builder()
-                    .projectId(project.getId())
-                    .projectName(project.getName())
-                    .roles(projectRoleNames)
-                    .build());
-        }
-    }
-
-    private record AssignmentDetails(
-            List<String> assignedRoles,
-            List<String> assignedGrants,
-            Long globalGrantId,
-            String globalGrantName,
-            List<ItemTypeConfigurationRemovalImpactDto.ProjectGrantInfo> projectGrants,
-            List<ItemTypeConfigurationRemovalImpactDto.ProjectRoleInfo> projectRoles,
-            boolean hasAssignments
-    ) {}
-
-    private int countGlobalGrantAssignments(List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> permissions) {
-        return permissions.stream()
-                .mapToInt(p -> p.getAssignedGrants() != null ? p.getAssignedGrants().size() : 0)
-                .sum();
-    }
-
-    private int countProjectGrantAssignments(List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> permissions) {
-        return permissions.stream()
-                .mapToInt(p -> p.getProjectGrants() != null ? p.getProjectGrants().size() : 0)
-                .sum();
-    }
-
-    private int countGlobalRoleAssignments(List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> permissions) {
-        return permissions.stream()
-                .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
-                .sum();
-    }
-
-    private int countProjectRoleAssignments(List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> permissions) {
-        return permissions.stream()
-                .mapToInt(p -> {
-                    if (p.getProjectAssignedRoles() == null) {
-                        return 0;
-                    }
-                    return p.getProjectAssignedRoles().stream()
-                            .mapToInt(pr -> pr.getRoles() != null ? pr.getRoles().size() : 0)
-                            .sum();
-                })
-                .sum();
-    }
- 
-    private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeFieldOwnerPermissionImpacts(
-            List<ItemTypeConfiguration> configsToRemove,
-            ItemTypeSet itemTypeSet
-    ) {
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
-        
-        for (ItemTypeConfiguration config : configsToRemove) {
-            List<FieldOwnerPermission> permissions = fieldOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
-            
-            for (FieldOwnerPermission permission : permissions) {
-                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
-                        "FieldOwnerPermission",
-                        permission.getId(),
-                        itemTypeSet
-                );
-
-                if (assignmentDetails.hasAssignments()) {
-                    impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
-                            .permissionId(permission.getId())
-                            .permissionType("FIELD_OWNERS")
-                            .itemTypeSetId(itemTypeSet.getId())
-                            .itemTypeSetName(itemTypeSet.getName())
-                            .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
-                            .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
-                            .itemTypeConfigurationId(config.getId())
-                            .itemTypeName(config.getItemType() != null ? config.getItemType().getName() : null)
-                            .itemTypeCategory(config.getCategory() != null ? config.getCategory().toString() : null)
-                            .fieldConfigurationId(null) // FieldOwnerPermission è legata a Field, non FieldConfiguration
-                            .fieldConfigurationName(permission.getField() != null ? permission.getField().getName() : null)
-                            .grantId(assignmentDetails.globalGrantId())
-                            .grantName(assignmentDetails.globalGrantName())
-                            .assignedRoles(assignmentDetails.assignedRoles())
-                            .assignedGrants(assignmentDetails.assignedGrants())
-                            .projectAssignedRoles(assignmentDetails.projectRoles())
-                            .projectGrants(assignmentDetails.projectGrants())
-                            .hasAssignments(true)
-                            .build());
-                }
-            }
-        }
-        
-        return impacts;
-    }
-
-    private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeStatusOwnerPermissionImpacts(
-            List<ItemTypeConfiguration> configsToRemove,
-            ItemTypeSet itemTypeSet
-    ) {
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
-        
-        for (ItemTypeConfiguration config : configsToRemove) {
-            List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
-            
-            for (StatusOwnerPermission permission : permissions) {
-                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
-                        "StatusOwnerPermission",
-                        permission.getId(),
-                        itemTypeSet
-                );
-
-                if (assignmentDetails.hasAssignments()) {
-                    impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
-                            .permissionId(permission.getId())
-                            .permissionType("STATUS_OWNERS")
-                            .itemTypeSetId(itemTypeSet.getId())
-                            .itemTypeSetName(itemTypeSet.getName())
-                            .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
-                            .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
-                            .itemTypeConfigurationId(config.getId())
-                            .itemTypeName(config.getItemType() != null ? config.getItemType().getName() : null)
-                            .itemTypeCategory(config.getCategory() != null ? config.getCategory().toString() : null)
-                            .workflowStatusId(permission.getWorkflowStatus() != null ? permission.getWorkflowStatus().getId() : null)
-                            .workflowStatusName(permission.getWorkflowStatus() != null && permission.getWorkflowStatus().getStatus() != null 
-                                    ? permission.getWorkflowStatus().getStatus().getName() : null)
-                            .grantId(assignmentDetails.globalGrantId())
-                            .grantName(assignmentDetails.globalGrantName())
-                            .assignedRoles(assignmentDetails.assignedRoles())
-                            .assignedGrants(assignmentDetails.assignedGrants())
-                            .projectAssignedRoles(assignmentDetails.projectRoles())
-                            .projectGrants(assignmentDetails.projectGrants())
-                            .hasAssignments(true)
-                            .build());
-                }
-            }
-        }
-        
-        return impacts;
-    }
-
-    private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeFieldStatusPermissionImpacts(
-            List<ItemTypeConfiguration> configsToRemove,
-            ItemTypeSet itemTypeSet
-    ) {
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
-        
-        for (ItemTypeConfiguration config : configsToRemove) {
-            List<FieldStatusPermission> permissions = fieldStatusPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
-            
-            for (FieldStatusPermission permission : permissions) {
-                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
-                        "FieldStatusPermission",
-                        permission.getId(),
-                        itemTypeSet
-                );
-
-                if (assignmentDetails.hasAssignments()) {
-                    impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
-                            .permissionId(permission.getId())
-                            .permissionType(permission.getPermissionType() != null ? permission.getPermissionType().toString() : null)
-                            .itemTypeSetId(itemTypeSet.getId())
-                            .itemTypeSetName(itemTypeSet.getName())
-                            .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
-                            .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
-                            .itemTypeConfigurationId(config.getId())
-                            .itemTypeName(config.getItemType() != null ? config.getItemType().getName() : null)
-                            .itemTypeCategory(config.getCategory() != null ? config.getCategory().toString() : null)
-                            .fieldConfigurationId(null) // FieldStatusPermission è legata a Field, non FieldConfiguration
-                            .fieldConfigurationName(permission.getField() != null ? permission.getField().getName() : null)
-                            .workflowStatusId(permission.getWorkflowStatus() != null ? permission.getWorkflowStatus().getId() : null)
-                            .workflowStatusName(permission.getWorkflowStatus() != null && permission.getWorkflowStatus().getStatus() != null
-                                ? permission.getWorkflowStatus().getStatus().getName() : null)
-                            .grantId(assignmentDetails.globalGrantId())
-                            .grantName(assignmentDetails.globalGrantName())
-                            .assignedRoles(assignmentDetails.assignedRoles())
-                            .assignedGrants(assignmentDetails.assignedGrants())
-                            .projectAssignedRoles(assignmentDetails.projectRoles())
-                            .projectGrants(assignmentDetails.projectGrants())
-                            .hasAssignments(true)
-                            .build());
-                }
-            }
-        }
-        
-        return impacts;
-    }
-
-    private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeExecutorPermissionImpacts(
-            List<ItemTypeConfiguration> configsToRemove,
-            ItemTypeSet itemTypeSet
-    ) {
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
-        
-        for (ItemTypeConfiguration config : configsToRemove) {
-            List<ExecutorPermission> permissions = executorPermissionRepository.findAllByItemTypeConfiguration(config);
-            
-            for (ExecutorPermission permission : permissions) {
-                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
-                        "ExecutorPermission",
-                        permission.getId(),
-                        itemTypeSet
-                );
-
-                if (assignmentDetails.hasAssignments() && permission.getTransition() != null) {
-                    Transition transition = permission.getTransition();
-                    impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
-                            .permissionId(permission.getId())
-                            .permissionType("EXECUTORS")
-                            .itemTypeSetId(itemTypeSet.getId())
-                            .itemTypeSetName(itemTypeSet.getName())
-                            .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
-                            .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
-                            .itemTypeConfigurationId(config.getId())
-                            .itemTypeName(config.getItemType() != null ? config.getItemType().getName() : null)
-                            .itemTypeCategory(config.getCategory() != null ? config.getCategory().toString() : null)
-                            .transitionId(transition.getId())
-                            .transitionName(transition.getName())
-                            .fromStatusName(transition.getFromStatus() != null && transition.getFromStatus().getStatus() != null
-                                    ? transition.getFromStatus().getStatus().getName() : null)
-                            .toStatusName(transition.getToStatus() != null && transition.getToStatus().getStatus() != null
-                                    ? transition.getToStatus().getStatus().getName() : null)
-                            .grantId(assignmentDetails.globalGrantId())
-                            .grantName(assignmentDetails.globalGrantName())
-                            .assignedRoles(assignmentDetails.assignedRoles())
-                            .assignedGrants(assignmentDetails.assignedGrants())
-                            .projectAssignedRoles(assignmentDetails.projectRoles())
-                            .projectGrants(assignmentDetails.projectGrants())
-                            .hasAssignments(true)
-                            .build());
-                }
-            }
-        }
-        
-        return impacts;
-    }
-
-    private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeWorkerPermissionImpacts(
-            List<ItemTypeConfiguration> configsToRemove,
-            ItemTypeSet itemTypeSet
-    ) {
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
-        
-        for (ItemTypeConfiguration config : configsToRemove) {
-            List<WorkerPermission> permissions = workerPermissionRepository.findAllByItemTypeConfiguration(config);
-            
-            for (WorkerPermission permission : permissions) {
-                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
-                        "WorkerPermission",
-                        permission.getId(),
-                        itemTypeSet
-                );
-
-                if (assignmentDetails.hasAssignments()) {
-                    impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
-                            .permissionId(permission.getId())
-                            .permissionType("WORKERS")
-                            .itemTypeSetId(itemTypeSet.getId())
-                            .itemTypeSetName(itemTypeSet.getName())
-                            .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
-                            .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
-                            .itemTypeConfigurationId(config.getId())
-                            .itemTypeName(config.getItemType() != null ? config.getItemType().getName() : null)
-                            .itemTypeCategory(config.getCategory() != null ? config.getCategory().toString() : null)
-                            .grantId(assignmentDetails.globalGrantId())
-                            .grantName(assignmentDetails.globalGrantName())
-                            .assignedRoles(assignmentDetails.assignedRoles())
-                            .assignedGrants(assignmentDetails.assignedGrants())
-                            .projectAssignedRoles(assignmentDetails.projectRoles())
-                            .projectGrants(assignmentDetails.projectGrants())
-                            .hasAssignments(true)
-                            .canBePreserved(false)
-                            .defaultPreserve(false)
-                            .build());
-                }
-            }
-        }
-        
-        return impacts;
-    }
-
-    private List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> analyzeCreatorPermissionImpacts(
-            List<ItemTypeConfiguration> configsToRemove,
-            ItemTypeSet itemTypeSet
-    ) {
-        List<ItemTypeConfigurationRemovalImpactDto.PermissionImpact> impacts = new ArrayList<>();
-        
-        for (ItemTypeConfiguration config : configsToRemove) {
-            List<CreatorPermission> permissions = creatorPermissionRepository.findAllByItemTypeConfiguration(config);
-            
-            for (CreatorPermission permission : permissions) {
-                AssignmentDetails assignmentDetails = resolveAssignmentDetails(
-                        "CreatorPermission",
-                        permission.getId(),
-                        itemTypeSet
-                );
-
-                if (assignmentDetails.hasAssignments()) {
-                    impacts.add(ItemTypeConfigurationRemovalImpactDto.PermissionImpact.builder()
-                            .permissionId(permission.getId())
-                            .permissionType("CREATORS")
-                            .itemTypeSetId(itemTypeSet.getId())
-                            .itemTypeSetName(itemTypeSet.getName())
-                            .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
-                            .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
-                            .itemTypeConfigurationId(config.getId())
-                            .itemTypeName(config.getItemType() != null ? config.getItemType().getName() : null)
-                            .itemTypeCategory(config.getCategory() != null ? config.getCategory().toString() : null)
-                            .grantId(assignmentDetails.globalGrantId())
-                            .grantName(assignmentDetails.globalGrantName())
-                            .assignedRoles(assignmentDetails.assignedRoles())
-                            .assignedGrants(assignmentDetails.assignedGrants())
-                            .projectAssignedRoles(assignmentDetails.projectRoles())
-                            .projectGrants(assignmentDetails.projectGrants())
-                            .hasAssignments(true)
-                            .canBePreserved(false)
-                            .defaultPreserve(false)
-                            .build());
-                }
-            }
-        }
-        
-        return impacts;
-    }
-
-    // RIMOSSO: Metodo analyzeItemTypeSetRoleImpacts() - ItemTypeSetRole eliminata completamente
-
-    private List<String> getItemTypeConfigurationNames(Set<Long> configIds, Tenant tenant) {
-        return configIds.stream()
-                .map(id -> {
-                    try {
-                        ItemTypeConfiguration config = itemTypeConfigurationRepository.findById(id)
-                                .orElse(null);
-                        if (config != null && config.getItemType() != null) {
-                            return config.getItemType().getName();
-                        }
-                        return "Configurazione " + id;
-                    } catch (Exception e) {
-                        return "Configurazione " + id;
-                    }
-                })
-                .collect(Collectors.toList());
+        return permissionOrchestrator.analyzeRemovalImpact(tenant, itemTypeSetId, removedItemTypeConfigurationIds);
     }
     
     /**
@@ -1014,126 +407,12 @@ public class ItemTypeSetService {
             Set<Long> removedItemTypeConfigurationIds,
             Set<Long> preservedPermissionIds
     ) {
-        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByIdAndTenant(itemTypeSetId, tenant)
-                .orElseThrow(() -> new ApiException(ITEMTYPESET_NOT_FOUND + ": " + itemTypeSetId));
-        
-        // Trova tutte le ItemTypeConfiguration da rimuovere
-        List<ItemTypeConfiguration> configsToRemove = itemTypeSet.getItemTypeConfigurations().stream()
-                .filter(config -> removedItemTypeConfigurationIds.contains(config.getId()))
-                .collect(Collectors.toList());
-        
-        if (configsToRemove.isEmpty()) {
-            return; // Nessuna configurazione da rimuovere
-        }
-        
-        // Rimuovi tutte le permission per ogni configurazione rimossa (tranne quelle preservate)
-        for (ItemTypeConfiguration config : configsToRemove) {
-            // Rimuovi FieldOwnerPermissions
-            List<FieldOwnerPermission> fieldOwnerPermissions = fieldOwnerPermissionRepository.findAllByItemTypeConfiguration(config);
-            for (FieldOwnerPermission perm : fieldOwnerPermissions) {
-                if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
-                    permissionAssignmentService.deleteAssignment("FieldOwnerPermission", perm.getId(), tenant);
-                    if (itemTypeSet.getProject() != null) {
-                        projectPermissionAssignmentService.deleteProjectAssignment(
-                                "FieldOwnerPermission",
-                                perm.getId(),
-                                itemTypeSet.getProject().getId(),
-                                tenant
-                        );
-                    } else {
-                        for (Project project : itemTypeSet.getProjectsAssociation()) {
-                            projectPermissionAssignmentService.deleteProjectAssignment(
-                                    "FieldOwnerPermission",
-                                    perm.getId(),
-                                    project.getId(),
-                                    tenant
-                            );
-                        }
-                    }
-                    fieldOwnerPermissionRepository.delete(perm);
-                }
-            }
-            
-            // Rimuovi StatusOwnerPermissions
-            List<StatusOwnerPermission> statusOwnerPermissions = statusOwnerPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
-            for (StatusOwnerPermission perm : statusOwnerPermissions) {
-                if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
-                    permissionAssignmentService.deleteAssignment("StatusOwnerPermission", perm.getId(), tenant);
-                    if (itemTypeSet.getProject() != null) {
-                        projectPermissionAssignmentService.deleteProjectAssignment(
-                                "StatusOwnerPermission",
-                                perm.getId(),
-                                itemTypeSet.getProject().getId(),
-                                tenant
-                        );
-                    } else {
-                        for (Project project : itemTypeSet.getProjectsAssociation()) {
-                            projectPermissionAssignmentService.deleteProjectAssignment(
-                                    "StatusOwnerPermission",
-                                    perm.getId(),
-                                    project.getId(),
-                                    tenant
-                            );
-                        }
-                    }
-                    statusOwnerPermissionRepository.delete(perm);
-                }
-            }
-            
-            // Rimuovi FieldStatusPermissions
-            List<FieldStatusPermission> fieldStatusPermissions = fieldStatusPermissionRepository.findByItemTypeConfigurationIdAndTenant(config.getId(), itemTypeSet.getTenant());
-            for (FieldStatusPermission perm : fieldStatusPermissions) {
-                if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
-                    permissionAssignmentService.deleteAssignment("FieldStatusPermission", perm.getId(), tenant);
-                    if (itemTypeSet.getProject() != null) {
-                        projectPermissionAssignmentService.deleteProjectAssignment(
-                                "FieldStatusPermission",
-                                perm.getId(),
-                                itemTypeSet.getProject().getId(),
-                                tenant
-                        );
-                    } else {
-                        for (Project project : itemTypeSet.getProjectsAssociation()) {
-                            projectPermissionAssignmentService.deleteProjectAssignment(
-                                    "FieldStatusPermission",
-                                    perm.getId(),
-                                    project.getId(),
-                                    tenant
-                            );
-                        }
-                    }
-                    fieldStatusPermissionRepository.delete(perm);
-                }
-            }
-            
-            // Rimuovi ExecutorPermissions
-            List<ExecutorPermission> executorPermissions = executorPermissionRepository.findAllByItemTypeConfiguration(config);
-            for (ExecutorPermission perm : executorPermissions) {
-                if (preservedPermissionIds == null || !preservedPermissionIds.contains(perm.getId())) {
-                    permissionAssignmentService.deleteAssignment("ExecutorPermission", perm.getId(), tenant);
-                    if (itemTypeSet.getProject() != null) {
-                        projectPermissionAssignmentService.deleteProjectAssignment(
-                                "ExecutorPermission",
-                                perm.getId(),
-                                itemTypeSet.getProject().getId(),
-                                tenant
-                        );
-                    } else {
-                        for (Project project : itemTypeSet.getProjectsAssociation()) {
-                            projectPermissionAssignmentService.deleteProjectAssignment(
-                                    "ExecutorPermission",
-                                    perm.getId(),
-                                    project.getId(),
-                                    tenant
-                            );
-                        }
-                    }
-                    executorPermissionRepository.delete(perm);
-                }
-            }
-            
-            // RIMOSSO: ItemTypeSetRole eliminata - le permission sono ora gestite tramite PermissionAssignment
-        }
+        permissionOrchestrator.removeOrphanedPermissionsForItemTypeConfigurations(
+                tenant,
+                itemTypeSetId,
+                removedItemTypeConfigurationIds,
+                preservedPermissionIds
+        );
     }
 
 }
