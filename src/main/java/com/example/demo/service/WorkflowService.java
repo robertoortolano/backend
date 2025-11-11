@@ -122,65 +122,74 @@ public class WorkflowService {
     }
 
     private WorkflowViewDto performWorkflowUpdate(Workflow workflow, WorkflowUpdateDto dto, Tenant tenant) {
-        // --- Update base workflow ---
         workflow.setName(dto.name());
 
-        // ========================
-        // WORKFLOW STATUSES
-        // ========================
-        // Mappa per Status ID -> WorkflowStatus (per il processing)
+        Map<Long, WorkflowStatus> updatedStatusMap = updateWorkflowStatuses(workflow, dto, tenant);
+        updateWorkflowNodes(workflow, dto, tenant, updatedStatusMap);
+        TransitionUpdateContext transitionContext = updateWorkflowTransitions(workflow, dto, tenant, updatedStatusMap);
+        updateWorkflowEdges(workflow, dto, tenant, transitionContext);
+        updateInitialStatus(workflow, dto, updatedStatusMap);
+
+        workflow = workflowRepository.save(workflow);
+        return dtoMapper.toWorkflowViewDto(workflow);
+    }
+
+    private Map<Long, WorkflowStatus> updateWorkflowStatuses(Workflow workflow, WorkflowUpdateDto dto, Tenant tenant) {
         Map<Long, WorkflowStatus> existingStatusMap = workflow.getStatuses().stream()
                 .collect(Collectors.toMap(ws -> ws.getStatus().getId(), ws -> ws));
 
-        // Mappa per WorkflowStatus ID -> WorkflowStatus (per identificare i nuovi)
-        Map<Long, WorkflowStatus> existingWorkflowStatusMap = workflow.getStatuses().stream()
-                .collect(Collectors.toMap(ws -> ws.getId(), ws -> ws));
-
-        // Cattura gli ID dei WorkflowStatus esistenti per identificare i nuovi
-        Set<Long> existingWorkflowStatusIds = existingWorkflowStatusMap.keySet();
+        Set<Long> existingWorkflowStatusIds = workflow.getStatuses().stream()
+                .map(WorkflowStatus::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
         Map<Long, WorkflowStatus> updatedStatusMap = new HashMap<>();
 
         for (WorkflowStatusUpdateDto wsDto : dto.workflowStatuses()) {
-            WorkflowStatus ws = existingStatusMap.remove(wsDto.statusId());
-            if (ws == null) {
-                ws = new WorkflowStatus();
-                ws.setWorkflow(workflow);
-                ws.setStatus(statusLookup.getById(tenant, wsDto.statusId()));
+            WorkflowStatus workflowStatus = existingStatusMap.remove(wsDto.statusId());
+            if (workflowStatus == null) {
+                workflowStatus = new WorkflowStatus();
+                workflowStatus.setWorkflow(workflow);
+                workflowStatus.setStatus(statusLookup.getById(tenant, wsDto.statusId()));
             }
 
-            ws.setStatusCategory(wsDto.statusCategory());
-            ws.setInitial(wsDto.isInitial());
-            workflowStatusRepository.save(ws);
-            updatedStatusMap.put(wsDto.statusId(), ws);
+            workflowStatus.setStatusCategory(wsDto.statusCategory());
+            workflowStatus.setInitial(wsDto.isInitial());
+            workflowStatusRepository.save(workflowStatus);
+            updatedStatusMap.put(wsDto.statusId(), workflowStatus);
         }
 
-        // Cancella status rimasti
-        for (WorkflowStatus obsolete : existingStatusMap.values()) {
-            workflowStatusRepository.delete(obsolete);
-        }
+        existingStatusMap.values().forEach(workflowStatusRepository::delete);
+
         workflow.getStatuses().clear();
         workflow.getStatuses().addAll(updatedStatusMap.values());
 
-        // Gestisce le permissions per i nuovi WorkflowStatus aggiunti (DOPO l'aggiornamento)
         handlePermissionsForNewWorkflowStatuses(tenant, workflow, existingWorkflowStatusIds);
 
-        // ========================
-        // WORKFLOW NODES
-        // ========================
+        return updatedStatusMap;
+    }
+
+    private void updateWorkflowNodes(
+            Workflow workflow,
+            WorkflowUpdateDto dto,
+            Tenant tenant,
+            Map<Long, WorkflowStatus> updatedStatusMap
+    ) {
         Map<Long, WorkflowNode> existingNodes = workflow.getStatuses().stream()
                 .map(WorkflowStatus::getNode)
                 .filter(Objects::nonNull)
-                .collect(Collectors.toMap(n -> n.getWorkflowStatus().getStatus().getId(), n -> n));
+                .collect(Collectors.toMap(node -> node.getWorkflowStatus().getStatus().getId(), node -> node));
 
         for (WorkflowNodeDto nodeDto : dto.workflowNodes()) {
-            WorkflowStatus ws = updatedStatusMap.get(nodeDto.statusId());
-            if (ws == null) throw new ApiException("WorkflowNode refers to missing statusId: " + nodeDto.statusId());
+            WorkflowStatus workflowStatus = updatedStatusMap.get(nodeDto.statusId());
+            if (workflowStatus == null) {
+                throw new ApiException("WorkflowNode refers to missing statusId: " + nodeDto.statusId());
+            }
 
             WorkflowNode node = existingNodes.remove(nodeDto.statusId());
             if (node == null) {
                 node = new WorkflowNode();
-                node.setWorkflowStatus(ws);
+                node.setWorkflowStatus(workflowStatus);
                 node.setWorkflow(workflow);
             }
 
@@ -189,73 +198,72 @@ public class WorkflowService {
             node.setPositionY(nodeDto.positionY());
             workflowNodeRepository.save(node);
 
-            ws.setNode(node);
+            workflowStatus.setNode(node);
         }
 
-        // Cancella nodi rimasti
-        for (WorkflowNode obsolete : existingNodes.values()) {
-            workflowNodeRepository.delete(obsolete);
-        }
+        existingNodes.values().forEach(workflowNodeRepository::delete);
+    }
 
-        // ========================
-        // TRANSITIONS
-        // ========================
+    private TransitionUpdateContext updateWorkflowTransitions(
+            Workflow workflow,
+            WorkflowUpdateDto dto,
+            Tenant tenant,
+            Map<Long, WorkflowStatus> updatedStatusMap
+    ) {
         Map<Long, Transition> existingTransitions = workflow.getTransitions().stream()
-                .filter(t -> t.getId() != null)
-                .collect(Collectors.toMap(Transition::getId, t -> t));
+                .filter(transition -> transition.getId() != null)
+                .collect(Collectors.toMap(Transition::getId, transition -> transition));
+
+        Set<Long> existingTransitionIdsSnapshot = new HashSet<>(existingTransitions.keySet());
 
         Map<Long, Transition> transitionMapById = new HashMap<>();
         Map<String, Transition> transitionMapByTempId = new HashMap<>();
 
-        for (TransitionUpdateDto tDto : dto.transitions()) {
-            Transition transition;
+        for (TransitionUpdateDto transitionDto : dto.transitions()) {
+            Transition transition = null;
 
-            if (tDto.id() != null && existingTransitions.containsKey(tDto.id())) {
-                transition = existingTransitions.remove(tDto.id());
-            } else {
+            if (transitionDto.id() != null) {
+                transition = existingTransitions.remove(transitionDto.id());
+            }
+            if (transition == null) {
                 transition = new Transition();
             }
 
             transition.setWorkflow(workflow);
-            transition.setFromStatus(updatedStatusMap.get(tDto.fromStatusId()));
-            transition.setToStatus(updatedStatusMap.get(tDto.toStatusId()));
-            transition.setName(tDto.name() != null ? tDto.name() : "");
+            transition.setFromStatus(updatedStatusMap.get(transitionDto.fromStatusId()));
+            transition.setToStatus(updatedStatusMap.get(transitionDto.toStatusId()));
+            transition.setName(transitionDto.name() != null ? transitionDto.name() : "");
 
             transition = transitionRepository.save(transition);
 
             if (transition.getId() != null) {
                 transitionMapById.put(transition.getId(), transition);
             }
-            if (tDto.tempId() != null) {
-                transitionMapByTempId.put(tDto.tempId(), transition);
+            if (transitionDto.tempId() != null) {
+                transitionMapByTempId.put(transitionDto.tempId(), transition);
             }
         }
 
-        // Cancella transizioni obsolete
-        for (Transition obsolete : existingTransitions.values()) {
-            // Prima rimuovi le ExecutorPermissions associate direttamente dal database, filtrate per Tenant (sicurezza)
-            List<ExecutorPermission> permissions = executorPermissionRepository
-                    .findByTransitionIdAndTenant(obsolete.getId(), tenant);
-            for (ExecutorPermission permission : permissions) {
-                executorPermissionRepository.delete(permission);
-            }
-            // Poi elimina la Transition
-            transitionRepository.delete(obsolete);
-        }
+        existingTransitions.values().forEach(obsolete -> cleanupObsoleteTransition(tenant, obsolete));
 
         workflow.getTransitions().clear();
         workflow.getTransitions().addAll(transitionMapById.values());
 
-        // Gestisce le permissions per le nuove Transition aggiunte
-        handlePermissionsForNewTransitions(tenant, workflow, existingTransitions.keySet());
+        handlePermissionsForNewTransitions(tenant, workflow, existingTransitionIdsSnapshot);
 
-        // ========================
-        // WORKFLOW EDGES
-        // ========================
+        return new TransitionUpdateContext(transitionMapById, transitionMapByTempId);
+    }
+
+    private void updateWorkflowEdges(
+            Workflow workflow,
+            WorkflowUpdateDto dto,
+            Tenant tenant,
+            TransitionUpdateContext transitionContext
+    ) {
         Map<Long, WorkflowEdge> existingEdges = workflowEdgeRepository
                 .findByWorkflowIdAndTenant(workflow.getId(), tenant)
                 .stream()
-                .collect(Collectors.toMap(WorkflowEdge::getId, e -> e));
+                .collect(Collectors.toMap(WorkflowEdge::getId, edge -> edge));
 
         for (WorkflowEdgeDto edgeDto : dto.workflowEdges()) {
             WorkflowEdge edge = (edgeDto.id() != null && existingEdges.containsKey(edgeDto.id()))
@@ -271,9 +279,9 @@ public class WorkflowService {
 
             Transition transition = null;
             if (edgeDto.transitionId() != null) {
-                transition = transitionMapById.get(edgeDto.transitionId());
+                transition = transitionContext.getTransitionById().get(edgeDto.transitionId());
             } else if (edgeDto.transitionTempId() != null) {
-                transition = transitionMapByTempId.get(edgeDto.transitionTempId());
+                transition = transitionContext.getTransitionByTempId().get(edgeDto.transitionTempId());
             }
 
             if (transition != null) {
@@ -284,23 +292,52 @@ public class WorkflowService {
             workflowEdgeRepository.save(edge);
         }
 
-        // Cancella edges obsolete
-        for (WorkflowEdge obsolete : existingEdges.values()) {
-            workflowEdgeRepository.delete(obsolete);
+        existingEdges.values().forEach(workflowEdgeRepository::delete);
+    }
+
+    private void updateInitialStatus(
+            Workflow workflow,
+            WorkflowUpdateDto dto,
+            Map<Long, WorkflowStatus> updatedStatusMap
+    ) {
+        if (dto.initialStatusId() == null) {
+            return;
         }
 
-        // ========================
-        // INITIAL STATUS
-        // ========================
-        if (dto.initialStatusId() != null) {
-            WorkflowStatus initialWs = updatedStatusMap.get(dto.initialStatusId());
-            if (initialWs == null)
-                throw new ApiException("Invalid initialStatusId: " + dto.initialStatusId());
-            workflow.setInitialStatus(initialWs.getStatus());
+        WorkflowStatus initialWorkflowStatus = updatedStatusMap.get(dto.initialStatusId());
+        if (initialWorkflowStatus == null) {
+            throw new ApiException("Invalid initialStatusId: " + dto.initialStatusId());
+        }
+        workflow.setInitialStatus(initialWorkflowStatus.getStatus());
+    }
+
+    private void cleanupObsoleteTransition(Tenant tenant, Transition obsolete) {
+        if (obsolete.getId() != null) {
+            List<ExecutorPermission> permissions = executorPermissionRepository
+                    .findByTransitionIdAndTenant(obsolete.getId(), tenant);
+            for (ExecutorPermission permission : permissions) {
+                executorPermissionRepository.delete(permission);
+            }
+        }
+        transitionRepository.delete(obsolete);
+    }
+
+    private static class TransitionUpdateContext {
+        private final Map<Long, Transition> transitionById;
+        private final Map<String, Transition> transitionByTempId;
+
+        TransitionUpdateContext(Map<Long, Transition> transitionById, Map<String, Transition> transitionByTempId) {
+            this.transitionById = transitionById;
+            this.transitionByTempId = transitionByTempId;
         }
 
-        workflow = workflowRepository.save(workflow);
-        return dtoMapper.toWorkflowViewDto(workflow);
+        Map<Long, Transition> getTransitionById() {
+            return transitionById;
+        }
+
+        Map<String, Transition> getTransitionByTempId() {
+            return transitionByTempId;
+        }
     }
 
 
