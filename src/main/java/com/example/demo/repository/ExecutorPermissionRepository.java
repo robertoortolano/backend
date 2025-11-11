@@ -3,6 +3,7 @@ package com.example.demo.repository;
 import com.example.demo.entity.ExecutorPermission;
 import com.example.demo.entity.ItemTypeConfiguration;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -43,4 +44,11 @@ public interface ExecutorPermissionRepository extends JpaRepository<ExecutorPerm
     @Query("SELECT p FROM ExecutorPermission p WHERE p.itemTypeConfiguration.id IN :itemTypeConfigurationIds AND p.itemTypeConfiguration.tenant = :tenant")
     List<ExecutorPermission> findAllByItemTypeConfigurationIdInAndTenant(@Param("itemTypeConfigurationIds") Collection<Long> itemTypeConfigurationIds,
                                                                          @Param("tenant") com.example.demo.entity.Tenant tenant);
+
+    @Modifying
+    @Query("DELETE FROM ExecutorPermission p WHERE p.transition.id IN :transitionIds")
+    void deleteAllByTransitionIds(@Param("transitionIds") Collection<Long> transitionIds);
+
+    @Query("SELECT p FROM ExecutorPermission p WHERE p.transition.id IN :transitionIds")
+    List<ExecutorPermission> findAllByTransitionIdIn(@Param("transitionIds") Collection<Long> transitionIds);
 }

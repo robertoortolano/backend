@@ -5,6 +5,8 @@ import com.example.demo.entity.*;
 import com.example.demo.exception.ApiException;
 import com.example.demo.mapper.DtoMapperFacade;
 import com.example.demo.repository.*;
+import com.example.demo.metadata.WorkflowNode;
+import com.example.demo.metadata.WorkflowNodeRepository;
 import com.example.demo.service.workflow.WorkflowEdgeManager;
 import com.example.demo.service.workflow.WorkflowPermissionCleanupService;
 import com.example.demo.service.workflow.WorkflowStatusUpdateResult;
@@ -12,15 +14,18 @@ import com.example.demo.service.workflow.WorkflowStatusUpdater;
 import com.example.demo.service.workflow.WorkflowTransitionSyncResult;
 import com.example.demo.service.workflow.WorkflowTransitionSynchronizer;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class WorkflowService {
 
     private final WorkflowRepository workflowRepository;
@@ -37,6 +42,7 @@ public class WorkflowService {
     private final WorkflowStatusUpdater workflowStatusUpdater;
     private final WorkflowTransitionSynchronizer workflowTransitionSynchronizer;
     private final WorkflowEdgeManager workflowEdgeManager;
+    private final WorkflowNodeRepository workflowNodeRepository;
     private final WorkflowPermissionCleanupService workflowPermissionCleanupService;
     
     // Servizi per PermissionAssignment (nuova struttura)
@@ -298,7 +304,7 @@ public class WorkflowService {
         List<ItemTypeSet> affectedItemTypeSets = findItemTypeSetsUsingWorkflow(workflowId, tenant);
         
         // Rimuovi ExecutorPermissions orfane
-        removeOrphanedExecutorPermissions(affectedItemTypeSets, removedTransitionIds);
+        removeOrphanedExecutorPermissions(affectedItemTypeSets, removedTransitionIds, tenant);
     }
     
     /**
@@ -737,9 +743,16 @@ public class WorkflowService {
      * Rimuove le ExecutorPermissions orfane per le Transition rimosse
      */
     private void removeOrphanedExecutorPermissions(
-            List<ItemTypeSet> itemTypeSets, 
-            Set<Long> removedTransitionIds
+            List<ItemTypeSet> itemTypeSets,
+            Set<Long> removedTransitionIds,
+            Tenant tenant
     ) {
+        if (removedTransitionIds == null || removedTransitionIds.isEmpty()) {
+            return;
+        }
+
+        Set<Long> permissionsToDelete = new HashSet<>();
+
         for (ItemTypeSet itemTypeSet : itemTypeSets) {
             for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
                 // Trova e rimuovi le ExecutorPermissions per le Transition rimosse
@@ -747,9 +760,57 @@ public class WorkflowService {
                         .findByItemTypeConfigurationAndTransitionIdIn(config, removedTransitionIds);
                 
                 for (ExecutorPermission permission : permissions) {
-                    executorPermissionRepository.delete(permission);
+                    permissionAssignmentService.deleteAssignment("ExecutorPermission", permission.getId(), itemTypeSet.getTenant());
+
+                    if (itemTypeSet.getProject() != null) {
+                        projectPermissionAssignmentService.deleteProjectAssignment(
+                                "ExecutorPermission",
+                                permission.getId(),
+                                itemTypeSet.getProject().getId(),
+                                itemTypeSet.getTenant()
+                        );
+                    } else {
+                        for (Project project : itemTypeSet.getProjectsAssociation()) {
+                            projectPermissionAssignmentService.deleteProjectAssignment(
+                                    "ExecutorPermission",
+                                    permission.getId(),
+                                    project.getId(),
+                                    itemTypeSet.getTenant()
+                            );
+                        }
+                    }
+
+                    permissionsToDelete.add(permission.getId());
                 }
             }
+        }
+
+        if (!permissionsToDelete.isEmpty()) {
+            executorPermissionRepository.deleteAllById(permissionsToDelete);
+            permissionsToDelete.clear();
+        }
+
+        for (Long transitionId : removedTransitionIds) {
+            List<ExecutorPermission> residualPermissions = executorPermissionRepository.findByTransitionIdAndTenant(transitionId, tenant);
+            for (ExecutorPermission permission : residualPermissions) {
+                permissionAssignmentService.deleteAssignment("ExecutorPermission", permission.getId(), tenant);
+                permissionsToDelete.add(permission.getId());
+            }
+        }
+
+        if (!permissionsToDelete.isEmpty()) {
+            executorPermissionRepository.deleteAllById(permissionsToDelete);
+            executorPermissionRepository.flush();
+            permissionsToDelete.clear();
+        }
+
+        List<ExecutorPermission> remaining = executorPermissionRepository.findAllByTransitionIdIn(removedTransitionIds);
+        if (!remaining.isEmpty()) {
+            log.warn("ExecutorPermissions still present for transitions {} after cleanup. Permission IDs: {}",
+                    removedTransitionIds,
+                    remaining.stream().map(ExecutorPermission::getId).collect(Collectors.toSet()));
+            executorPermissionRepository.deleteAll(remaining);
+            executorPermissionRepository.flush();
         }
     }
     
@@ -760,11 +821,16 @@ public class WorkflowService {
         // Trova tutte le ExecutorPermissions per questa Transition, filtrate per Tenant (sicurezza)
         List<ExecutorPermission> permissions = executorPermissionRepository
                 .findByTransitionIdAndTenant(transitionId, tenant);
-        
-        // Rimuovi tutte le permission
-        for (ExecutorPermission permission : permissions) {
-            executorPermissionRepository.delete(permission);
+
+        if (permissions.isEmpty()) {
+            return;
         }
+
+        Transition transition = transitionRepository.findByTransitionIdAndTenant(transitionId, tenant)
+                .orElseThrow(() -> new ApiException("Transition not found: " + transitionId));
+
+        List<ItemTypeSet> affectedItemTypeSets = findItemTypeSetsUsingWorkflow(transition.getWorkflow().getId(), tenant);
+        removeOrphanedExecutorPermissions(affectedItemTypeSets, Set.of(transitionId), tenant);
     }
     
     /**
@@ -1194,62 +1260,41 @@ public class WorkflowService {
         if (!removedStatusIds.isEmpty()) {
             removeOrphanedStatusOwnerPermissions(tenant, workflowId, removedStatusIds);
             removeOrphanedFieldStatusPermissionsForStatuses(tenant, workflowId, removedStatusIds);
-            
-            // Rimuovi fisicamente gli Status dal database
-            for (Long statusId : removedStatusIds) {
-                WorkflowStatus workflowStatus = workflowStatusRepository.findByWorkflowStatusIdAndTenant(statusId, tenant).orElse(null);
-                if (workflowStatus != null) {
-                    // Rimuovi prima le relazioni
+
+            List<WorkflowStatus> statusesToRemove = removedStatusIds.stream()
+                    .map(statusId -> workflowStatusRepository.findByIdAndTenantWithAssociations(statusId, tenant).orElse(null))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+
+            if (!statusesToRemove.isEmpty()) {
+                workflow.getStatuses().removeAll(statusesToRemove);
+
+                Set<Long> removedTransitionIds = statusesToRemove.stream()
+                        .flatMap(status -> Stream.concat(
+                                status.getOutgoingTransitions().stream(),
+                                status.getIncomingTransitions().stream()))
+                        .map(Transition::getId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+                if (!removedTransitionIds.isEmpty()) {
+                    removeOrphanedExecutorPermissions(tenant, workflowId, removedTransitionIds);
+
+                    List<Transition> transitionsToRemove = transitionRepository.findAllById(removedTransitionIds);
+                    workflowPermissionCleanupService.cleanupObsoleteTransitions(tenant, transitionsToRemove);
+                }
+
+                for (WorkflowStatus workflowStatus : statusesToRemove) {
+                    WorkflowNode node = workflowStatus.getNode();
+                    if (node != null) {
+                        workflowNodeRepository.delete(node);
+                        workflowStatus.setNode(null);
+                    }
+
                     workflowStatus.getOutgoingTransitions().clear();
                     workflowStatus.getIncomingTransitions().clear();
                     workflowStatus.getOwners().clear();
-                    
-                    // Rimuovi il WorkflowStatus
-                    workflowStatusRepository.delete(workflowStatus);
-                }
-            }
-            
-            // Trova tutte le Transition che verranno rimosse (entranti e uscenti dagli stati rimossi)
-            Set<Long> removedTransitionIds = new HashSet<>();
-            for (Long statusId : removedStatusIds) {
-                WorkflowStatus workflowStatus = workflowStatusRepository.findByWorkflowStatusIdAndTenant(statusId, tenant).orElse(null);
-                if (workflowStatus != null) {
-                    // Transizioni uscenti (fromStatus)
-                    List<Transition> outgoingTransitions = transitionRepository.findByFromStatusAndTenant(workflowStatus, tenant);
-                    removedTransitionIds.addAll(outgoingTransitions.stream()
-                            .map(Transition::getId)
-                            .filter(Objects::nonNull)
-                            .collect(Collectors.toSet()));
-                    
-                    // Transizioni entranti (toStatus)
-                    List<Transition> incomingTransitions = transitionRepository.findByToStatusAndTenant(workflowStatus, tenant);
-                    removedTransitionIds.addAll(incomingTransitions.stream()
-                            .map(Transition::getId)
-                            .filter(Objects::nonNull)
-                            .collect(Collectors.toSet()));
-                }
-            }
-            
-            // Rimuovi le ExecutorPermissions orfane per le Transition rimosse
-            if (!removedTransitionIds.isEmpty()) {
-                removeOrphanedExecutorPermissions(tenant, workflowId, removedTransitionIds);
-                
-                // Rimuovi le Transition obsolete
-                for (Long transitionId : removedTransitionIds) {
-                    transitionRepository.deleteById(transitionId);
-                }
-            }
-            
-            // Rimuovi fisicamente gli Status dal database
-            for (Long statusId : removedStatusIds) {
-                WorkflowStatus workflowStatus = workflowStatusRepository.findByWorkflowStatusIdAndTenant(statusId, tenant).orElse(null);
-                if (workflowStatus != null) {
-                    // Rimuovi prima le relazioni
-                    workflowStatus.getOutgoingTransitions().clear();
-                    workflowStatus.getIncomingTransitions().clear();
-                    workflowStatus.getOwners().clear();
-                    
-                    // Rimuovi il WorkflowStatus
+
                     workflowStatusRepository.delete(workflowStatus);
                 }
             }

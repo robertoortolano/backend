@@ -59,16 +59,18 @@ public class ProjectPermissionAssignmentService {
             Long grantId,
             Tenant tenant) {
         
+        String normalizedPermissionType = normalizePermissionType(permissionType);
+
         // Verifica che il progetto esista
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
         
         ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, itemTypeSetId);
-        resolveAndValidatePermissionForProject(permissionType, permissionId, tenant, project, itemTypeSet);
+        resolveAndValidatePermissionForProject(normalizedPermissionType, permissionId, tenant, project, itemTypeSet);
         
         // Trova o crea PermissionAssignment di progetto
         Optional<PermissionAssignment> existingOpt = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProject(permissionType, permissionId, tenant, project);
+                .findByPermissionTypeAndPermissionIdAndTenantAndProject(normalizedPermissionType, permissionId, tenant, project);
         
         PermissionAssignment assignment;
         if (existingOpt.isPresent()) {
@@ -76,7 +78,7 @@ public class ProjectPermissionAssignmentService {
         } else {
             // Crea nuovo PermissionAssignment per il progetto
             assignment = PermissionAssignment.builder()
-                    .permissionType(permissionType)
+                    .permissionType(normalizedPermissionType)
                     .permissionId(permissionId)
                     .tenant(tenant)
                     .project(project) // Assegnazione di progetto
@@ -132,15 +134,24 @@ public class ProjectPermissionAssignmentService {
             String permissionType,
             Long permissionId,
             Long projectId,
-            Tenant tenant) {
-        
+            Tenant tenant
+    ) {
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
-        ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, project.getItemTypeSet() != null ? project.getItemTypeSet().getId() : null);
-        resolveAndValidatePermissionForProject(permissionType, permissionId, tenant, project, itemTypeSet);
-        
+
+        ItemTypeSet itemTypeSet = project.getItemTypeSet();
+
+        String normalizedPermissionType = normalizePermissionType(permissionType);
+
+        resolveAndValidatePermissionForProject(
+                normalizedPermissionType,
+                permissionId,
+                tenant,
+                project,
+                itemTypeSet
+        );
         return permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProjectWithCollections(permissionType, permissionId, tenant, project);
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectWithCollections(normalizedPermissionType, permissionId, tenant, project);
     }
     
     @Transactional(readOnly = true)
@@ -158,8 +169,9 @@ public class ProjectPermissionAssignmentService {
                 .orElseThrow(() -> new ApiException("Project not found"));
         
         List<Long> ids = permissionIds instanceof List<Long> list ? list : new ArrayList<>(permissionIds);
+        String normalizedPermissionType = normalizePermissionType(permissionType);
         List<PermissionAssignment> assignments = permissionAssignmentRepository
-                .findAllByPermissionTypeAndPermissionIdInAndTenantAndProjectWithCollections(permissionType, ids, tenant, project);
+                .findAllByPermissionTypeAndPermissionIdInAndTenantAndProjectWithCollections(normalizedPermissionType, ids, tenant, project);
         
         return assignments.stream()
                 .collect(java.util.stream.Collectors.toMap(PermissionAssignment::getPermissionId, assignment -> assignment));
@@ -180,13 +192,14 @@ public class ProjectPermissionAssignmentService {
             Long projectId,
             Tenant tenant) {
         
+        String normalizedPermissionType = normalizePermissionType(permissionType);
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
         ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, project.getItemTypeSet() != null ? project.getItemTypeSet().getId() : null);
-        resolveAndValidatePermissionForProject(permissionType, permissionId, tenant, project, itemTypeSet);
+        resolveAndValidatePermissionForProject(normalizedPermissionType, permissionId, tenant, project, itemTypeSet);
         
         Optional<PermissionAssignment> assignmentOpt = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProject(permissionType, permissionId, tenant, project);
+                .findByPermissionTypeAndPermissionIdAndTenantAndProject(normalizedPermissionType, permissionId, tenant, project);
         
         if (assignmentOpt.isPresent()) {
             PermissionAssignment assignment = assignmentOpt.get();
@@ -237,18 +250,19 @@ public class ProjectPermissionAssignmentService {
                 .orElseThrow(() -> new ApiException("Project not found"));
         
         ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, itemTypeSetId);
-        resolveAndValidatePermissionForProject(permissionType, permissionId, tenant, project, itemTypeSet);
+        String normalizedPermissionType = normalizePermissionType(permissionType);
+        resolveAndValidatePermissionForProject(normalizedPermissionType, permissionId, tenant, project, itemTypeSet);
         
         // Trova o crea PermissionAssignment di progetto
         Optional<PermissionAssignment> existingOpt = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProject(permissionType, permissionId, tenant, project);
+                .findByPermissionTypeAndPermissionIdAndTenantAndProject(normalizedPermissionType, permissionId, tenant, project);
         
         PermissionAssignment assignment;
         if (existingOpt.isPresent()) {
             assignment = existingOpt.get();
         } else {
             assignment = PermissionAssignment.builder()
-                    .permissionType(permissionType)
+                    .permissionType(normalizedPermissionType)
                     .permissionId(permissionId)
                     .tenant(tenant)
                     .project(project) // Assegnazione di progetto
@@ -386,9 +400,11 @@ public class ProjectPermissionAssignmentService {
             Project project,
             ItemTypeSet itemTypeSet
     ) {
-        ItemTypeConfiguration configuration = resolveItemTypeConfiguration(permissionType, permissionId);
+        String normalizedPermissionType = normalizePermissionType(permissionType);
+
+        ItemTypeConfiguration configuration = resolveItemTypeConfiguration(normalizedPermissionType, permissionId);
         if (configuration == null) {
-            throw new ApiException("Permission not found: " + permissionType + " #" + permissionId);
+            throw new ApiException("Permission not found: " + normalizedPermissionType + " #" + permissionId);
         }
         if (!configuration.getTenant().getId().equals(tenant.getId())) {
             throw new ApiException("Permission does not belong to tenant");
@@ -427,6 +443,29 @@ public class ProjectPermissionAssignmentService {
                     .map(FieldStatusPermission::getItemTypeConfiguration)
                     .orElse(null);
             default -> throw new ApiException("Unsupported permission type: " + permissionType);
+        };
+    }
+
+    private String normalizePermissionType(String permissionType) {
+        if (permissionType == null || permissionType.isBlank()) {
+            return permissionType;
+        }
+
+        String trimmed = permissionType.trim();
+
+        if (trimmed.endsWith("Permission")) {
+            return trimmed;
+        }
+
+        return switch (trimmed.toUpperCase()) {
+            case "WORKERS" -> "WorkerPermission";
+            case "STATUS_OWNERS" -> "StatusOwnerPermission";
+            case "FIELD_OWNERS" -> "FieldOwnerPermission";
+            case "CREATORS" -> "CreatorPermission";
+            case "EXECUTORS" -> "ExecutorPermission";
+            case "EDITORS", "FIELD_EDITORS" -> "FieldStatusPermission";
+            case "VIEWERS", "FIELD_VIEWERS" -> "FieldStatusPermission";
+            default -> trimmed;
         };
     }
     

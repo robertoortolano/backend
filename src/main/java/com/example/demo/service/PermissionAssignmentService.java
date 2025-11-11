@@ -57,12 +57,13 @@ public class PermissionAssignmentService {
             Long grantId,
             Tenant tenant) {
         
-        ItemTypeConfiguration configuration = resolveAndValidatePermission(permissionType, permissionId, tenant);
+        String normalizedType = normalizePermissionType(permissionType);
+        ItemTypeConfiguration configuration = resolveAndValidatePermission(normalizedType, permissionId, tenant);
         boolean projectScoped = configuration.getScope() != ScopeType.TENANT;
 
         // Trova o crea PermissionAssignment GLOBALE (project = null)
         Optional<PermissionAssignment> existingOpt = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(permissionType, permissionId, tenant);
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(normalizedType, permissionId, tenant);
 
         boolean isCleanupRequest = projectScoped && existingOpt.isPresent()
                 && roleIds != null
@@ -78,7 +79,7 @@ public class PermissionAssignmentService {
             assignment = existingOpt.get();
         } else {
             assignment = PermissionAssignment.builder()
-                    .permissionType(permissionType)
+                    .permissionType(normalizedType)
                     .permissionId(permissionId)
                     .tenant(tenant)
                     .project(null) // Assegnazione globale
@@ -120,8 +121,9 @@ public class PermissionAssignmentService {
             String permissionType,
             Long permissionId,
             Tenant tenant) {
+        String normalizedType = normalizePermissionType(permissionType);
         return permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantWithCollections(permissionType, permissionId, tenant);
+                .findByPermissionTypeAndPermissionIdAndTenantWithCollections(normalizedType, permissionId, tenant);
     }
     
     @Transactional(readOnly = true)
@@ -130,12 +132,13 @@ public class PermissionAssignmentService {
             Collection<Long> permissionIds,
             Tenant tenant
     ) {
+        String normalizedType = normalizePermissionType(permissionType);
         if (permissionIds == null || permissionIds.isEmpty()) {
             return Collections.emptyMap();
         }
         List<Long> ids = permissionIds instanceof List<Long> list ? list : new ArrayList<>(permissionIds);
         List<PermissionAssignment> assignments = permissionAssignmentRepository
-                .findAllByPermissionTypeAndPermissionIdInAndTenantWithCollections(permissionType, ids, tenant);
+                .findAllByPermissionTypeAndPermissionIdInAndTenantWithCollections(normalizedType, ids, tenant);
         return assignments.stream()
                 .collect(Collectors.toMap(PermissionAssignment::getPermissionId, assignment -> assignment));
     }
@@ -149,8 +152,9 @@ public class PermissionAssignmentService {
      * @param tenant Tenant di appartenenza
      */
     public void deleteAssignment(String permissionType, Long permissionId, Tenant tenant) {
+        String normalizedType = normalizePermissionType(permissionType);
         Optional<PermissionAssignment> assignmentOpt = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(permissionType, permissionId, tenant);
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(normalizedType, permissionId, tenant);
         
         if (assignmentOpt.isPresent()) {
             PermissionAssignment assignment = assignmentOpt.get();
@@ -188,16 +192,17 @@ public class PermissionAssignmentService {
             Long permissionId,
             Long roleId,
             Tenant tenant) {
-        
-        ItemTypeConfiguration configuration = resolveAndValidatePermission(permissionType, permissionId, tenant);
+        String normalizedType = normalizePermissionType(permissionType);
+
+        ItemTypeConfiguration configuration = resolveAndValidatePermission(normalizedType, permissionId, tenant);
         if (configuration.getScope() != ScopeType.TENANT) {
             throw new ApiException("Permission belongs to a project-scoped ItemTypeSet. Use the project-specific assignment endpoint.");
         }
 
         PermissionAssignment assignment = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(permissionType, permissionId, tenant)
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(normalizedType, permissionId, tenant)
                 .orElseGet(() -> PermissionAssignment.builder()
-                        .permissionType(permissionType)
+                        .permissionType(normalizedType)
                         .permissionId(permissionId)
                         .tenant(tenant)
                         .project(null) // Assegnazione globale
@@ -229,11 +234,12 @@ public class PermissionAssignmentService {
             Long permissionId,
             Long roleId,
             Tenant tenant) {
-        
-        resolveAndValidatePermission(permissionType, permissionId, tenant);
+        String normalizedType = normalizePermissionType(permissionType);
+
+        resolveAndValidatePermission(normalizedType, permissionId, tenant);
 
         PermissionAssignment assignment = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(permissionType, permissionId, tenant)
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(normalizedType, permissionId, tenant)
                 .orElseThrow(() -> new ApiException("PermissionAssignment not found"));
         
         Role role = roleRepository.findById(roleId)
@@ -270,16 +276,17 @@ public class PermissionAssignmentService {
             Set<Long> negatedUserIds,
             Set<Long> negatedGroupIds,
             Tenant tenant) {
-        
-        ItemTypeConfiguration configuration = resolveAndValidatePermission(permissionType, permissionId, tenant);
+        String normalizedType = normalizePermissionType(permissionType);
+
+        ItemTypeConfiguration configuration = resolveAndValidatePermission(normalizedType, permissionId, tenant);
         if (configuration.getScope() != ScopeType.TENANT) {
             throw new ApiException("Permission belongs to a project-scoped ItemTypeSet. Use the project-specific assignment endpoint.");
         }
 
         PermissionAssignment assignment = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(permissionType, permissionId, tenant)
+                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(normalizedType, permissionId, tenant)
                 .orElseGet(() -> PermissionAssignment.builder()
-                        .permissionType(permissionType)
+                        .permissionType(normalizedType)
                         .permissionId(permissionId)
                         .tenant(tenant)
                         .project(null) // Assegnazione globale
@@ -391,6 +398,24 @@ public class PermissionAssignmentService {
             throw new ApiException("Permission does not belong to tenant");
         }
         return configuration;
+    }
+
+    private String normalizePermissionType(String permissionType) {
+        if (permissionType == null) {
+            return null;
+        }
+
+        String upper = permissionType.replace("-", "_").toUpperCase(Locale.ROOT);
+
+        return switch (upper) {
+            case "STATUS_OWNERS", "STATUS_OWNER", "STATUSOWNERPERMISSION", "STATUS_OWNER_PERMISSION" -> "StatusOwnerPermission";
+            case "FIELD_OWNERS", "FIELD_OWNER", "FIELDOWNERPERMISSION", "FIELD_OWNER_PERMISSION" -> "FieldOwnerPermission";
+            case "FIELD_EDITORS", "FIELD_VIEWERS", "FIELDSTATUSPERMISSION", "FIELD_STATUS_PERMISSION", "EDITORS", "VIEWERS" -> "FieldStatusPermission";
+            case "EXECUTORS", "EXECUTOR", "EXECUTORPERMISSION", "EXECUTOR_PERMISSION" -> "ExecutorPermission";
+            case "WORKERS", "WORKER", "WORKERPERMISSION", "WORKER_PERMISSION" -> "WorkerPermission";
+            case "CREATORS", "CREATOR", "CREATORPERMISSION", "CREATOR_PERMISSION" -> "CreatorPermission";
+            default -> permissionType;
+        };
     }
 
     private ItemTypeConfiguration resolveItemTypeConfiguration(String permissionType, Long permissionId) {

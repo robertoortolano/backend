@@ -80,4 +80,15 @@ public interface WorkflowStatusRepository extends JpaRepository<WorkflowStatus, 
     @Query("SELECT ws FROM WorkflowStatus ws JOIN ws.workflow w WHERE ws.id = :workflowStatusId AND w.tenant = :tenant")
     Optional<WorkflowStatus> findByWorkflowStatusIdAndTenant(@Param("workflowStatusId") Long workflowStatusId, @Param("tenant") Tenant tenant);
 
+    @Query("""
+        SELECT ws FROM WorkflowStatus ws
+        LEFT JOIN FETCH ws.outgoingTransitions
+        LEFT JOIN FETCH ws.incomingTransitions
+        LEFT JOIN FETCH ws.owners
+        LEFT JOIN FETCH ws.node
+        JOIN ws.workflow w
+        WHERE ws.id = :id AND w.tenant = :tenant
+    """)
+    Optional<WorkflowStatus> findByIdAndTenantWithAssociations(@Param("id") Long id, @Param("tenant") Tenant tenant);
+
 }
