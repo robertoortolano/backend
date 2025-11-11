@@ -19,7 +19,7 @@ public class FieldConfigurationLookup {
 
     private static final String FIELDCONFIGURATION_NOT_FOUND = "FieldConfiguration not found";
 
-    List<FieldConfiguration> getAllByField(Long fieldId, Tenant tenant) {
+    public List<FieldConfiguration> getAllByField(Long fieldId, Tenant tenant) {
         return fieldConfigurationRepository.findByFieldIdAndTenant(fieldId, tenant);
     }
 
@@ -27,7 +27,7 @@ public class FieldConfigurationLookup {
         return fieldConfigurationRepository.existsByFieldIdAndTenant(fieldId, tenant);
     }
 
-    List<FieldConfiguration> getAll(List<Long> configIds, Tenant tenant) {
+    public List<FieldConfiguration> getAll(List<Long> configIds, Tenant tenant) {
         return fieldConfigurationRepository.findAllByIdInAndTenant(configIds, tenant);
     }
 
