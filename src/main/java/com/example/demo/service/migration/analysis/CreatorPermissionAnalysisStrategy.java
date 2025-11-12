@@ -75,10 +75,10 @@ public class CreatorPermissionAnalysisStrategy {
                 itemTypeSet
         );
 
-        boolean hasAssignments = !assignedRoles.isEmpty()
-                || grantId != null
-                || projectSummary.hasProjectRoles()
-                || !projectSummary.projectGrants().isEmpty();
+        // Verifica se ci sono assegnazioni: ruoli globali, grant globale, o assegnazioni di progetto (ruoli o grant)
+        boolean hasProjectAssignments = projectSummary.projectGrants().stream()
+                .anyMatch(pg -> (pg.getAssignedRoles() != null && !pg.getAssignedRoles().isEmpty()) || pg.getGrantId() != null);
+        boolean hasAssignments = !assignedRoles.isEmpty() || grantId != null || hasProjectAssignments;
 
         return ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact.builder()
                 .permissionId(permission.getId())
@@ -102,5 +102,7 @@ public class CreatorPermissionAnalysisStrategy {
                 .build();
     }
 }
+
+
 
 

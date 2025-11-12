@@ -2,18 +2,20 @@ package com.example.demo.service;
 
 import com.example.demo.dto.ItemTypeConfigurationMigrationImpactDto;
 import com.example.demo.dto.ItemTypeConfigurationMigrationRequest;
-import com.example.demo.entity.FieldSet;
 import com.example.demo.entity.ItemTypeConfiguration;
+import com.example.demo.entity.ItemTypeSet;
 import com.example.demo.entity.Tenant;
-import com.example.demo.entity.Workflow;
 import com.example.demo.exception.ApiException;
 import com.example.demo.repository.CreatorPermissionRepository;
 import com.example.demo.repository.ExecutorPermissionRepository;
 import com.example.demo.repository.FieldOwnerPermissionRepository;
 import com.example.demo.repository.FieldStatusPermissionRepository;
 import com.example.demo.repository.ItemTypeConfigurationRepository;
+import com.example.demo.repository.ItemTypeSetRepository;
 import com.example.demo.repository.StatusOwnerPermissionRepository;
 import com.example.demo.repository.WorkerPermissionRepository;
+import com.example.demo.service.PermissionAssignmentService;
+import com.example.demo.service.ProjectPermissionAssignmentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,10 +37,11 @@ public class ItemTypeConfigurationMigrationService {
     private final ExecutorPermissionRepository executorPermissionRepository;
     private final WorkerPermissionRepository workerPermissionRepository;
     private final CreatorPermissionRepository creatorPermissionRepository;
-    private final WorkflowLookup workflowLookup;
-    private final FieldSetLookup fieldSetLookup;
     private final ItemTypePermissionService itemTypePermissionService;
     private final ItemTypeConfigurationMigrationAnalysisService migrationAnalysisService;
+    private final PermissionAssignmentService permissionAssignmentService;
+    private final ProjectPermissionAssignmentService projectPermissionAssignmentService;
+    private final ItemTypeSetRepository itemTypeSetRepository;
 
     @Transactional(readOnly = true)
     public ItemTypeConfigurationMigrationImpactDto analyzeMigrationImpact(
@@ -84,33 +87,42 @@ public class ItemTypeConfigurationMigrationService {
             permissionsToPreserve = request.preservePermissionIds();
         }
 
-        migrateFieldOwnerPermissions(config, impact, permissionsToPreserve);
-        migrateStatusOwnerPermissions(config, impact, permissionsToPreserve);
-        migrateFieldStatusPermissions(config, impact, permissionsToPreserve);
-        migrateExecutorPermissions(config, impact, permissionsToPreserve);
-        migrateWorkerPermissions(config, impact, permissionsToPreserve);
-        migrateCreatorPermissions(config, impact, permissionsToPreserve);
+        // Ottieni l'ItemTypeSet per questa configurazione per rimuovere le assegnazioni di progetto
+        ItemTypeSet itemTypeSet = itemTypeSetRepository.findByItemTypeConfigurations_IdAndTenant(
+                itemTypeConfigurationId, tenant).stream()
+                .findFirst()
+                .orElse(null);
 
-        if (request.newFieldSetId() != null) {
-            FieldSet newFieldSet = fieldSetLookup.getById(request.newFieldSetId(), tenant);
-            config.setFieldSet(newFieldSet);
-        }
-        if (request.newWorkflowId() != null) {
-            Workflow newWorkflow = workflowLookup.getByIdEntity(tenant, request.newWorkflowId());
-            config.setWorkflow(newWorkflow);
-        }
-        itemTypeConfigurationRepository.save(config);
+        // Rimuovi le permission non preservate (incluse le assegnazioni)
+        // NOTA: NON aggiorniamo qui il workflow/fieldset della configurazione,
+        // perché questo viene fatto in updateItemTypeSet che chiama anche il cleanup automatico
+        // per rimuovere le permission obsolete che non sono nell'impact report
+        migrateFieldOwnerPermissions(config, impact, permissionsToPreserve, tenant, itemTypeSet);
+        migrateStatusOwnerPermissions(config, impact, permissionsToPreserve, tenant, itemTypeSet);
+        migrateFieldStatusPermissions(config, impact, permissionsToPreserve, tenant, itemTypeSet);
+        migrateExecutorPermissions(config, impact, permissionsToPreserve, tenant, itemTypeSet);
+        migrateWorkerPermissions(config, impact, permissionsToPreserve, tenant, itemTypeSet);
+        migrateCreatorPermissions(config, impact, permissionsToPreserve, tenant, itemTypeSet);
 
-        createNewPermissions(config, impact, permissionsToPreserve);
+        // NON aggiorniamo qui workflow/fieldset - questo viene fatto in updateItemTypeSet
+        // che chiama anche il cleanup automatico per rimuovere le permission obsolete
+        // itemTypeConfigurationRepository.save(config);
+        // createNewPermissions(config, impact, permissionsToPreserve);
     }
 
     private void migrateFieldOwnerPermissions(
             ItemTypeConfiguration config,
             ItemTypeConfigurationMigrationImpactDto impact,
-            Set<Long> permissionsToPreserve
+            Set<Long> permissionsToPreserve,
+            Tenant tenant,
+            ItemTypeSet itemTypeSet
     ) {
         impact.getFieldOwnerPermissions().forEach(permImpact -> {
             if (!permissionsToPreserve.contains(permImpact.getPermissionId())) {
+                // Rimuovi prima le assegnazioni (ruoli e grant)
+                permissionAssignmentService.deleteAssignment("FieldOwnerPermission", permImpact.getPermissionId(), tenant);
+                deleteProjectAssignments(itemTypeSet, permImpact.getPermissionId(), "FieldOwnerPermission", tenant);
+                // Poi rimuovi la permission
                 fieldOwnerPermissionRepository.deleteById(permImpact.getPermissionId());
             }
         });
@@ -119,10 +131,16 @@ public class ItemTypeConfigurationMigrationService {
     private void migrateStatusOwnerPermissions(
             ItemTypeConfiguration config,
             ItemTypeConfigurationMigrationImpactDto impact,
-            Set<Long> permissionsToPreserve
+            Set<Long> permissionsToPreserve,
+            Tenant tenant,
+            ItemTypeSet itemTypeSet
     ) {
         impact.getStatusOwnerPermissions().forEach(permImpact -> {
             if (!permissionsToPreserve.contains(permImpact.getPermissionId())) {
+                // Rimuovi prima le assegnazioni (ruoli e grant)
+                permissionAssignmentService.deleteAssignment("StatusOwnerPermission", permImpact.getPermissionId(), tenant);
+                deleteProjectAssignments(itemTypeSet, permImpact.getPermissionId(), "StatusOwnerPermission", tenant);
+                // Poi rimuovi la permission
                 statusOwnerPermissionRepository.deleteById(permImpact.getPermissionId());
             }
         });
@@ -131,10 +149,16 @@ public class ItemTypeConfigurationMigrationService {
     private void migrateFieldStatusPermissions(
             ItemTypeConfiguration config,
             ItemTypeConfigurationMigrationImpactDto impact,
-            Set<Long> permissionsToPreserve
+            Set<Long> permissionsToPreserve,
+            Tenant tenant,
+            ItemTypeSet itemTypeSet
     ) {
         impact.getFieldStatusPermissions().forEach(permImpact -> {
             if (!permissionsToPreserve.contains(permImpact.getPermissionId())) {
+                // Rimuovi prima le assegnazioni (ruoli e grant)
+                permissionAssignmentService.deleteAssignment("FieldStatusPermission", permImpact.getPermissionId(), tenant);
+                deleteProjectAssignments(itemTypeSet, permImpact.getPermissionId(), "FieldStatusPermission", tenant);
+                // Poi rimuovi la permission
                 fieldStatusPermissionRepository.deleteById(permImpact.getPermissionId());
             }
         });
@@ -143,10 +167,16 @@ public class ItemTypeConfigurationMigrationService {
     private void migrateExecutorPermissions(
             ItemTypeConfiguration config,
             ItemTypeConfigurationMigrationImpactDto impact,
-            Set<Long> permissionsToPreserve
+            Set<Long> permissionsToPreserve,
+            Tenant tenant,
+            ItemTypeSet itemTypeSet
     ) {
         impact.getExecutorPermissions().forEach(permImpact -> {
             if (!permissionsToPreserve.contains(permImpact.getPermissionId())) {
+                // Rimuovi prima le assegnazioni (ruoli e grant)
+                permissionAssignmentService.deleteAssignment("ExecutorPermission", permImpact.getPermissionId(), tenant);
+                deleteProjectAssignments(itemTypeSet, permImpact.getPermissionId(), "ExecutorPermission", tenant);
+                // Poi rimuovi la permission
                 executorPermissionRepository.deleteById(permImpact.getPermissionId());
             }
         });
@@ -155,13 +185,19 @@ public class ItemTypeConfigurationMigrationService {
     private void migrateWorkerPermissions(
             ItemTypeConfiguration config,
             ItemTypeConfigurationMigrationImpactDto impact,
-            Set<Long> permissionsToPreserve
+            Set<Long> permissionsToPreserve,
+            Tenant tenant,
+            ItemTypeSet itemTypeSet
     ) {
         if (impact.getWorkerPermissions() == null) {
             return;
         }
         impact.getWorkerPermissions().forEach(permImpact -> {
             if (!permissionsToPreserve.contains(permImpact.getPermissionId())) {
+                // Rimuovi prima le assegnazioni (ruoli e grant)
+                permissionAssignmentService.deleteAssignment("WorkerPermission", permImpact.getPermissionId(), tenant);
+                deleteProjectAssignments(itemTypeSet, permImpact.getPermissionId(), "WorkerPermission", tenant);
+                // Poi rimuovi la permission
                 workerPermissionRepository.deleteById(permImpact.getPermissionId());
             }
         });
@@ -170,25 +206,58 @@ public class ItemTypeConfigurationMigrationService {
     private void migrateCreatorPermissions(
             ItemTypeConfiguration config,
             ItemTypeConfigurationMigrationImpactDto impact,
-            Set<Long> permissionsToPreserve
+            Set<Long> permissionsToPreserve,
+            Tenant tenant,
+            ItemTypeSet itemTypeSet
     ) {
         if (impact.getCreatorPermissions() == null) {
             return;
         }
         impact.getCreatorPermissions().forEach(permImpact -> {
             if (!permissionsToPreserve.contains(permImpact.getPermissionId())) {
+                // Rimuovi prima le assegnazioni (ruoli e grant)
+                permissionAssignmentService.deleteAssignment("CreatorPermission", permImpact.getPermissionId(), tenant);
+                deleteProjectAssignments(itemTypeSet, permImpact.getPermissionId(), "CreatorPermission", tenant);
+                // Poi rimuovi la permission
                 creatorPermissionRepository.deleteById(permImpact.getPermissionId());
             }
         });
     }
 
-    private void createNewPermissions(
-            ItemTypeConfiguration config,
-            ItemTypeConfigurationMigrationImpactDto impact,
-            Set<Long> preservedPermissionIds
+    private void deleteProjectAssignments(
+            ItemTypeSet itemTypeSet,
+            Long permissionId,
+            String permissionType,
+            Tenant tenant
     ) {
-        itemTypePermissionService.createPermissionsForItemTypeConfiguration(config);
+        if (itemTypeSet == null) {
+            return;
+        }
+
+        if (itemTypeSet.getProject() != null) {
+            projectPermissionAssignmentService.deleteProjectAssignment(
+                    permissionType,
+                    permissionId,
+                    itemTypeSet.getProject().getId(),
+                    tenant
+            );
+            return;
+        }
+
+        if (itemTypeSet.getProjectsAssociation() == null) {
+            return;
+        }
+
+        for (com.example.demo.entity.Project project : itemTypeSet.getProjectsAssociation()) {
+            projectPermissionAssignmentService.deleteProjectAssignment(
+                    permissionType,
+                    permissionId,
+                    project.getId(),
+                    tenant
+            );
+        }
     }
+
 
     private Set<Long> getAllPreservablePermissionIds(ItemTypeConfigurationMigrationImpactDto impact) {
         Set<Long> preservable = new HashSet<>();

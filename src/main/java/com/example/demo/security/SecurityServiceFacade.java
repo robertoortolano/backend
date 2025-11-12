@@ -2,11 +2,13 @@ package com.example.demo.security;
 
 import com.example.demo.entity.*;
 import com.example.demo.exception.ApiException;
+import com.example.demo.repository.ItemTypeConfigurationRepository;
 import com.example.demo.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Set;
 
 @Component("securityService")
@@ -24,6 +26,8 @@ public class SecurityServiceFacade {
     private final WorkflowService workflowService;
     private final WorkflowLookup workflowLookup;
     private final FieldConfigurationLookup fieldConfigurationLookup;
+    private final ItemTypeSetLookup itemTypeSetLookup;
+    private final com.example.demo.repository.ItemTypeConfigurationRepository itemTypeConfigurationRepository;
 
     // General
     public boolean hasAccessToGlobals(Object principal, Tenant tenant) {
@@ -315,6 +319,52 @@ public class SecurityServiceFacade {
             return true;
         }
         return projectId != null && projectSecurityService.hasProjectRole(user, tenant, projectId, "ADMIN");
+    }
+
+    /**
+     * Verifica se l'utente può accedere alla migrazione di una ItemTypeConfiguration.
+     * - Tenant Admin: sempre accesso
+     * - Project Admin: accesso solo se l'ItemTypeConfiguration appartiene a un ITS di progetto
+     *   e l'utente è Project Admin di quel progetto
+     */
+    public boolean canAccessItemTypeConfigurationMigration(Object principal, Tenant tenant, Long itemTypeConfigurationId) {
+        User user = extractUser(principal);
+        
+        // Tenant Admin ha sempre accesso
+        if (isTenantAdmin(user, tenant)) {
+            return true;
+        }
+        
+        // Verifica se l'ItemTypeConfiguration appartiene a un ITS di progetto
+        ItemTypeConfiguration config = itemTypeConfigurationRepository.findById(itemTypeConfigurationId)
+                .orElse(null);
+        
+        if (config == null || !config.getTenant().getId().equals(tenant.getId())) {
+            return false;
+        }
+        
+        // Trova l'ItemTypeSet che contiene questa configurazione
+        List<ItemTypeSet> itemTypeSets = itemTypeSetLookup.findByItemTypeConfigurationId(itemTypeConfigurationId, tenant);
+        
+        if (itemTypeSets.isEmpty()) {
+            return false;
+        }
+        
+        // Verifica se almeno un ItemTypeSet è di progetto (scope = PROJECT) e l'utente è Project Admin di quel progetto
+        // NOTA: Gli ITS globali (scope = TENANT) possono essere modificati solo da Tenant Admin
+        for (ItemTypeSet itemTypeSet : itemTypeSets) {
+            // Verifica se l'ITS è di progetto (scope = PROJECT)
+            if (itemTypeSet.getScope() == com.example.demo.enums.ScopeType.PROJECT && itemTypeSet.getProject() != null) {
+                // ItemTypeSet di progetto: verifica se l'utente è Project Admin
+                if (isProjectAdmin(user, tenant, itemTypeSet.getProject().getId())) {
+                    return true;
+                }
+            }
+            // NOTA: Gli ITS globali (scope = TENANT) possono essere modificati solo da Tenant Admin,
+            // quindi se l'utente non è Tenant Admin, non ha accesso
+        }
+        
+        return false;
     }
 
 /*

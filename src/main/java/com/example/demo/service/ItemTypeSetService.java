@@ -221,6 +221,24 @@ public class ItemTypeSetService {
                     defaultFieldSet
             );
 
+            // Se la configurazione esiste già, verifica se workflow o fieldset sono cambiati
+            // e rimuovi le permission obsolete prima di salvare
+            if (existing != null) {
+                // Carica la configurazione esistente dal database con workflow e fieldset
+                // usando JOIN FETCH per evitare problemi di lazy loading
+                ItemTypeConfiguration existingConfigLoaded = itemTypeConfigurationRepository
+                        .findByIdWithWorkflowAndFieldSet(existing.getId())
+                        .orElse(existing);
+                
+                // Rimuovi le permission obsolete se workflow o fieldset sono cambiati
+                permissionOrchestrator.removeObsoletePermissionsForUpdatedConfiguration(
+                        tenant,
+                        set,
+                        existingConfigLoaded,
+                        entry
+                );
+            }
+
             itemTypeConfigurationRepository.save(entry);
             
             if (existing == null) {

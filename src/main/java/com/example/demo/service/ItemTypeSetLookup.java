@@ -44,4 +44,11 @@ public class ItemTypeSetLookup {
         return itemTypeSetRepository.findByItemTypeConfigurationsWorkflowIdAndTenant(workflowId, tenant);
     }
 
+    /**
+     * Trova tutti gli ItemTypeSet che contengono una specifica ItemTypeConfiguration, filtrato per Tenant (sicurezza)
+     */
+    public List<ItemTypeSet> findByItemTypeConfigurationId(Long itemTypeConfigurationId, Tenant tenant) {
+        return itemTypeSetRepository.findByItemTypeConfigurations_IdAndTenant(itemTypeConfigurationId, tenant);
+    }
+
 }

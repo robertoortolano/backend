@@ -56,6 +56,18 @@ public interface FieldSetRepository extends JpaRepository<FieldSet, Long> {
 
     Optional<FieldSet> findByIdAndTenant(Long id, Tenant tenant);
 
+    /**
+     * Trova un FieldSet per ID e Tenant, caricando anche i fieldSetEntries con le relative fieldConfiguration e field.
+     * Questo metodo è utile quando è necessario accedere ai fieldSetEntries senza problemi di lazy loading.
+     */
+    @EntityGraph(attributePaths = {
+            "fieldSetEntries",
+            "fieldSetEntries.fieldConfiguration",
+            "fieldSetEntries.fieldConfiguration.field"
+    })
+    @Query("SELECT fs FROM FieldSet fs WHERE fs.id = :id AND fs.tenant = :tenant")
+    Optional<FieldSet> findByIdAndTenantWithEntries(@Param("id") Long id, @Param("tenant") Tenant tenant);
+
     void deleteByIdAndTenant(Long id, Tenant tenant);
 
 }

@@ -2,6 +2,7 @@ package com.example.demo.service.itemtypeset;
 
 import com.example.demo.dto.ItemTypeConfigurationRemovalImpactDto;
 import com.example.demo.entity.ItemTypeConfiguration;
+import com.example.demo.entity.ItemTypeSet;
 import com.example.demo.entity.Tenant;
 import com.example.demo.service.permission.itemtypeset.ItemTypeSetPermissionProvisioningModule;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,17 @@ public class ItemTypeSetPermissionOrchestrator {
     public void ensureItemTypeSetPermissions(Long itemTypeSetId, Tenant tenant) {
         provisioningModule.createPermissionsForItemTypeSet(itemTypeSetId, tenant);
     }
+
+    public void removeObsoletePermissionsForUpdatedConfiguration(
+            Tenant tenant,
+            ItemTypeSet itemTypeSet,
+            ItemTypeConfiguration existingConfig,
+            ItemTypeConfiguration newConfig
+    ) {
+        cleanupModule.removeObsoletePermissionsForUpdatedConfiguration(tenant, itemTypeSet, existingConfig, newConfig);
+    }
 }
+
+
 
 

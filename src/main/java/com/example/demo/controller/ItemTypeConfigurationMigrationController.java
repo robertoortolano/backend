@@ -35,7 +35,7 @@ public class ItemTypeConfigurationMigrationController {
      * @return Report di impatto con permission preservabili selezionabili
      */
     @GetMapping("/{itemTypeConfigurationId}/migration-impact")
-    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    @PreAuthorize("@securityService.canAccessItemTypeConfigurationMigration(principal, #tenant, #itemTypeConfigurationId)")
     public ResponseEntity<ItemTypeConfigurationMigrationImpactDto> analyzeMigrationImpact(
             @PathVariable Long itemTypeConfigurationId,
             @RequestParam(required = false) Long newFieldSetId,
@@ -60,7 +60,7 @@ public class ItemTypeConfigurationMigrationController {
      * @return 204 No Content se successo
      */
     @PostMapping("/{itemTypeConfigurationId}/migrate-permissions")
-    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    @PreAuthorize("@securityService.canAccessItemTypeConfigurationMigration(principal, #tenant, #itemTypeConfigurationId)")
     public ResponseEntity<Void> applyMigration(
             @PathVariable Long itemTypeConfigurationId,
             @RequestBody ItemTypeConfigurationMigrationRequest request,
@@ -84,7 +84,7 @@ public class ItemTypeConfigurationMigrationController {
      * @return CSV file con tutte le permission e i dettagli di migrazione
      */
     @GetMapping("/{itemTypeConfigurationId}/export-migration-impact-csv")
-    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    @PreAuthorize("@securityService.canAccessItemTypeConfigurationMigration(principal, #tenant, #itemTypeConfigurationId)")
     public ResponseEntity<byte[]> exportMigrationImpactCsv(
             @PathVariable Long itemTypeConfigurationId,
             @RequestParam(required = false) Long newFieldSetId,

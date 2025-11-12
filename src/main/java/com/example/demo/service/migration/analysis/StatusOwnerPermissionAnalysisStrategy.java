@@ -58,7 +58,15 @@ public class StatusOwnerPermissionAnalysisStrategy {
         Long itemTypeSetId = context.itemTypeSetId();
         ItemTypeSet itemTypeSet = context.owningItemTypeSet();
 
+        // Filtra solo le permission che sono effettivamente impattate:
+        // - Status non esiste più nel nuovo workflow
         return existingPermissions.stream()
+                .filter(permission -> {
+                    Long statusId = permission.getWorkflowStatus() != null && permission.getWorkflowStatus().getStatus() != null
+                            ? permission.getWorkflowStatus().getStatus().getId() : null;
+                    // Include solo se lo status non esiste più nel nuovo workflow
+                    return statusId == null || !newStatusIds.contains(statusId);
+                })
                 .map(permission -> buildImpact(permission, context, tenant, itemTypeSet, itemTypeSetId, newStatusIds, newStatusesMap))
                 .collect(Collectors.toList());
     }
@@ -100,7 +108,10 @@ public class StatusOwnerPermissionAnalysisStrategy {
                 itemTypeSet
         );
 
-        boolean hasAssignments = !assignedRoles.isEmpty() || grantId != null || !projectGrants.isEmpty();
+        // Verifica se ci sono assegnazioni: ruoli globali, grant globale, o assegnazioni di progetto (ruoli o grant)
+        boolean hasProjectAssignments = projectGrants.stream()
+                .anyMatch(pg -> (pg.getAssignedRoles() != null && !pg.getAssignedRoles().isEmpty()) || pg.getGrantId() != null);
+        boolean hasAssignments = !assignedRoles.isEmpty() || grantId != null || hasProjectAssignments;
         boolean defaultPreserve = canPreserve && hasAssignments;
 
         return ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact.builder()
@@ -144,10 +155,28 @@ public class StatusOwnerPermissionAnalysisStrategy {
                     tenant
             );
             projectAssignmentOpt.ifPresent(assignment -> {
-                if (assignment.getGrant() != null) {
+                // Raccogli ruoli e grant dalla PermissionAssignment di progetto
+                List<String> projectRoles = assignment.getRoles() != null
+                        ? assignment.getRoles().stream()
+                                .map(Role::getName)
+                                .collect(Collectors.toList())
+                        : Collections.emptyList();
+                
+                Long projectGrantId = assignment.getGrant() != null ? assignment.getGrant().getId() : null;
+                // Per i grant di progetto, popoliamo grantName solo se c'è un ruolo specifico associato
+                // Non usiamo "Grant globale" perché questi sono grant di progetto, non globali
+                String projectGrantName = assignment.getGrant() != null && assignment.getGrant().getRole() != null
+                        ? assignment.getGrant().getRole().getName()
+                        : null;
+                
+                // Aggiungi solo se ci sono ruoli o grant
+                if (!projectRoles.isEmpty() || projectGrantId != null) {
                     grants.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
                             .projectId(itemTypeSet.getProject().getId())
                             .projectName(itemTypeSet.getProject().getName())
+                            .assignedRoles(projectRoles)
+                            .grantId(projectGrantId)
+                            .grantName(projectGrantName)
                             .build());
                 }
             });
@@ -160,10 +189,28 @@ public class StatusOwnerPermissionAnalysisStrategy {
                         tenant
                 );
                 projectAssignmentOpt.ifPresent(assignment -> {
-                    if (assignment.getGrant() != null) {
+                    // Raccogli ruoli e grant dalla PermissionAssignment di progetto
+                    List<String> projectRoles = assignment.getRoles() != null
+                            ? assignment.getRoles().stream()
+                                    .map(Role::getName)
+                                    .collect(Collectors.toList())
+                            : Collections.emptyList();
+                    
+                    Long projectGrantId = assignment.getGrant() != null ? assignment.getGrant().getId() : null;
+                    // Per i grant di progetto, popoliamo grantName solo se c'è un ruolo specifico associato
+                    // Non usiamo "Grant globale" perché questi sono grant di progetto, non globali
+                    String projectGrantName = assignment.getGrant() != null && assignment.getGrant().getRole() != null
+                            ? assignment.getGrant().getRole().getName()
+                            : null;
+                    
+                    // Aggiungi solo se ci sono ruoli o grant
+                    if (!projectRoles.isEmpty() || projectGrantId != null) {
                         grants.add(ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo.builder()
                                 .projectId(project.getId())
                                 .projectName(project.getName())
+                                .assignedRoles(projectRoles)
+                                .grantId(projectGrantId)
+                                .grantName(projectGrantName)
                                 .build());
                     }
                 });

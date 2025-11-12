@@ -144,7 +144,9 @@ public class ItemTypeConfigurationMigrationImpactDto {
     public static class ProjectGrantInfo {
         private Long projectId;
         private String projectName;
-        // RIMOSSO: roleId - ItemTypeSetRole eliminata, ora usiamo permissionId e permissionType per recuperare i dettagli via API
+        private List<String> assignedRoles; // Ruoli assegnati a questa permission per questo progetto
+        private Long grantId; // Grant assegnato a questa permission per questo progetto (se presente)
+        private String grantName; // Nome del grant (se presente)
     }
 }
 

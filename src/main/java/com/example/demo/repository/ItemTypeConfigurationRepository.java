@@ -56,4 +56,16 @@ public interface ItemTypeConfigurationRepository extends JpaRepository<ItemTypeC
     @Query("SELECT itc FROM ItemTypeConfiguration itc WHERE itc.workflow.id = :workflowId AND itc.tenant.id = :tenantId")
     List<ItemTypeConfiguration> findByWorkflowIdAndTenant(@Param("workflowId") Long workflowId, @Param("tenantId") Long tenantId);
 
+    /**
+     * Trova un ItemTypeConfiguration per ID, caricando anche workflow e fieldset con JOIN FETCH.
+     * Questo metodo è utile quando è necessario accedere a workflow e fieldset senza problemi di lazy loading.
+     */
+    @Query("""
+        SELECT itc FROM ItemTypeConfiguration itc
+        LEFT JOIN FETCH itc.workflow
+        LEFT JOIN FETCH itc.fieldSet
+        WHERE itc.id = :id
+    """)
+    java.util.Optional<ItemTypeConfiguration> findByIdWithWorkflowAndFieldSet(@Param("id") Long id);
+
 }
