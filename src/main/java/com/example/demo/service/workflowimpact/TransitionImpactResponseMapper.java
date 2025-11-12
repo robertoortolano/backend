@@ -40,8 +40,14 @@ public class TransitionImpactResponseMapper {
                 .removedTransitionNames(List.copyOf(analysisResult.getRemovedTransitionNames()))
                 .affectedItemTypeSets(affectedItemTypeSets)
                 .executorPermissions(executorPermissions)
+                // La rimozione di transizioni impatta solo le ExecutorPermission
+                // StatusOwnerPermission e FieldStatusPermission non sono impattate
+                .statusOwnerPermissions(List.of())
+                .fieldStatusPermissions(List.of())
                 .totalAffectedItemTypeSets(affectedItemTypeSets.size())
                 .totalExecutorPermissions(totalExecutorPermissions)
+                .totalStatusOwnerPermissions(0)
+                .totalFieldStatusPermissions(0)
                 .totalGrantAssignments(totalGrantAssignments)
                 .totalRoleAssignments(totalRoleAssignments)
                 .build();
@@ -94,4 +100,5 @@ public class TransitionImpactResponseMapper {
                 .collect(Collectors.toList());
     }
 }
+
 

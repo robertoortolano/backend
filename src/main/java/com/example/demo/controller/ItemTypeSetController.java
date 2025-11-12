@@ -115,6 +115,20 @@ public class ItemTypeSetController {
         return ResponseEntity.ok(itemTypeSetService.getProjectItemTypeSets(tenant, projectId));
     }
 
+    /**
+     * Restituisce gli ItemTypeSet disponibili per un progetto specifico.
+     * Per Tenant Admin: tutti gli ITS globali + tutti quelli definiti nel progetto stesso.
+     * Per Project Admin: solo quelli definiti nel progetto stesso (usare /project/{projectId}).
+     */
+    @GetMapping("/available-for-project/{projectId}")
+    @PreAuthorize("@securityService.hasAccessToGlobals(principal, #tenant)")
+    public ResponseEntity<List<ItemTypeSetViewDto>> getAvailableItemTypeSetsForProject(
+            @PathVariable Long projectId,
+            @CurrentTenant Tenant tenant
+    ) {
+        return ResponseEntity.ok(itemTypeSetService.getAvailableItemTypeSetsForProject(tenant, projectId));
+    }
+
     @PostMapping("/project/{projectId}")
     @PreAuthorize("@securityService.canCreateFieldSet(principal, #tenant, #projectId)")
     public ResponseEntity<ItemTypeSetViewDto> createProjectItemTypeSet(

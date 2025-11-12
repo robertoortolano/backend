@@ -7,8 +7,6 @@ import com.example.demo.entity.ItemTypeSet;
 import com.example.demo.entity.Tenant;
 import com.example.demo.enums.ScopeType;
 import com.example.demo.exception.ApiException;
-import com.example.demo.factory.FieldSetCloner;
-import com.example.demo.repository.FieldSetRepository;
 import com.example.demo.service.FieldSetLookup;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -18,8 +16,6 @@ import org.springframework.stereotype.Component;
 public class ItemTypeSetFieldOrchestrator {
 
     private final FieldSetLookup fieldSetLookup;
-    private final FieldSetRepository fieldSetRepository;
-    private final FieldSetCloner fieldSetCloner;
 
     public void applyFieldSet(
             Tenant tenant,
@@ -28,30 +24,37 @@ public class ItemTypeSetFieldOrchestrator {
             ItemTypeConfigurationCreateDto dto,
             FieldSet defaultFieldSet
     ) {
+        FieldSet requestedFieldSet = fieldSetLookup.getById(dto.fieldSetId(), tenant);
+        
         if (ScopeType.TENANT.equals(itemTypeSet.getScope())) {
-            FieldSet requestedFieldSet = fieldSetLookup.getById(dto.fieldSetId(), tenant);
+            // Per ItemTypeSet globali, usa direttamente il FieldSet richiesto
             configuration.setFieldSet(requestedFieldSet);
             return;
         }
 
-        FieldSet baseFieldSet = defaultFieldSet != null ? defaultFieldSet : fieldSetLookup.getFirstDefault(tenant);
-        if (baseFieldSet == null) {
-            throw new ApiException("No default FieldSet found for tenant ID " + tenant.getId());
+        // Per ItemTypeSet di progetto: NON creare copie, usare solo FieldSet definiti nel progetto stesso
+        if (itemTypeSet.getProject() == null) {
+            throw new ApiException("ItemTypeSet di progetto deve avere un progetto associato");
         }
 
-        FieldSet requestedFieldSet = fieldSetLookup.getById(dto.fieldSetId(), tenant);
-        boolean needsClone = configuration.getFieldSet() == null
-                || configuration.getFieldSet().getId() == null
-                || !configuration.getFieldSet().getId().equals(requestedFieldSet.getId());
-
-        if (!needsClone) {
-            return;
+        // Verifica che il FieldSet richiesto sia di progetto e appartenga allo stesso progetto
+        if (requestedFieldSet.getScope() != ScopeType.PROJECT) {
+            throw new ApiException(
+                "Per ItemTypeSet di progetto, è possibile utilizzare solo FieldSet definiti nel progetto stesso. " +
+                "Il FieldSet selezionato è globale."
+            );
         }
 
-        String suffix = configuration.getItemType() != null ? configuration.getItemType().getName() : "ItemTypeSet";
-        FieldSet clonedFieldSet = fieldSetCloner.cloneFieldSet(baseFieldSet, " (copy for " + suffix + ")");
-        fieldSetRepository.save(clonedFieldSet);
-        configuration.setFieldSet(clonedFieldSet);
+        if (requestedFieldSet.getProject() == null || !requestedFieldSet.getProject().getId().equals(itemTypeSet.getProject().getId())) {
+            throw new ApiException(
+                "Per ItemTypeSet di progetto, è possibile utilizzare solo FieldSet definiti nel progetto stesso. " +
+                "Il FieldSet selezionato appartiene a un progetto diverso."
+            );
+        }
+
+        // Usa direttamente il FieldSet di progetto senza clonare
+        configuration.setFieldSet(requestedFieldSet);
     }
 }
+
 

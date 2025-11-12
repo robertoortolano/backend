@@ -31,3 +31,4 @@ public class StatusImpactAnalysisResult {
     List<FieldStatusPermissionImpactData> fieldStatusPermissionImpacts;
 }
 
+

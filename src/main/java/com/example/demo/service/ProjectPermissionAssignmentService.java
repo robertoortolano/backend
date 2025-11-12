@@ -25,6 +25,7 @@ public class ProjectPermissionAssignmentService {
     
     private final PermissionAssignmentRepository permissionAssignmentRepository;
     private final ProjectRepository projectRepository;
+    private final ItemTypeSetRepository itemTypeSetRepository;
     private final RoleRepository roleRepository;
     private final GrantRepository grantRepository;
     private final GrantCleanupService grantCleanupService;
@@ -139,7 +140,8 @@ public class ProjectPermissionAssignmentService {
         Project project = projectRepository.findByIdAndTenant(projectId, tenant)
                 .orElseThrow(() -> new ApiException("Project not found"));
 
-        ItemTypeSet itemTypeSet = project.getItemTypeSet();
+        // Usa resolveProjectItemTypeSet per caricare l'ItemTypeSet con le configurazioni
+        ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, null);
 
         String normalizedPermissionType = normalizePermissionType(permissionType);
 
@@ -295,11 +297,48 @@ public class ProjectPermissionAssignmentService {
             throw new ApiException("Project has no ItemTypeSet assigned");
         }
 
+        ItemTypeSet itemTypeSetToUse = projectItemTypeSet;
+        
+        // Se è stato richiesto un ItemTypeSet specifico diverso da quello assegnato
         if (requestedItemTypeSetId != null && !projectItemTypeSet.getId().equals(requestedItemTypeSetId)) {
-            throw new ApiException("ItemTypeSet not assigned to project");
+            // Verifica se l'ItemTypeSet richiesto è un ItemTypeSet di progetto che appartiene allo stesso progetto
+            // Questo permette di creare assegnazioni per ItemTypeSet di progetto anche se non sono quello attualmente assegnato
+            ItemTypeSet requestedItemTypeSet = itemTypeSetRepository.findByIdWithItemTypeConfigurationsAndTenant(
+                    requestedItemTypeSetId, 
+                    project.getTenant()
+            ).orElseThrow(() -> new ApiException("ItemTypeSet not found or does not belong to tenant"));
+            
+            // Verifica che l'ItemTypeSet richiesto sia di progetto e appartenga allo stesso progetto
+            if (requestedItemTypeSet.getScope() == ScopeType.PROJECT) {
+                if (requestedItemTypeSet.getProject() == null || !requestedItemTypeSet.getProject().getId().equals(project.getId())) {
+                    throw new ApiException("ItemTypeSet does not belong to the specified project");
+                }
+                // L'ItemTypeSet richiesto è valido, usalo
+                itemTypeSetToUse = requestedItemTypeSet;
+            } else {
+                // L'ItemTypeSet richiesto è globale, ma il progetto ha un ItemTypeSet assegnato
+                // Per ora, permettiamo solo ItemTypeSet di progetto quando si specifica un ID diverso
+                // Se necessario, possiamo permettere anche ItemTypeSet globali in futuro
+                throw new ApiException("ItemTypeSet not assigned to project. To use a different ItemTypeSet, it must be a project-scoped ItemTypeSet for this project.");
+            }
         }
 
-        return projectItemTypeSet;
+        // Carica esplicitamente l'ItemTypeSet con le configurazioni per evitare problemi di lazy loading
+        // Questo è necessario perché la validazione in resolveAndValidatePermissionForProject
+        // controlla se la configurazione appartiene all'ItemTypeSet
+        ItemTypeSet loadedItemTypeSet = itemTypeSetRepository.findByIdWithItemTypeConfigurationsAndTenant(
+                itemTypeSetToUse.getId(), 
+                project.getTenant()
+        ).orElseThrow(() -> new ApiException("ItemTypeSet not found or does not belong to tenant"));
+        
+        // Verifica aggiuntiva: se l'ItemTypeSet è di progetto, deve appartenere al progetto specifico
+        if (loadedItemTypeSet.getScope() == ScopeType.PROJECT) {
+            if (loadedItemTypeSet.getProject() == null || !loadedItemTypeSet.getProject().getId().equals(project.getId())) {
+                throw new ApiException("ItemTypeSet does not belong to the specified project");
+            }
+        }
+        
+        return loadedItemTypeSet;
     }
     
     private Grant resolveGrant(PermissionAssignment assignment) {
@@ -409,10 +448,90 @@ public class ProjectPermissionAssignmentService {
         if (!configuration.getTenant().getId().equals(tenant.getId())) {
             throw new ApiException("Permission does not belong to tenant");
         }
-        boolean belongsToItemTypeSet = itemTypeSet.getItemTypeConfigurations().stream()
-                .anyMatch(config -> Objects.equals(config.getId(), configuration.getId()));
+        
+        // Verifica che la configurazione appartenga all'ItemTypeSet del progetto
+        // Estraiamo gli ID delle configurazioni per evitare problemi di lazy loading e confronti tra istanze diverse
+        Set<Long> itemTypeSetConfigurationIds = itemTypeSet.getItemTypeConfigurations().stream()
+                .map(ItemTypeConfiguration::getId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        
+        // Verifica aggiuntiva: se l'ItemTypeSet non ha configurazioni caricate, ricaricalo
+        if (itemTypeSetConfigurationIds.isEmpty() && itemTypeSet.getId() != null) {
+            // Ricarica l'ItemTypeSet con le configurazioni
+            ItemTypeSet reloadedItemTypeSet = itemTypeSetRepository.findByIdWithItemTypeConfigurationsAndTenant(
+                    itemTypeSet.getId(), 
+                    tenant
+            ).orElseThrow(() -> new ApiException("ItemTypeSet not found or does not belong to tenant"));
+            itemTypeSetConfigurationIds = reloadedItemTypeSet.getItemTypeConfigurations().stream()
+                    .map(ItemTypeConfiguration::getId)
+                    .filter(Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            // Aggiorna anche l'ItemTypeSet originale con le configurazioni ricaricate
+            itemTypeSet.setItemTypeConfigurations(reloadedItemTypeSet.getItemTypeConfigurations());
+        }
+        
+        // Verifica diretta nel database che la configurazione appartenga all'ItemTypeSet specifico
+        // Questo è importante per evitare problemi di lazy loading
+        boolean belongsToItemTypeSet = configuration.getId() != null && itemTypeSetConfigurationIds.contains(configuration.getId());
+        
+        // Verifica aggiuntiva: controlla direttamente nel database se la configurazione appartiene all'ItemTypeSet
+        if (belongsToItemTypeSet && itemTypeSet.getId() != null) {
+            List<ItemTypeSet> itemTypeSetsWithConfig = itemTypeSetRepository.findByItemTypeConfigurations_IdAndTenant(
+                    configuration.getId(), 
+                    tenant
+            );
+            boolean belongsToThisItemTypeSet = itemTypeSetsWithConfig.stream()
+                    .anyMatch(its -> Objects.equals(its.getId(), itemTypeSet.getId()));
+            if (!belongsToThisItemTypeSet) {
+                belongsToItemTypeSet = false;
+            }
+        }
+        
         if (!belongsToItemTypeSet) {
-            throw new ApiException("Permission does not belong to the project's ItemTypeSet");
+            // Verifica se la configurazione appartiene a un ItemTypeSet di progetto associato allo stesso progetto
+            // Questo è necessario quando si visualizzano le permission di un ItemTypeSet di progetto
+            // che non è quello attualmente assegnato al progetto
+            List<ItemTypeSet> itemTypeSetsWithConfig = itemTypeSetRepository.findByItemTypeConfigurations_IdAndTenant(
+                    configuration.getId(), 
+                    tenant
+            );
+            boolean belongsToProjectItemTypeSet = itemTypeSetsWithConfig.stream()
+                    .anyMatch(its -> {
+                        // Verifica se è un ItemTypeSet di progetto associato allo stesso progetto
+                        if (its.getScope() == ScopeType.PROJECT && its.getProject() != null) {
+                            return Objects.equals(its.getProject().getId(), project.getId());
+                        }
+                        return false;
+                    });
+            
+            if (belongsToProjectItemTypeSet) {
+                // La configurazione appartiene a un ItemTypeSet di progetto associato al progetto
+                // Questo è valido, anche se non è l'ItemTypeSet attualmente assegnato al progetto
+                return configuration;
+            }
+            
+            // Verifica aggiuntiva: controlla se la configurazione appartiene a qualche ItemTypeSet del tenant
+            // per dare un messaggio di errore più informativo
+            boolean existsInAnyItemTypeSet = itemTypeSetRepository.existsByItemTypeConfigurations_IdAndTenant_Id(
+                    configuration.getId(), 
+                    tenant.getId()
+            );
+            if (existsInAnyItemTypeSet) {
+                throw new ApiException(
+                    String.format("Permission does not belong to the project's ItemTypeSet (ID: %d). " +
+                            "The permission's ItemTypeConfiguration (ID: %d) belongs to a different ItemTypeSet. " +
+                            "ItemTypeSet has %d configurations loaded.",
+                            itemTypeSet.getId(), configuration.getId(), itemTypeSetConfigurationIds.size())
+                );
+            } else {
+                throw new ApiException(
+                    String.format("Permission does not belong to the project's ItemTypeSet (ID: %d). " +
+                            "The permission's ItemTypeConfiguration (ID: %d) does not exist in any ItemTypeSet. " +
+                            "ItemTypeSet has %d configurations loaded.",
+                            itemTypeSet.getId(), configuration.getId(), itemTypeSetConfigurationIds.size())
+                );
+            }
         }
         if (configuration.getScope() == ScopeType.PROJECT) {
             if (configuration.getProject() == null || !Objects.equals(configuration.getProject().getId(), project.getId())) {

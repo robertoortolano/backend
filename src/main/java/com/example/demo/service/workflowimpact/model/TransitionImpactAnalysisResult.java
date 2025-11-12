@@ -23,3 +23,4 @@ public class TransitionImpactAnalysisResult {
     List<ExecutorPermissionImpactData> executorPermissionImpacts;
 }
 
+

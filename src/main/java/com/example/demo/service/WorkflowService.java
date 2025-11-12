@@ -787,6 +787,8 @@ public class WorkflowService {
 
         if (!permissionsToDelete.isEmpty()) {
             executorPermissionRepository.deleteAllById(permissionsToDelete);
+            // Forza un flush per assicurarsi che le eliminazioni siano committate prima di procedere
+            executorPermissionRepository.flush();
             permissionsToDelete.clear();
         }
 
@@ -800,6 +802,7 @@ public class WorkflowService {
 
         if (!permissionsToDelete.isEmpty()) {
             executorPermissionRepository.deleteAllById(permissionsToDelete);
+            // Forza un flush finale per assicurarsi che tutte le eliminazioni siano committate
             executorPermissionRepository.flush();
             permissionsToDelete.clear();
         }
@@ -1267,8 +1270,9 @@ public class WorkflowService {
                     .collect(Collectors.toList());
 
             if (!statusesToRemove.isEmpty()) {
-                workflow.getStatuses().removeAll(statusesToRemove);
-
+                // PRIMA: Identifica le transizioni che verranno rimosse e elimina le permission associate
+                // Questo deve essere fatto PRIMA di rimuovere le transizioni dalle collezioni
+                // per evitare problemi di foreign key constraint durante il flush di Hibernate
                 Set<Long> removedTransitionIds = statusesToRemove.stream()
                         .flatMap(status -> Stream.concat(
                                 status.getOutgoingTransitions().stream(),
@@ -1278,8 +1282,14 @@ public class WorkflowService {
                         .collect(Collectors.toSet());
 
                 if (!removedTransitionIds.isEmpty()) {
+                    // Elimina le permission PRIMA di rimuovere le transizioni dalle collezioni
                     removeOrphanedExecutorPermissions(tenant, workflowId, removedTransitionIds);
+                }
 
+                // POI: Rimuovi gli stati dalle collezioni (questo rimuoverà anche le transizioni dalle collezioni)
+                workflow.getStatuses().removeAll(statusesToRemove);
+
+                if (!removedTransitionIds.isEmpty()) {
                     List<Transition> transitionsToRemove = transitionRepository.findAllById(removedTransitionIds);
                     workflowPermissionCleanupService.cleanupObsoleteTransitions(tenant, transitionsToRemove);
                 }

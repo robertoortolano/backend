@@ -7,6 +7,7 @@ import com.example.demo.entity.ItemTypeSet;
 import com.example.demo.entity.Tenant;
 import com.example.demo.entity.Workflow;
 import com.example.demo.enums.ScopeType;
+import com.example.demo.exception.ApiException;
 import com.example.demo.service.ItemTypeLookup;
 import com.example.demo.service.WorkflowLookup;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,23 @@ public class ItemTypeSetWorkflowOrchestrator {
     ) {
         ItemType itemType = itemTypeLookup.getById(tenant, dto.itemTypeId());
         Workflow workflow = workflowLookup.getByIdEntity(tenant, dto.workflowId());
+
+        // Per ItemTypeSet di progetto: verifica che il workflow sia di progetto e appartenga allo stesso progetto
+        if (!ScopeType.TENANT.equals(itemTypeSet.getScope()) && itemTypeSet.getProject() != null) {
+            if (workflow.getScope() != ScopeType.PROJECT) {
+                throw new ApiException(
+                    "Per ItemTypeSet di progetto, è possibile utilizzare solo workflow definiti nel progetto stesso. " +
+                    "Il workflow selezionato è globale."
+                );
+            }
+
+            if (workflow.getProject() == null || !workflow.getProject().getId().equals(itemTypeSet.getProject().getId())) {
+                throw new ApiException(
+                    "Per ItemTypeSet di progetto, è possibile utilizzare solo workflow definiti nel progetto stesso. " +
+                    "Il workflow selezionato appartiene a un progetto diverso."
+                );
+            }
+        }
 
         ItemTypeConfiguration target = existingConfiguration != null ? existingConfiguration : new ItemTypeConfiguration();
 
@@ -51,4 +69,5 @@ public class ItemTypeSetWorkflowOrchestrator {
         return target;
     }
 }
+
 

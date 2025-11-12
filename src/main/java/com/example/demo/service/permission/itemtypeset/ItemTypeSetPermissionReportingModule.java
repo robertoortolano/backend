@@ -36,11 +36,39 @@ public class ItemTypeSetPermissionReportingModule {
 
             Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
 
+            // Assicurati che le configurazioni siano caricate correttamente
+            // Per ItemTypeSet di progetto, potrebbe essere necessario ricaricare le configurazioni
             List<ItemTypeConfiguration> configurations = new ArrayList<>(itemTypeSet.getItemTypeConfigurations());
+            
+            // Se non ci sono configurazioni caricate, ricarica l'ItemTypeSet
+            if (configurations.isEmpty() && itemTypeSet.getId() != null) {
+                ItemTypeSet reloadedItemTypeSet = itemTypeSetRepository.findByIdWithItemTypeConfigurationsAndTenant(
+                        itemTypeSet.getId(), 
+                        tenant
+                ).orElse(itemTypeSet);
+                configurations = new ArrayList<>(reloadedItemTypeSet.getItemTypeConfigurations());
+                // Aggiorna anche l'ItemTypeSet originale con le configurazioni ricaricate
+                itemTypeSet.setItemTypeConfigurations(new HashSet<>(configurations));
+            }
+            
             Set<Long> configurationIds = configurations.stream()
                     .map(ItemTypeConfiguration::getId)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toCollection(LinkedHashSet::new));
+            
+            // Log per debug: verifica che le configurazioni siano corrette
+            if (log.isDebugEnabled()) {
+                log.debug("ItemTypeSet {} (scope: {}) has {} configurations: {}", 
+                        itemTypeSet.getId(), 
+                        itemTypeSet.getScope(), 
+                        configurationIds.size(),
+                        configurationIds);
+            }
+            
+            // Verifica che le configurazioni siano effettivamente nell'ItemTypeSet
+            // Questo è importante per gli ItemTypeSet di progetto
+            // Le configurazioni sono già state caricate con LEFT JOIN FETCH, quindi dovrebbero essere corrette
+            // Non serve una verifica aggiuntiva qui perché le permission vengono già filtrate per configurationIds
 
             Map<Long, List<WorkerPermission>> workerPermissionsByConfigId = Collections.emptyMap();
             Set<Long> workerPermissionIds = Collections.emptySet();
@@ -489,6 +517,53 @@ public class ItemTypeSetPermissionReportingModule {
             if (projectGrant != null) {
                 target.put("projectGrantId", projectGrant.getId());
                 target.put("projectGrantName", "Grant di progetto");
+                // Includi i dettagli completi del grant per evitare chiamate separate dal frontend
+                Map<String, Object> projectGrantDetails = new HashMap<>();
+                projectGrantDetails.put("id", projectGrant.getId());
+                // Converti Set<User> e Set<Group> in liste di ID per la serializzazione JSON
+                projectGrantDetails.put("users", projectGrant.getUsers() != null 
+                    ? projectGrant.getUsers().stream()
+                        .map(user -> {
+                            Map<String, Object> userMap = new HashMap<>();
+                            userMap.put("id", user.getId());
+                            userMap.put("username", user.getUsername());
+                            userMap.put("fullName", user.getFullName());
+                            return userMap;
+                        })
+                        .collect(Collectors.toList())
+                    : Collections.emptyList());
+                projectGrantDetails.put("groups", projectGrant.getGroups() != null
+                    ? projectGrant.getGroups().stream()
+                        .map(group -> {
+                            Map<String, Object> groupMap = new HashMap<>();
+                            groupMap.put("id", group.getId());
+                            groupMap.put("name", group.getName());
+                            return groupMap;
+                        })
+                        .collect(Collectors.toList())
+                    : Collections.emptyList());
+                projectGrantDetails.put("negatedUsers", projectGrant.getNegatedUsers() != null
+                    ? projectGrant.getNegatedUsers().stream()
+                        .map(user -> {
+                            Map<String, Object> userMap = new HashMap<>();
+                            userMap.put("id", user.getId());
+                            userMap.put("username", user.getUsername());
+                            userMap.put("fullName", user.getFullName());
+                            return userMap;
+                        })
+                        .collect(Collectors.toList())
+                    : Collections.emptyList());
+                projectGrantDetails.put("negatedGroups", projectGrant.getNegatedGroups() != null
+                    ? projectGrant.getNegatedGroups().stream()
+                        .map(group -> {
+                            Map<String, Object> groupMap = new HashMap<>();
+                            groupMap.put("id", group.getId());
+                            groupMap.put("name", group.getName());
+                            return groupMap;
+                        })
+                        .collect(Collectors.toList())
+                    : Collections.emptyList());
+                target.put("projectGrant", projectGrantDetails);
                 hasAssignments = true;
             }
 
@@ -527,4 +602,5 @@ public class ItemTypeSetPermissionReportingModule {
         return roleDtos;
     }
 }
+
 

@@ -14,3 +14,4 @@ public interface PermissionRoleStrategy {
     void removeRole(Long permissionId, Long roleId, PermissionScopeRequest request);
 }
 
+

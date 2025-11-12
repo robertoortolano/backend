@@ -131,53 +131,9 @@ public class WorkflowImpactController {
                 ));
             }
 
-            // Status Owner Permissions
-            if (impact.getStatusOwnerPermissions() != null) {
-                for (TransitionRemovalImpactDto.StatusOwnerPermissionImpact perm : impact.getStatusOwnerPermissions()) {
-                    csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-                        CsvUtils.escapeCsv(perm.getPermissionType()),
-                        perm.getItemTypeSetId(),
-                        CsvUtils.escapeCsv(perm.getItemTypeSetName()),
-                        perm.getProjectId() != null ? perm.getProjectId().toString() : "",
-                        perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        perm.getWorkflowStatusId() != null ? perm.getWorkflowStatusId().toString() : "",
-                        CsvUtils.escapeCsv(perm.getWorkflowStatusName() != null ? perm.getWorkflowStatusName() : ""),
-                        perm.getStatusId() != null ? perm.getStatusId().toString() : "",
-                        CsvUtils.escapeCsv(perm.getStatusName() != null ? perm.getStatusName() : ""),
-                        CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
-                        perm.isHasAssignments()
-                    ));
-                }
-            }
-
-            // Field Status Permissions (FIELD_EDITORS/FIELD_VIEWERS)
-            for (TransitionRemovalImpactDto.FieldStatusPermissionImpact perm : impact.getFieldStatusPermissions()) {
-                csv.append(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-                    CsvUtils.escapeCsv(perm.getPermissionType()),
-                    perm.getItemTypeSetId(),
-                    CsvUtils.escapeCsv(perm.getItemTypeSetName()),
-                    perm.getProjectId() != null ? perm.getProjectId().toString() : "",
-                    perm.getProjectName() != null ? CsvUtils.escapeCsv(perm.getProjectName()) : "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    CsvUtils.escapeCsv(perm.getFieldId() != null ? perm.getFieldId().toString() : ""),
-                    CsvUtils.escapeCsv(perm.getFieldName() != null ? perm.getFieldName() : ""),
-                    perm.getWorkflowStatusId() != null ? perm.getWorkflowStatusId().toString() : "",
-                    CsvUtils.escapeCsv(perm.getWorkflowStatusName() != null ? perm.getWorkflowStatusName() : ""),
-                    perm.getStatusId() != null ? perm.getStatusId().toString() : "",
-                    CsvUtils.escapeCsv(perm.getStatusName() != null ? perm.getStatusName() : ""),
-                    CsvUtils.escapeCsv(String.join(";", perm.getAssignedRoles())),
-                    perm.isHasAssignments()
-                ));
-            }
+            // La rimozione di transizioni impatta solo le ExecutorPermission
+            // StatusOwnerPermission e FieldStatusPermission non sono impattate dalla rimozione di transizioni
+            // quindi non le includiamo nel CSV
             
             return CsvUtils.createCsvResponse(csv.toString(), "workflow_transition_removal_impact", workflowId);
         } catch (Exception e) {
@@ -276,6 +232,7 @@ public class WorkflowImpactController {
         StatusRemovalImpactDto impact = workflowService.analyzeStatusRemovalImpact(tenant, workflowId, removedStatusIds);
         return ResponseEntity.ok(impact);
     }
+
 
     @PostMapping("/{workflowId}/confirm-status-removal")
     @PreAuthorize("@securityService.canEditWorkflow(principal, #tenant, #workflowId)")

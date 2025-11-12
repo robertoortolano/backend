@@ -85,10 +85,14 @@ public class ItemTypeSetService {
             set.getProjectsAssociation().add(project);
         }
 
-        // Recupera il FieldSet di default del tenant
-        FieldSet defaultFieldSet = fieldSetLookup.getFirstDefault(tenant);
-        if (defaultFieldSet == null) {
-            throw new ApiException("No default FieldSet found for tenant ID " + tenant.getId());
+        // Per ItemTypeSet di progetto, non serve il FieldSet di default
+        // Il FieldSet viene validato direttamente in fieldOrchestrator.applyFieldSet
+        FieldSet defaultFieldSet = null;
+        if (ScopeType.TENANT.equals(scopeType)) {
+            defaultFieldSet = fieldSetLookup.getFirstDefault(tenant);
+            if (defaultFieldSet == null) {
+                throw new ApiException("No default FieldSet found for tenant ID " + tenant.getId());
+            }
         }
 
         Set<ItemTypeConfiguration> configurations = new HashSet<>();
@@ -192,8 +196,12 @@ public class ItemTypeSetService {
         Map<Long, ItemTypeConfiguration> existingConfigsMap = set.getItemTypeConfigurations().stream()
                 .collect(java.util.stream.Collectors.toMap(ItemTypeConfiguration::getId, config -> config));
 
-        // Recupera il FieldSet di default del tenant (per clonazioni)
-        FieldSet defaultFieldSet = fieldSetLookup.getFirstDefault(tenant);
+        // Per ItemTypeSet di progetto, non serve il FieldSet di default
+        // Il FieldSet viene validato direttamente in fieldOrchestrator.applyFieldSet
+        FieldSet defaultFieldSet = null;
+        if (ScopeType.TENANT.equals(set.getScope())) {
+            defaultFieldSet = fieldSetLookup.getFirstDefault(tenant);
+        }
 
         for (ItemTypeConfigurationCreateDto entryDto : dtoConfigurations) {
             ItemTypeConfiguration existing = entryDto.id() != null ? existingConfigsMap.get(entryDto.id()) : null;
@@ -295,6 +303,28 @@ public class ItemTypeSetService {
     public List<ItemTypeSetViewDto> getProjectItemTypeSets(Tenant tenant, Long projectId) {
         List<ItemTypeSet> sets = itemTypeSetRepository.findAllByProjectIdAndTenant(projectId, tenant);
         return sets.stream()
+                .map(dtoMapper::toItemTypeSetViewDto)
+                .toList();
+    }
+
+    /**
+     * Restituisce gli ItemTypeSet disponibili per un progetto specifico.
+     * Per Tenant Admin: tutti gli ITS globali + tutti quelli definiti nel progetto stesso.
+     * Per Project Admin: solo quelli definiti nel progetto stesso (chiamare getProjectItemTypeSets).
+     */
+    @Transactional(readOnly = true)
+    public List<ItemTypeSetViewDto> getAvailableItemTypeSetsForProject(Tenant tenant, Long projectId) {
+        // Tutti gli ITS globali (scope = TENANT)
+        List<ItemTypeSet> globalSets = itemTypeSetRepository.findAllGlobalWithItemTypeConfigurationsByTenant(tenant);
+        
+        // Tutti gli ITS definiti nel progetto specifico (scope = PROJECT AND project.id = projectId)
+        List<ItemTypeSet> projectSets = itemTypeSetRepository.findAllByProjectIdAndTenant(projectId, tenant);
+        
+        // Combina le due liste
+        List<ItemTypeSet> allSets = new ArrayList<>(globalSets);
+        allSets.addAll(projectSets);
+        
+        return allSets.stream()
                 .map(dtoMapper::toItemTypeSetViewDto)
                 .toList();
     }
