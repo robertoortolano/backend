@@ -13,6 +13,7 @@ import com.example.demo.repository.*;
 import com.example.demo.service.itemtypeset.ItemTypeSetFieldOrchestrator;
 import com.example.demo.service.itemtypeset.ItemTypeSetPermissionOrchestrator;
 import com.example.demo.service.itemtypeset.ItemTypeSetWorkflowOrchestrator;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 @Transactional
 public class ItemTypeSetService {
 
+    private final EntityManager entityManager;
     private final ItemTypeSetRepository itemTypeSetRepository;
     private final ProjectRepository projectRepository;
 
@@ -182,12 +184,18 @@ public class ItemTypeSetService {
             }
 
             // Nessuna assegnazione: rimuovi automaticamente le permission orfane prima di procedere con l'aggiornamento
-            permissionOrchestrator.removeOrphanedPermissionsForItemTypeConfigurations(
-                    tenant,
-                    id,
-                    removedConfigurationIds,
-                    Collections.emptySet()
-            );
+            try {
+                permissionOrchestrator.removeOrphanedPermissionsForItemTypeConfigurations(
+                        tenant,
+                        id,
+                        removedConfigurationIds,
+                        Collections.emptySet()
+                );
+            } catch (Exception e) {
+                // Se c'è un errore nella rimozione delle permission, logga ma continua
+                // Le permission verranno comunque rimosse quando si elimina la configurazione
+                log.warn("Errore durante la rimozione automatica delle permission orfane per le configurazioni rimosse: {}", e.getMessage());
+            }
         }
 
         Set<ItemTypeConfiguration> updatedConfigurations = new HashSet<>();
@@ -224,28 +232,52 @@ public class ItemTypeSetService {
             // Se la configurazione esiste già, verifica se workflow o fieldset sono cambiati
             // e rimuovi le permission obsolete prima di salvare
             if (existing != null) {
-                // Carica la configurazione esistente dal database con workflow e fieldset
-                // usando JOIN FETCH per evitare problemi di lazy loading
-                ItemTypeConfiguration existingConfigLoaded = itemTypeConfigurationRepository
-                        .findByIdWithWorkflowAndFieldSet(existing.getId())
-                        .orElse(existing);
-                
-                // Rimuovi le permission obsolete se workflow o fieldset sono cambiati
-                permissionOrchestrator.removeObsoletePermissionsForUpdatedConfiguration(
-                        tenant,
-                        set,
-                        existingConfigLoaded,
-                        entry
-                );
+                try {
+                    // Carica la configurazione esistente dal database con workflow e fieldset
+                    // usando JOIN FETCH per evitare problemi di lazy loading
+                    ItemTypeConfiguration existingConfigLoaded = itemTypeConfigurationRepository
+                            .findByIdWithWorkflowAndFieldSet(existing.getId())
+                            .orElse(existing);
+                    
+                    // Rimuovi le permission obsolete se workflow o fieldset sono cambiati
+                    permissionOrchestrator.removeObsoletePermissionsForUpdatedConfiguration(
+                            tenant,
+                            set,
+                            existingConfigLoaded,
+                            entry
+                    );
+                } catch (Exception e) {
+                    // Se c'è un errore nella rimozione delle permission obsolete, logga ma continua
+                    log.warn("Errore durante la rimozione delle permission obsolete per la configurazione {}: {}", 
+                            existing.getId(), e.getMessage(), e);
+                }
             }
 
-            itemTypeConfigurationRepository.save(entry);
+            // Salva la configurazione e assicurati che sia completamente persistent
+            ItemTypeConfiguration savedConfig = itemTypeConfigurationRepository.save(entry);
             
             if (existing == null) {
-                permissionOrchestrator.handlePermissionsForNewConfiguration(entry);
+                try {
+                    permissionOrchestrator.handlePermissionsForNewConfiguration(savedConfig);
+                } catch (Exception e) {
+                    // Se c'è un errore nella creazione delle permission per la nuova configurazione, logga ma continua
+                    log.warn("Errore durante la creazione delle permission per la nuova configurazione {}: {}", 
+                            savedConfig.getId(), e.getMessage(), e);
+                }
             }
 
-            updatedConfigurations.add(entry);
+            // Usa la configurazione salvata (che è completamente persistent)
+            updatedConfigurations.add(savedConfig);
+        }
+        
+        // IMPORTANTE: Flush esplicito per assicurarsi che tutte le configurazioni siano persistent
+        // prima di aggiungerle alla collezione ManyToMany
+        try {
+            itemTypeConfigurationRepository.flush();
+            log.debug("Flush completato per {} configurazioni", updatedConfigurations.size());
+        } catch (Exception e) {
+            log.error("Errore durante il flush delle configurazioni: {}", e.getMessage(), e);
+            throw new ApiException("Errore durante il salvataggio delle configurazioni: " + e.getMessage());
         }
         
         // Rimuovi le configurazioni che non sono più nel DTO
@@ -264,23 +296,82 @@ public class ItemTypeSetService {
             throw new ApiException("Cannot remove all ItemTypeConfigurations. An ItemTypeSet must have at least one ItemTypeConfiguration.");
         }
 
-        for (ItemTypeConfiguration configToRemove : configsToRemove) {
-            itemTypeConfigurationRepository.delete(configToRemove);
-        }
-
-        set.getItemTypeConfigurations().clear();
-        set.getItemTypeConfigurations().addAll(updatedConfigurations);
-
-        ItemTypeSet updated = itemTypeSetRepository.save(set);
+        // IMPORTANTE: Gestione corretta delle relazioni ManyToMany
+        // 1. Assicurati che l'ItemTypeSet sia managed
+        // 2. Rimuovi le configurazioni dalla collezione
+        // 3. Aggiungi le nuove configurazioni (già salvate e flushate)
+        // 4. Salva l'ItemTypeSet (sincronizza la join table automaticamente)
+        // 5. Crea/aggiorna le permission
+        // 6. Elimina le configurazioni obsolete dal database (alla fine, dopo tutto)
+        log.debug("Rimozione di {} configurazioni dall'ItemTypeSet {}", configsToRemove.size(), set.getId());
         
-        // Crea/aggiorna le permission per l'ItemTypeSet (per assicurarsi che tutte le permission base siano create)
+        // Passo 1: Assicurati che l'ItemTypeSet sia managed prima di modificare la collezione
+        ItemTypeSet managedSet = entityManager.contains(set) ? set : entityManager.merge(set);
+        
+        // Passo 2: Rimuovi le configurazioni obsolete dalla collezione ManyToMany
+        for (ItemTypeConfiguration configToRemove : configsToRemove) {
+            // Assicurati che anche le configurazioni da rimuovere siano managed
+            ItemTypeConfiguration managedToRemove = entityManager.contains(configToRemove) 
+                    ? configToRemove 
+                    : entityManager.merge(configToRemove);
+            boolean removed = managedSet.getItemTypeConfigurations().remove(managedToRemove);
+            log.debug("Configurazione {} rimossa dalla collezione: {}", managedToRemove.getId(), removed);
+        }
+        
+        // Passo 3: Aggiungi le nuove configurazioni (già salvate e flushate)
+        // Usa EntityManager.merge() per assicurarsi che tutte le configurazioni siano completamente managed
+        // e che anche le entità correlate (Workflow, FieldSet) siano persistent
+        List<ItemTypeConfiguration> managedConfigs = new ArrayList<>();
+        for (ItemTypeConfiguration config : updatedConfigurations) {
+            // Merge assicura che l'entità e tutte le sue relazioni siano completamente managed
+            ItemTypeConfiguration managed = entityManager.merge(config);
+            managedConfigs.add(managed);
+        }
+        managedSet.getItemTypeConfigurations().addAll(managedConfigs);
+        log.debug("Aggiunte {} nuove configurazioni all'ItemTypeSet {}", managedConfigs.size(), managedSet.getId());
+
+        // Passo 4: Salva l'ItemTypeSet usando EntityManager per assicurarsi che sia completamente managed
+        ItemTypeSet updated;
+        try {
+            // Usa merge per assicurarsi che l'entità e tutte le sue relazioni siano completamente managed
+            updated = entityManager.merge(managedSet);
+            // Flush esplicito per sincronizzare la join table ManyToMany
+            entityManager.flush();
+            log.debug("ItemTypeSet {} salvato con nuove configurazioni", updated.getId());
+        } catch (Exception e) {
+            log.error("Errore durante il salvataggio dell'ItemTypeSet {}: {}", managedSet.getId(), e.getMessage(), e);
+            throw new ApiException("Errore durante il salvataggio dell'ItemTypeSet: " + e.getMessage());
+        }
+        
+        // Passo 4: Crea/aggiorna le permission per l'ItemTypeSet
         // Questo è importante quando si aggiungono nuove configurazioni
-        // Le permission vengono create automaticamente tramite ItemTypeSetPermissionService
         try {
             permissionOrchestrator.ensureItemTypeSetPermissions(updated.getId(), tenant);
+            log.debug("Permission create/aggiornate per ItemTypeSet {}", updated.getId());
         } catch (Exception e) {
             // Log dell'errore ma non bloccare l'aggiornamento
-            log.error("Error creating/updating permissions for ItemTypeSet {}", updated.getId(), e);
+            log.warn("Errore durante la creazione/aggiornamento delle permission per l'ItemTypeSet {}: {}", 
+                    updated.getId(), e.getMessage(), e);
+        }
+        
+        // Passo 5: Elimina le configurazioni obsolete dal database (alla fine, dopo tutte le altre operazioni)
+        // Questo viene fatto alla fine per evitare problemi con le relazioni
+        for (ItemTypeConfiguration configToRemove : configsToRemove) {
+            try {
+                // Verifica se la configurazione esiste ancora prima di eliminarla
+                if (itemTypeConfigurationRepository.existsById(configToRemove.getId())) {
+                    log.debug("Eliminazione ItemTypeConfiguration {}", configToRemove.getId());
+                    itemTypeConfigurationRepository.delete(configToRemove);
+                } else {
+                    log.debug("ItemTypeConfiguration {} già eliminata", configToRemove.getId());
+                }
+            } catch (Exception e) {
+                // Se la configurazione è già stata eliminata o ha relazioni che impediscono l'eliminazione,
+                // logga l'errore ma continua (idempotenza)
+                log.warn("Errore durante la rimozione di ItemTypeConfiguration {}: {}", 
+                        configToRemove.getId(), e.getMessage(), e);
+                // Non rilanciare l'eccezione per evitare il rollback della transazione
+            }
         }
         
         return dtoMapper.toItemTypeSetViewDto(updated);

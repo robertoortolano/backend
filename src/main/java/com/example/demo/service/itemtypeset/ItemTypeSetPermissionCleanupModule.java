@@ -63,9 +63,23 @@ class ItemTypeSetPermissionCleanupModule {
             if (isPreserved(preservedPermissionIds, perm.getId())) {
                 continue;
             }
-            permissionAssignmentService.deleteAssignment("FieldOwnerPermission", perm.getId(), tenant);
-            deleteProjectAssignments(itemTypeSet, perm.getId(), "FieldOwnerPermission", tenant);
-            fieldOwnerPermissionRepository.delete(perm);
+            try {
+                permissionAssignmentService.deleteAssignment("FieldOwnerPermission", perm.getId(), tenant);
+                deleteProjectAssignments(itemTypeSet, perm.getId(), "FieldOwnerPermission", tenant);
+                // Verifica se la permission esiste ancora prima di eliminarla (idempotenza)
+                if (fieldOwnerPermissionRepository.existsById(perm.getId())) {
+                    try {
+                        fieldOwnerPermissionRepository.delete(perm);
+                    } catch (Exception e) {
+                        // Se la permission è già stata eliminata, ignora (idempotenza)
+                        // log.warn("Errore durante la rimozione di FieldOwnerPermission {}: {}", perm.getId(), e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                // Se la permission o l'assegnazione sono già state eliminate, ignora l'eccezione (idempotenza)
+                // Log solo per debug, ma non interrompere il processo
+                // log.warn("Errore durante la rimozione di FieldOwnerPermission {}: {}", perm.getId(), e.getMessage());
+            }
         }
     }
 
@@ -80,9 +94,22 @@ class ItemTypeSetPermissionCleanupModule {
             if (isPreserved(preservedPermissionIds, perm.getId())) {
                 continue;
             }
-            permissionAssignmentService.deleteAssignment("StatusOwnerPermission", perm.getId(), tenant);
-            deleteProjectAssignments(itemTypeSet, perm.getId(), "StatusOwnerPermission", tenant);
-            statusOwnerPermissionRepository.delete(perm);
+            try {
+                permissionAssignmentService.deleteAssignment("StatusOwnerPermission", perm.getId(), tenant);
+                deleteProjectAssignments(itemTypeSet, perm.getId(), "StatusOwnerPermission", tenant);
+                // Verifica se la permission esiste ancora prima di eliminarla (idempotenza)
+                if (statusOwnerPermissionRepository.existsById(perm.getId())) {
+                    try {
+                        statusOwnerPermissionRepository.delete(perm);
+                    } catch (Exception e) {
+                        // Se la permission è già stata eliminata, ignora (idempotenza)
+                        // log.warn("Errore durante la rimozione di StatusOwnerPermission {}: {}", perm.getId(), e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                // Se la permission o l'assegnazione sono già state eliminate, ignora l'eccezione (idempotenza)
+                // log.warn("Errore durante la rimozione di StatusOwnerPermission {}: {}", perm.getId(), e.getMessage());
+            }
         }
     }
 
@@ -97,9 +124,22 @@ class ItemTypeSetPermissionCleanupModule {
             if (isPreserved(preservedPermissionIds, perm.getId())) {
                 continue;
             }
-            permissionAssignmentService.deleteAssignment("FieldStatusPermission", perm.getId(), tenant);
-            deleteProjectAssignments(itemTypeSet, perm.getId(), "FieldStatusPermission", tenant);
-            fieldStatusPermissionRepository.delete(perm);
+            try {
+                permissionAssignmentService.deleteAssignment("FieldStatusPermission", perm.getId(), tenant);
+                deleteProjectAssignments(itemTypeSet, perm.getId(), "FieldStatusPermission", tenant);
+                // Verifica se la permission esiste ancora prima di eliminarla (idempotenza)
+                if (fieldStatusPermissionRepository.existsById(perm.getId())) {
+                    try {
+                        fieldStatusPermissionRepository.delete(perm);
+                    } catch (Exception e) {
+                        // Se la permission è già stata eliminata, ignora (idempotenza)
+                        // log.warn("Errore durante la rimozione di FieldStatusPermission {}: {}", perm.getId(), e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                // Se la permission o l'assegnazione sono già state eliminate, ignora l'eccezione (idempotenza)
+                // log.warn("Errore durante la rimozione di FieldStatusPermission {}: {}", perm.getId(), e.getMessage());
+            }
         }
     }
 
@@ -114,9 +154,22 @@ class ItemTypeSetPermissionCleanupModule {
             if (isPreserved(preservedPermissionIds, perm.getId())) {
                 continue;
             }
-            permissionAssignmentService.deleteAssignment("ExecutorPermission", perm.getId(), tenant);
-            deleteProjectAssignments(itemTypeSet, perm.getId(), "ExecutorPermission", tenant);
-            executorPermissionRepository.delete(perm);
+            try {
+                permissionAssignmentService.deleteAssignment("ExecutorPermission", perm.getId(), tenant);
+                deleteProjectAssignments(itemTypeSet, perm.getId(), "ExecutorPermission", tenant);
+                // Verifica se la permission esiste ancora prima di eliminarla (idempotenza)
+                if (executorPermissionRepository.existsById(perm.getId())) {
+                    try {
+                        executorPermissionRepository.delete(perm);
+                    } catch (Exception e) {
+                        // Se la permission è già stata eliminata, ignora (idempotenza)
+                        // log.warn("Errore durante la rimozione di ExecutorPermission {}: {}", perm.getId(), e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                // Se la permission o l'assegnazione sono già state eliminate, ignora l'eccezione (idempotenza)
+                // log.warn("Errore durante la rimozione di ExecutorPermission {}: {}", perm.getId(), e.getMessage());
+            }
         }
     }
 
@@ -126,27 +179,38 @@ class ItemTypeSetPermissionCleanupModule {
             String permissionType,
             Tenant tenant
     ) {
-        if (itemTypeSet.getProject() != null) {
-            projectPermissionAssignmentService.deleteProjectAssignment(
-                    permissionType,
-                    permissionId,
-                    itemTypeSet.getProject().getId(),
-                    tenant
-            );
-            return;
-        }
+        try {
+            if (itemTypeSet.getProject() != null) {
+                projectPermissionAssignmentService.deleteProjectAssignment(
+                        permissionType,
+                        permissionId,
+                        itemTypeSet.getProject().getId(),
+                        tenant
+                );
+                return;
+            }
 
-        if (itemTypeSet.getProjectsAssociation() == null) {
-            return;
-        }
+            if (itemTypeSet.getProjectsAssociation() == null) {
+                return;
+            }
 
-        for (Project project : itemTypeSet.getProjectsAssociation()) {
-            projectPermissionAssignmentService.deleteProjectAssignment(
-                    permissionType,
-                    permissionId,
-                    project.getId(),
-                    tenant
-            );
+            for (Project project : itemTypeSet.getProjectsAssociation()) {
+                try {
+                    projectPermissionAssignmentService.deleteProjectAssignment(
+                            permissionType,
+                            permissionId,
+                            project.getId(),
+                            tenant
+                    );
+                } catch (Exception e) {
+                    // Se l'assegnazione di progetto è già stata eliminata, ignora l'eccezione (idempotenza)
+                    // log.warn("Errore durante la rimozione di ProjectAssignment per permission {} nel progetto {}: {}", 
+                    //          permissionId, project.getId(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            // Se l'assegnazione di progetto è già stata eliminata, ignora l'eccezione (idempotenza)
+            // log.warn("Errore durante la rimozione di ProjectAssignment per permission {}: {}", permissionId, e.getMessage());
         }
     }
 

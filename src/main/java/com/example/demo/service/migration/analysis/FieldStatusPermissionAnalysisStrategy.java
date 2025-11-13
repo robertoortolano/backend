@@ -61,21 +61,25 @@ public class FieldStatusPermissionAnalysisStrategy {
         Long itemTypeSetId = context.itemTypeSetId();
         ItemTypeSet itemTypeSet = context.owningItemTypeSet();
 
-        // Filtra solo le permission che sono effettivamente impattate:
-        // - Field non esiste più nel nuovo fieldset (solo se fieldset è cambiato)
-        // - Status non esiste più nel nuovo workflow (solo se workflow è cambiato)
-        // - Oppure entrambe le condizioni se entrambi sono cambiati
+        // Filtra le permission che sono effettivamente impattate:
+        // - Se il fieldset è cambiato: include TUTTE le permission (anche se il field esiste ancora, 
+        //   perché la FieldConfiguration potrebbe essere diversa e le permission devono essere ricreate)
+        // - Se solo il workflow è cambiato: include solo quelle con status obsoleto
+        // - Se entrambi sono cambiati: include tutte (fieldset cambia sempre le permission)
         return existingPermissions.stream()
                 .filter(permission -> {
                     Long fieldId = permission.getField() != null ? permission.getField().getId() : null;
                     Long statusId = permission.getWorkflowStatus() != null && permission.getWorkflowStatus().getStatus() != null
                             ? permission.getWorkflowStatus().getStatus().getId() : null;
                     
-                    boolean fieldObsolete = context.fieldSetChanged() && (fieldId == null || !newFieldIds.contains(fieldId));
-                    boolean statusObsolete = context.workflowChanged() && (statusId == null || !newStatusIds.contains(statusId));
+                    // Se il fieldset è cambiato, include TUTTE le permission (perché cambiano le FieldConfiguration)
+                    if (context.fieldSetChanged()) {
+                        return true;
+                    }
                     
-                    // Include solo se field o status sono obsoleti (impattati)
-                    return fieldObsolete || statusObsolete;
+                    // Se solo il workflow è cambiato, include solo quelle con status obsoleto
+                    boolean statusObsolete = context.workflowChanged() && (statusId == null || !newStatusIds.contains(statusId));
+                    return statusObsolete;
                 })
                 .map(permission -> buildImpact(permission, context, tenant, itemTypeSet, itemTypeSetId, newFieldIds, newStatusIds, newStatusesMap))
                 .collect(Collectors.toList());

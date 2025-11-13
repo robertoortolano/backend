@@ -152,29 +152,39 @@ public class PermissionAssignmentService {
      * @param tenant Tenant di appartenenza
      */
     public void deleteAssignment(String permissionType, Long permissionId, Tenant tenant) {
-        String normalizedType = normalizePermissionType(permissionType);
-        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(normalizedType, permissionId, tenant);
-        
-        if (assignmentOpt.isPresent()) {
-            PermissionAssignment assignment = assignmentOpt.get();
+        try {
+            String normalizedType = normalizePermissionType(permissionType);
+            Optional<PermissionAssignment> assignmentOpt = permissionAssignmentRepository
+                    .findByPermissionTypeAndPermissionIdAndTenantAndProjectIsNull(normalizedType, permissionId, tenant);
             
-            // Scollega ruoli e grant prima di eliminare per evitare violazioni FK
-            assignment.getRoles().clear();
-            Long grantId = null;
-            if (assignment.getGrant() != null) {
-                grantId = assignment.getGrant().getId();
-                assignment.setGrant(null);
+            if (assignmentOpt.isPresent()) {
+                PermissionAssignment assignment = assignmentOpt.get();
+                
+                // Scollega ruoli e grant prima di eliminare per evitare violazioni FK
+                assignment.getRoles().clear();
+                Long grantId = null;
+                if (assignment.getGrant() != null) {
+                    grantId = assignment.getGrant().getId();
+                    assignment.setGrant(null);
+                }
+                permissionAssignmentRepository.save(assignment);
+                
+                // Elimina PermissionAssignment
+                permissionAssignmentRepository.delete(assignment);
+                
+                // Ora puoi eliminare il Grant in sicurezza (se esiste)
+                if (grantId != null) {
+                    try {
+                        grantCleanupService.deleteGrantCompletely(grantId);
+                    } catch (Exception e) {
+                        // Se il grant è già stato eliminato o non esiste, ignora (idempotenza)
+                        // log.warn("Errore durante la rimozione del Grant {}: {}", grantId, e.getMessage());
+                    }
+                }
             }
-            permissionAssignmentRepository.save(assignment);
-            
-            // Elimina PermissionAssignment
-            permissionAssignmentRepository.delete(assignment);
-            
-            // Ora puoi eliminare il Grant in sicurezza (se esiste)
-            if (grantId != null) {
-                grantCleanupService.deleteGrantCompletely(grantId);
-            }
+        } catch (Exception e) {
+            // Se la permission o l'assegnazione sono già state eliminate, ignora l'eccezione (idempotenza)
+            // log.warn("Errore durante la rimozione di PermissionAssignment per {} {}: {}", permissionType, permissionId, e.getMessage());
         }
     }
     

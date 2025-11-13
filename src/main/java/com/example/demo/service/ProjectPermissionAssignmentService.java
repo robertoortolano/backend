@@ -194,31 +194,53 @@ public class ProjectPermissionAssignmentService {
             Long projectId,
             Tenant tenant) {
         
-        String normalizedPermissionType = normalizePermissionType(permissionType);
-        Project project = projectRepository.findByIdAndTenant(projectId, tenant)
-                .orElseThrow(() -> new ApiException("Project not found"));
-        ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, project.getItemTypeSet() != null ? project.getItemTypeSet().getId() : null);
-        resolveAndValidatePermissionForProject(normalizedPermissionType, permissionId, tenant, project, itemTypeSet);
-        
-        Optional<PermissionAssignment> assignmentOpt = permissionAssignmentRepository
-                .findByPermissionTypeAndPermissionIdAndTenantAndProject(normalizedPermissionType, permissionId, tenant, project);
-        
-        if (assignmentOpt.isPresent()) {
-            PermissionAssignment assignment = assignmentOpt.get();
+        try {
+            String normalizedPermissionType = normalizePermissionType(permissionType);
+            Project project = projectRepository.findByIdAndTenant(projectId, tenant)
+                    .orElseThrow(() -> new ApiException("Project not found"));
+            ItemTypeSet itemTypeSet = resolveProjectItemTypeSet(project, project.getItemTypeSet() != null ? project.getItemTypeSet().getId() : null);
             
-            assignment.getRoles().clear();
-            Long grantId = null;
-            if (assignment.getGrant() != null) {
-                grantId = assignment.getGrant().getId();
-                assignment.setGrant(null);
+            // Se la permission non esiste più, ignora silenziosamente (idempotenza)
+            try {
+                resolveAndValidatePermissionForProject(normalizedPermissionType, permissionId, tenant, project, itemTypeSet);
+            } catch (ApiException e) {
+                // Se la permission non esiste più, è già stata eliminata - ignora (idempotenza)
+                if (e.getMessage() != null && e.getMessage().contains("Permission not found")) {
+                    return;
+                }
+                // Rilancia altre eccezioni
+                throw e;
             }
-            permissionAssignmentRepository.save(assignment);
             
-            permissionAssignmentRepository.delete(assignment);
+            Optional<PermissionAssignment> assignmentOpt = permissionAssignmentRepository
+                    .findByPermissionTypeAndPermissionIdAndTenantAndProject(normalizedPermissionType, permissionId, tenant, project);
             
-            if (grantId != null) {
-                grantCleanupService.deleteGrantCompletely(grantId);
+            if (assignmentOpt.isPresent()) {
+                PermissionAssignment assignment = assignmentOpt.get();
+                
+                assignment.getRoles().clear();
+                Long grantId = null;
+                if (assignment.getGrant() != null) {
+                    grantId = assignment.getGrant().getId();
+                    assignment.setGrant(null);
+                }
+                permissionAssignmentRepository.save(assignment);
+                
+                permissionAssignmentRepository.delete(assignment);
+                
+                if (grantId != null) {
+                    grantCleanupService.deleteGrantCompletely(grantId);
+                }
             }
+        } catch (ApiException e) {
+            // Se la permission o l'assegnazione sono già state eliminate, ignora l'eccezione (idempotenza)
+            // Solo se l'eccezione indica che la permission non esiste
+            if (e.getMessage() != null && (e.getMessage().contains("Permission not found") || 
+                e.getMessage().contains("does not belong"))) {
+                return;
+            }
+            // Rilancia altre eccezioni
+            throw e;
         }
     }
     

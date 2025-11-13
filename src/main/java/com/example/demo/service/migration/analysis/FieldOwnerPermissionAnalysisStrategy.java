@@ -61,13 +61,14 @@ public class FieldOwnerPermissionAnalysisStrategy {
         Long itemTypeSetId = context.itemTypeSetId();
         ItemTypeSet itemTypeSet = context.owningItemTypeSet();
 
-        // Filtra solo le permission che sono effettivamente impattate:
-        // - Field non esiste più nel nuovo fieldset
+        // Filtra le permission che sono effettivamente impattate:
+        // - Include TUTTE le permission quando il fieldset cambia (anche se il field esiste ancora,
+        //   perché la FieldConfiguration potrebbe essere diversa e le permission devono essere ricreate)
         return existingPermissions.stream()
                 .filter(permission -> {
-                    Long fieldId = permission.getField() != null ? permission.getField().getId() : null;
-                    // Include solo se il field non esiste più nel nuovo fieldset
-                    return fieldId == null || !newFieldIds.contains(fieldId);
+                    // Quando il fieldset cambia, tutte le permission sono impattate
+                    // perché cambiano le FieldConfiguration anche se il field è lo stesso
+                    return true;
                 })
                 .map(permission -> buildImpact(permission, context, tenant, itemTypeSet, itemTypeSetId, newFieldIds, newFieldsMap))
                 .collect(Collectors.toList());
