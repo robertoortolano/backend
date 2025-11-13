@@ -6,6 +6,7 @@ public record ItemTypeSetUpdateDto (
 
         Long id,
         String name,
-        Set<ItemTypeConfigurationCreateDto> itemTypeConfigurations
+        Set<ItemTypeConfigurationCreateDto> itemTypeConfigurations,
+        Boolean forceRemoval
 
 ) {}

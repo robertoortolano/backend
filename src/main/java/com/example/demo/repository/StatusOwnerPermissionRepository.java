@@ -55,4 +55,10 @@ public interface StatusOwnerPermissionRepository extends JpaRepository<StatusOwn
      */
     @Query("SELECT p FROM StatusOwnerPermission p JOIN p.workflowStatus ws JOIN ws.workflow w WHERE ws.id = :workflowStatusId AND w.tenant = :tenant")
     List<StatusOwnerPermission> findByWorkflowStatusIdAndTenant(@Param("workflowStatusId") Long workflowStatusId, @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
+    /**
+     * Trova tutte le StatusOwnerPermission per una lista di WorkflowStatus, filtrate per Tenant (sicurezza)
+     */
+    @Query("SELECT p FROM StatusOwnerPermission p JOIN p.workflowStatus ws JOIN ws.workflow w WHERE ws.id IN :workflowStatusIds AND w.tenant = :tenant")
+    List<StatusOwnerPermission> findByWorkflowStatusIdInAndTenant(@Param("workflowStatusIds") Set<Long> workflowStatusIds, @Param("tenant") com.example.demo.entity.Tenant tenant);
 }

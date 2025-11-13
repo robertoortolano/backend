@@ -13,6 +13,7 @@ import com.example.demo.service.workflow.WorkflowStatusUpdateResult;
 import com.example.demo.service.workflow.WorkflowStatusUpdater;
 import com.example.demo.service.workflow.WorkflowTransitionSyncResult;
 import com.example.demo.service.workflow.WorkflowTransitionSynchronizer;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -48,6 +49,9 @@ public class WorkflowService {
     // Servizi per PermissionAssignment (nuova struttura)
     private final PermissionAssignmentService permissionAssignmentService;
     private final ProjectPermissionAssignmentService projectPermissionAssignmentService;
+    
+    // EntityManager per gestire il flush esplicito
+    private final EntityManager entityManager;
 
     @Transactional
     public WorkflowViewDto createGlobal(WorkflowCreateDto dto, Tenant tenant) {
@@ -1128,19 +1132,36 @@ public class WorkflowService {
             Long workflowId,
             Set<Long> removedStatusIds
     ) {
-        // Trova tutti gli ItemTypeSet che usano questo Workflow
-        List<ItemTypeSet> affectedItemTypeSets = findItemTypeSetsUsingWorkflow(workflowId, tenant);
-        
-        for (ItemTypeSet itemTypeSet : affectedItemTypeSets) {
-            for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-                // Trova le StatusOwnerPermissions per gli Status rimossi
-                List<StatusOwnerPermission> permissions = statusOwnerPermissionRepository
-                        .findByItemTypeConfigurationAndWorkflowStatusIdIn(config, removedStatusIds);
+        if (removedStatusIds == null || removedStatusIds.isEmpty()) {
+            return;
+        }
+
+        // Trova direttamente tutte le StatusOwnerPermission per gli stati rimossi
+        // Questo garantisce che troviamo tutte le permission, anche se non sono associate
+        // a un ItemTypeSet che usa il workflow
+        List<StatusOwnerPermission> allPermissions = statusOwnerPermissionRepository
+                .findByWorkflowStatusIdInAndTenant(removedStatusIds, tenant);
+
+        // Raggruppa le permission per ItemTypeConfiguration per gestire le assegnazioni di progetto
+        Map<ItemTypeConfiguration, List<StatusOwnerPermission>> permissionsByConfig = allPermissions.stream()
+                .collect(Collectors.groupingBy(StatusOwnerPermission::getItemTypeConfiguration));
+
+        for (Map.Entry<ItemTypeConfiguration, List<StatusOwnerPermission>> entry : permissionsByConfig.entrySet()) {
+            ItemTypeConfiguration config = entry.getKey();
+            List<StatusOwnerPermission> permissions = entry.getValue();
+            
+            // Trova l'ItemTypeSet associato a questa configurazione
+            // Nota: una ItemTypeConfiguration può essere in più ItemTypeSet, prendiamo il primo
+            List<ItemTypeSet> itemTypeSets = itemTypeSetRepository.findByItemTypeConfigurations_IdAndTenant(
+                    config.getId(), tenant);
+            ItemTypeSet itemTypeSet = itemTypeSets.isEmpty() ? null : itemTypeSets.get(0);
+            
+            for (StatusOwnerPermission permission : permissions) {
+                // Elimina le PermissionAssignment globali
+                permissionAssignmentService.deleteAssignment("StatusOwnerPermission", permission.getId(), tenant);
                 
-                // Rimuovi tutte le permission
-                for (StatusOwnerPermission permission : permissions) {
-                    // Rimuovi prima eventuali PermissionAssignment globali e di progetto
-                    permissionAssignmentService.deleteAssignment("StatusOwnerPermission", permission.getId(), tenant);
+                // Elimina le assegnazioni di progetto se l'ItemTypeSet è associato a progetti
+                if (itemTypeSet != null) {
                     if (itemTypeSet.getProject() != null) {
                         projectPermissionAssignmentService.deleteProjectAssignment(
                                 "StatusOwnerPermission",
@@ -1158,10 +1179,17 @@ public class WorkflowService {
                             );
                         }
                     }
-                    statusOwnerPermissionRepository.delete(permission);
                 }
+                
+                // Elimina la permission
+                statusOwnerPermissionRepository.delete(permission);
             }
         }
+        
+        // Flush esplicito per assicurarsi che le delete delle StatusOwnerPermission 
+        // siano eseguite nel database prima di eliminare i WorkflowStatus
+        // Questo evita errori di foreign key constraint
+        entityManager.flush();
     }
     
     /**
@@ -1205,15 +1233,32 @@ public class WorkflowService {
             return;
         }
 
-        List<ItemTypeSet> affectedItemTypeSets = findItemTypeSetsUsingWorkflow(workflowId, tenant);
+        // Trova direttamente tutte le FieldStatusPermission per gli stati rimossi
+        // Questo garantisce che troviamo tutte le permission, anche se non sono associate
+        // a un ItemTypeSet che usa il workflow
+        List<FieldStatusPermission> allPermissions = fieldStatusPermissionRepository
+                .findByWorkflowStatusIdInAndTenant(removedWorkflowStatusIds, tenant);
 
-        for (ItemTypeSet itemTypeSet : affectedItemTypeSets) {
-            for (ItemTypeConfiguration config : itemTypeSet.getItemTypeConfigurations()) {
-                List<FieldStatusPermission> permissions = fieldStatusPermissionRepository
-                        .findAllByItemTypeConfigurationAndWorkflowStatusIdIn(config, removedWorkflowStatusIds);
+        // Raggruppa le permission per ItemTypeConfiguration per gestire le assegnazioni di progetto
+        Map<ItemTypeConfiguration, List<FieldStatusPermission>> permissionsByConfig = allPermissions.stream()
+                .collect(Collectors.groupingBy(FieldStatusPermission::getItemTypeConfiguration));
 
-                for (FieldStatusPermission permission : permissions) {
-                    permissionAssignmentService.deleteAssignment("FieldStatusPermission", permission.getId(), tenant);
+        for (Map.Entry<ItemTypeConfiguration, List<FieldStatusPermission>> entry : permissionsByConfig.entrySet()) {
+            ItemTypeConfiguration config = entry.getKey();
+            List<FieldStatusPermission> permissions = entry.getValue();
+            
+            // Trova l'ItemTypeSet associato a questa configurazione
+            // Nota: una ItemTypeConfiguration può essere in più ItemTypeSet, prendiamo il primo
+            List<ItemTypeSet> itemTypeSets = itemTypeSetRepository.findByItemTypeConfigurations_IdAndTenant(
+                    config.getId(), tenant);
+            ItemTypeSet itemTypeSet = itemTypeSets.isEmpty() ? null : itemTypeSets.get(0);
+            
+            for (FieldStatusPermission permission : permissions) {
+                // Elimina le PermissionAssignment globali
+                permissionAssignmentService.deleteAssignment("FieldStatusPermission", permission.getId(), tenant);
+                
+                // Elimina le assegnazioni di progetto se l'ItemTypeSet è associato a progetti
+                if (itemTypeSet != null) {
                     if (itemTypeSet.getProject() != null) {
                         projectPermissionAssignmentService.deleteProjectAssignment(
                                 "FieldStatusPermission",
@@ -1231,10 +1276,17 @@ public class WorkflowService {
                             );
                         }
                     }
-                    fieldStatusPermissionRepository.delete(permission);
                 }
+                
+                // Elimina la permission
+                fieldStatusPermissionRepository.delete(permission);
             }
         }
+        
+        // Flush esplicito per assicurarsi che le delete delle FieldStatusPermission 
+        // siano eseguite nel database prima di eliminare i WorkflowStatus
+        // Questo evita errori di foreign key constraint
+        entityManager.flush();
     }
     
     /**
@@ -1288,6 +1340,11 @@ public class WorkflowService {
 
                 // POI: Rimuovi gli stati dalle collezioni (questo rimuoverà anche le transizioni dalle collezioni)
                 workflow.getStatuses().removeAll(statusesToRemove);
+                
+                // Flush esplicito dopo aver rimosso gli stati dalla collezione per assicurarsi che
+                // tutte le delete delle permission siano state eseguite nel database prima di
+                // procedere con altre operazioni che potrebbero attivare un auto-flush
+                entityManager.flush();
 
                 if (!removedTransitionIds.isEmpty()) {
                     List<Transition> transitionsToRemove = transitionRepository.findAllById(removedTransitionIds);

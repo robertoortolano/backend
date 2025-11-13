@@ -75,4 +75,16 @@ public interface FieldStatusPermissionRepository extends JpaRepository<FieldStat
     @Query("SELECT p FROM FieldStatusPermission p WHERE p.itemTypeConfiguration.id IN :itemTypeConfigurationIds AND p.itemTypeConfiguration.tenant = :tenant")
     List<FieldStatusPermission> findAllByItemTypeConfigurationIdInAndTenant(@Param("itemTypeConfigurationIds") Collection<Long> itemTypeConfigurationIds,
                                                                             @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
+    /**
+     * Trova tutte le FieldStatusPermission per un WorkflowStatus, filtrate per Tenant (sicurezza)
+     */
+    @Query("SELECT p FROM FieldStatusPermission p WHERE p.workflowStatus.id = :workflowStatusId AND p.itemTypeConfiguration.tenant = :tenant")
+    List<FieldStatusPermission> findByWorkflowStatusIdAndTenant(@Param("workflowStatusId") Long workflowStatusId, @Param("tenant") com.example.demo.entity.Tenant tenant);
+    
+    /**
+     * Trova tutte le FieldStatusPermission per una lista di WorkflowStatus, filtrate per Tenant (sicurezza)
+     */
+    @Query("SELECT p FROM FieldStatusPermission p WHERE p.workflowStatus.id IN :workflowStatusIds AND p.itemTypeConfiguration.tenant = :tenant")
+    List<FieldStatusPermission> findByWorkflowStatusIdInAndTenant(@Param("workflowStatusIds") Set<Long> workflowStatusIds, @Param("tenant") com.example.demo.entity.Tenant tenant);
 }
