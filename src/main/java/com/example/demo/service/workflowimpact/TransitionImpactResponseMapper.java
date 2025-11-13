@@ -7,7 +7,11 @@ import com.example.demo.service.workflowimpact.model.ProjectGrantData;
 import com.example.demo.service.workflowimpact.model.TransitionImpactAnalysisResult;
 import org.springframework.stereotype.Component;
 
+import com.example.demo.entity.Project;
+
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -20,10 +24,12 @@ public class TransitionImpactResponseMapper {
                 .map(this::mapExecutorPermission)
                 .collect(Collectors.toList());
 
-        List<TransitionRemovalImpactDto.ItemTypeSetImpact> affectedItemTypeSets = analysisResult.getAffectedItemTypeSets()
-                .stream()
-                .map(this::mapItemTypeSetImpact)
-                .collect(Collectors.toList());
+        List<TransitionRemovalImpactDto.ItemTypeSetImpact> affectedItemTypeSets = mapItemTypeSetImpactsWithAggregates(
+                analysisResult.getAffectedItemTypeSets(),
+                executorPermissions,
+                List.of(), // statusOwnerPermissions - non ancora supportato da TransitionImpactAnalyzer
+                List.of()  // fieldStatusPermissions - non ancora supportato da TransitionImpactAnalyzer
+        );
 
         int totalExecutorPermissions = executorPermissions.size();
         int totalRoleAssignments = analysisResult.getExecutorPermissionImpacts().stream()
@@ -77,13 +83,118 @@ public class TransitionImpactResponseMapper {
                 .build();
     }
 
-    private TransitionRemovalImpactDto.ItemTypeSetImpact mapItemTypeSetImpact(ItemTypeSet itemTypeSet) {
-        return TransitionRemovalImpactDto.ItemTypeSetImpact.builder()
-                .itemTypeSetId(itemTypeSet.getId())
-                .itemTypeSetName(itemTypeSet.getName())
-                .projectId(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getId() : null)
-                .projectName(itemTypeSet.getProject() != null ? itemTypeSet.getProject().getName() : null)
-                .build();
+    private List<TransitionRemovalImpactDto.ItemTypeSetImpact> mapItemTypeSetImpactsWithAggregates(
+            List<ItemTypeSet> itemTypeSets,
+            List<TransitionRemovalImpactDto.PermissionImpact> executorPermissions,
+            List<TransitionRemovalImpactDto.StatusOwnerPermissionImpact> statusOwnerPermissions,
+            List<TransitionRemovalImpactDto.FieldStatusPermissionImpact> fieldStatusPermissions
+    ) {
+        return itemTypeSets.stream()
+                .map(its -> {
+                    Long itemTypeSetId = its.getId();
+
+                    List<TransitionRemovalImpactDto.PermissionImpact> itsExecutorPermissions = executorPermissions.stream()
+                            .filter(p -> p.getItemTypeSetId().equals(itemTypeSetId))
+                            .collect(Collectors.toList());
+
+                    List<TransitionRemovalImpactDto.StatusOwnerPermissionImpact> itsStatusOwnerPermissions = statusOwnerPermissions.stream()
+                            .filter(p -> p.getItemTypeSetId().equals(itemTypeSetId))
+                            .collect(Collectors.toList());
+
+                    List<TransitionRemovalImpactDto.FieldStatusPermissionImpact> itsFieldStatusPermissions = fieldStatusPermissions.stream()
+                            .filter(p -> p.getItemTypeSetId().equals(itemTypeSetId))
+                            .collect(Collectors.toList());
+
+                    int totalPermissions = itsExecutorPermissions.size() + itsStatusOwnerPermissions.size() + itsFieldStatusPermissions.size();
+
+                    int totalRoleAssignments = itsExecutorPermissions.stream()
+                            .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
+                            .sum()
+                            + itsStatusOwnerPermissions.stream()
+                            .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
+                            .sum()
+                            + itsFieldStatusPermissions.stream()
+                            .mapToInt(p -> p.getAssignedRoles() != null ? p.getAssignedRoles().size() : 0)
+                            .sum();
+
+                    int totalGlobalGrants = (int) itsExecutorPermissions.stream()
+                            .filter(p -> p.getGrantId() != null)
+                            .count()
+                            + (int) itsStatusOwnerPermissions.stream()
+                            .filter(p -> p.getGrantId() != null)
+                            .count()
+                            + (int) itsFieldStatusPermissions.stream()
+                            .filter(p -> p.getGrantId() != null)
+                            .count();
+
+                    Map<Long, Integer> projectGrantsCount = new HashMap<>();
+
+                    for (TransitionRemovalImpactDto.StatusOwnerPermissionImpact perm : itsStatusOwnerPermissions) {
+                        if (perm.getProjectGrants() != null) {
+                            for (TransitionRemovalImpactDto.ProjectGrantInfo pg : perm.getProjectGrants()) {
+                                if (pg.getProjectId() != null) {
+                                    projectGrantsCount.merge(pg.getProjectId(), 1, Integer::sum);
+                                }
+                            }
+                        }
+                    }
+
+                    for (TransitionRemovalImpactDto.PermissionImpact perm : itsExecutorPermissions) {
+                        if (perm.getProjectGrants() != null) {
+                            for (TransitionRemovalImpactDto.ProjectGrantInfo pg : perm.getProjectGrants()) {
+                                if (pg.getProjectId() != null) {
+                                    projectGrantsCount.merge(pg.getProjectId(), 1, Integer::sum);
+                                }
+                            }
+                        }
+                    }
+
+                    for (TransitionRemovalImpactDto.FieldStatusPermissionImpact perm : itsFieldStatusPermissions) {
+                        if (perm.getProjectGrants() != null) {
+                            for (TransitionRemovalImpactDto.ProjectGrantInfo pg : perm.getProjectGrants()) {
+                                if (pg.getProjectId() != null) {
+                                    projectGrantsCount.merge(pg.getProjectId(), 1, Integer::sum);
+                                }
+                            }
+                        }
+                    }
+
+                    int totalProjectGrants = projectGrantsCount.values().stream().mapToInt(Integer::intValue).sum();
+
+                    List<TransitionRemovalImpactDto.ProjectImpact> projectImpacts = projectGrantsCount.entrySet().stream()
+                            .map(entry -> {
+                                Long projectId = entry.getKey();
+                                String projectName;
+                                if (its.getProject() != null && its.getProject().getId().equals(projectId)) {
+                                    projectName = its.getProject().getName();
+                                } else {
+                                    projectName = its.getProjectsAssociation().stream()
+                                            .filter(project -> project.getId().equals(projectId))
+                                            .findFirst()
+                                            .map(Project::getName)
+                                            .orElse("Progetto " + projectId);
+                                }
+                                return TransitionRemovalImpactDto.ProjectImpact.builder()
+                                        .projectId(projectId)
+                                        .projectName(projectName)
+                                        .projectGrantsCount(entry.getValue())
+                                        .build();
+                            })
+                            .collect(Collectors.toList());
+
+                    return TransitionRemovalImpactDto.ItemTypeSetImpact.builder()
+                            .itemTypeSetId(itemTypeSetId)
+                            .itemTypeSetName(its.getName())
+                            .projectId(its.getProject() != null ? its.getProject().getId() : null)
+                            .projectName(its.getProject() != null ? its.getProject().getName() : null)
+                            .totalPermissions(totalPermissions)
+                            .totalRoleAssignments(totalRoleAssignments)
+                            .totalGlobalGrants(totalGlobalGrants)
+                            .totalProjectGrants(totalProjectGrants)
+                            .projectImpacts(projectImpacts)
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 
     private List<TransitionRemovalImpactDto.ProjectGrantInfo> mapProjectGrants(List<ProjectGrantData> projectGrants) {
