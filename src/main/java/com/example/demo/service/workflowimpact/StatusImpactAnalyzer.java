@@ -34,6 +34,27 @@ public class StatusImpactAnalyzer {
             Long workflowId,
             Set<Long> removedStatusIds
     ) {
+        // Metodo legacy: calcola le transizioni rimosse in base agli stati rimossi
+        // (potrebbe includere transizioni solo spostate)
+        Workflow workflow = workflowRepository.findByIdAndTenant(workflowId, tenant)
+                .orElseThrow(() -> new ApiException("Workflow not found: " + workflowId));
+
+        List<Transition> workflowTransitions = transitionRepository.findByWorkflowAndTenant(workflow, tenant);
+        Map<Long, Set<Long>> transitionIdsByStatus = indexTransitionIdsByStatus(workflowTransitions);
+
+        Set<Long> removedTransitionIds = removedStatusIds.stream()
+                .flatMap(statusId -> transitionIdsByStatus.getOrDefault(statusId, Collections.emptySet()).stream())
+                .collect(Collectors.toSet());
+
+        return analyzeStatusRemovalImpact(tenant, workflowId, removedStatusIds, removedTransitionIds);
+    }
+
+    public StatusImpactAnalysisResult analyzeStatusRemovalImpact(
+            Tenant tenant,
+            Long workflowId,
+            Set<Long> removedStatusIds,
+            Set<Long> actuallyRemovedTransitionIds
+    ) {
         Workflow workflow = workflowRepository.findByIdAndTenant(workflowId, tenant)
                 .orElseThrow(() -> new ApiException("Workflow not found: " + workflowId));
 
@@ -51,14 +72,11 @@ public class StatusImpactAnalyzer {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
-        List<Transition> workflowTransitions = transitionRepository.findByWorkflowAndTenant(workflow, tenant);
-        Map<Long, Set<Long>> transitionIdsByStatus = indexTransitionIdsByStatus(workflowTransitions);
-
-        Set<Long> removedTransitionIds = removedWorkflowStatuses.stream()
-                .map(WorkflowStatus::getId)
-                .filter(Objects::nonNull)
-                .flatMap(statusId -> transitionIdsByStatus.getOrDefault(statusId, Collections.emptySet()).stream())
-                .collect(Collectors.toSet());
+        // Usa le transizioni effettivamente rimosse passate come parametro
+        // invece di calcolarle in base agli stati rimossi
+        Set<Long> removedTransitionIds = actuallyRemovedTransitionIds != null 
+                ? actuallyRemovedTransitionIds 
+                : Collections.emptySet();
 
         Set<Long> removedStatusEntityIds = removedWorkflowStatuses.stream()
                 .map(WorkflowStatus::getStatus)
@@ -135,6 +153,8 @@ public class StatusImpactAnalyzer {
                             itemTypeSet,
                             itemTypeSet.getTenant());
 
+                    // Quando si rimuove uno stato, le permission associate non possono essere preservate
+                    // perché lo stato stesso viene rimosso
                     impacts.add(StatusOwnerPermissionImpactData.builder()
                             .permissionId(perm.getId())
                             .permissionType("STATUS_OWNER")
@@ -150,8 +170,8 @@ public class StatusImpactAnalyzer {
                             .grantName(assignmentData.grantName())
                             .assignedRoles(assignmentData.assignedRoles())
                             .hasAssignments(assignmentData.hasAssignments())
-                            .canBePreserved(assignmentData.hasAssignments())
-                            .defaultPreserve(assignmentData.hasAssignments())
+                            .canBePreserved(false) // Non può essere preservata quando lo stato viene rimosso
+                            .defaultPreserve(false)
                             .projectGrants(assignmentData.projectGrants())
                             .build());
                 }
@@ -201,7 +221,9 @@ public class StatusImpactAnalyzer {
                             itemTypeSet,
                             itemTypeSet.getTenant());
 
-                    boolean canBePreserved = assignmentData.hasAssignments();
+                    // Quando si rimuove uno stato, le permission associate non possono essere preservate
+                    // perché lo stato stesso viene rimosso
+                    boolean canBePreserved = false;
 
                     impacts.add(FieldStatusPermissionImpactData.builder()
                             .permissionId(perm.getId())
@@ -258,6 +280,8 @@ public class StatusImpactAnalyzer {
                     WorkflowStatus fromStatus = transition.getFromStatus();
                     WorkflowStatus toStatus = transition.getToStatus();
 
+                    // Quando si rimuove uno stato, le transizioni associate vengono rimosse,
+                    // quindi le ExecutorPermission non possono essere preservate
                     impacts.add(ExecutorPermissionImpactData.builder()
                             .permissionId(perm.getId())
                             .permissionType("EXECUTOR")
@@ -275,8 +299,8 @@ public class StatusImpactAnalyzer {
                             .hasAssignments(assignmentData.hasAssignments())
                             .transitionIdMatch(transition.getId())
                             .transitionNameMatch(transition.getName() != null ? transition.getName() : "")
-                            .canBePreserved(assignmentData.hasAssignments())
-                            .defaultPreserve(assignmentData.hasAssignments())
+                            .canBePreserved(false) // Non può essere preservata quando la transizione viene rimossa insieme allo stato
+                            .defaultPreserve(false)
                             .projectGrants(assignmentData.projectGrants())
                             .build());
                 }

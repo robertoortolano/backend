@@ -415,6 +415,17 @@ public class WorkflowService {
         // Delega l'analisi degli impatti al servizio dedicato
         return workflowImpactAnalysisService.analyzeStatusRemovalImpact(tenant, workflowId, removedStatusIds);
     }
+
+    public StatusRemovalImpactDto analyzeStatusRemovalImpact(
+            Tenant tenant,
+            Long workflowId,
+            Set<Long> removedStatusIds,
+            Set<Long> actuallyRemovedTransitionIds
+    ) {
+        // Delega l'analisi degli impatti al servizio dedicato con le transizioni effettivamente rimosse
+        return workflowImpactAnalysisService.analyzeStatusRemovalImpact(
+                tenant, workflowId, removedStatusIds, actuallyRemovedTransitionIds);
+    }
     
     /**
      * Rimuove le StatusOwnerPermissions orfane per gli Status rimossi
@@ -672,6 +683,16 @@ public class WorkflowService {
 
         return workflow.getStatuses().stream()
                 .map(WorkflowStatus::getId)
+                .collect(Collectors.toSet());
+    }
+
+    public Set<Long> getWorkflowTransitionIds(Long workflowId, Tenant tenant) {
+        Workflow workflow = workflowRepository.findByIdAndTenant(workflowId, tenant)
+                .orElseThrow(() -> new ApiException("Workflow not found: " + workflowId));
+
+        return workflow.getTransitions().stream()
+                .map(Transition::getId)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
     }
 }

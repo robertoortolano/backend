@@ -35,6 +35,17 @@ public class WorkflowImpactAnalysisService {
         return statusImpactResponseMapper.toDto(analysisResult);
     }
 
+    public StatusRemovalImpactDto analyzeStatusRemovalImpact(
+            Tenant tenant,
+            Long workflowId,
+            Set<Long> removedStatusIds,
+            Set<Long> actuallyRemovedTransitionIds
+    ) {
+        StatusImpactAnalysisResult analysisResult =
+                statusImpactAnalyzer.analyzeStatusRemovalImpact(tenant, workflowId, removedStatusIds, actuallyRemovedTransitionIds);
+        return statusImpactResponseMapper.toDto(analysisResult);
+    }
+
     public TransitionRemovalImpactDto analyzeTransitionRemovalImpact(
             Tenant tenant,
             Long workflowId,

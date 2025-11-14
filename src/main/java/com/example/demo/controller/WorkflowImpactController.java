@@ -229,7 +229,20 @@ public class WorkflowImpactController {
                 .filter(id -> !newStatusIds.contains(id))
                 .collect(Collectors.toSet());
 
-        StatusRemovalImpactDto impact = workflowService.analyzeStatusRemovalImpact(tenant, workflowId, removedStatusIds);
+        // Calcola le transizioni effettivamente rimosse (non solo spostate)
+        // Confronta le transizioni esistenti con quelle nel DTO
+        Set<Long> existingTransitionIds = workflowService.getWorkflowTransitionIds(workflowId, tenant);
+        Set<Long> newTransitionIds = dto.transitions().stream()
+                .filter(t -> t.id() != null)
+                .map(com.example.demo.dto.TransitionUpdateDto::id)
+                .collect(Collectors.toSet());
+        
+        Set<Long> actuallyRemovedTransitionIds = existingTransitionIds.stream()
+                .filter(id -> !newTransitionIds.contains(id))
+                .collect(Collectors.toSet());
+
+        StatusRemovalImpactDto impact = workflowService.analyzeStatusRemovalImpact(
+                tenant, workflowId, removedStatusIds, actuallyRemovedTransitionIds);
         return ResponseEntity.ok(impact);
     }
 
