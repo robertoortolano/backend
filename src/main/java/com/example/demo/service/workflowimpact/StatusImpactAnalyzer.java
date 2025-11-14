@@ -5,6 +5,7 @@ import com.example.demo.exception.ApiException;
 import com.example.demo.repository.*;
 import com.example.demo.service.PermissionAssignmentService;
 import com.example.demo.service.ProjectPermissionAssignmentService;
+import com.example.demo.service.workflow.WorkflowHelper;
 import com.example.demo.service.workflowimpact.model.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,7 @@ public class StatusImpactAnalyzer {
     private final ExecutorPermissionRepository executorPermissionRepository;
     private final PermissionAssignmentService permissionAssignmentService;
     private final ProjectPermissionAssignmentService projectPermissionAssignmentService;
+    private final WorkflowHelper workflowHelper;
 
     public StatusImpactAnalysisResult analyzeStatusRemovalImpact(
             Tenant tenant,
@@ -115,7 +117,7 @@ public class StatusImpactAnalyzer {
                 .collect(Collectors.toList());
 
         List<String> removedStatusNames = getStatusNames(removedStatusIds, tenant);
-        List<String> removedTransitionNames = getTransitionNames(removedTransitionIds, tenant);
+        List<String> removedTransitionNames = workflowHelper.getTransitionNames(removedTransitionIds, tenant);
 
         return StatusImpactAnalysisResult.builder()
                 .workflow(workflow)
@@ -427,13 +429,6 @@ public class StatusImpactAnalyzer {
                 .collect(Collectors.toList());
     }
 
-    private List<String> getTransitionNames(Set<Long> transitionIds, Tenant tenant) {
-        return transitionIds.stream()
-                .map(id -> transitionRepository.findByIdAndTenant(id, tenant)
-                        .map(Transition::getName)
-                        .orElse("Unknown"))
-                .collect(Collectors.toList());
-    }
 
     private record AssignmentData(
             List<String> assignedRoles,

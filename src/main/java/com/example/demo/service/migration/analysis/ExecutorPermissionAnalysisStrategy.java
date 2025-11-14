@@ -12,6 +12,7 @@ import com.example.demo.entity.Transition;
 import com.example.demo.repository.ExecutorPermissionRepository;
 import com.example.demo.service.PermissionAssignmentService;
 import com.example.demo.service.ProjectPermissionAssignmentService;
+import com.example.demo.service.workflow.WorkflowHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +32,7 @@ public class ExecutorPermissionAnalysisStrategy {
     private final ExecutorPermissionRepository executorPermissionRepository;
     private final PermissionAssignmentService permissionAssignmentService;
     private final ProjectPermissionAssignmentService projectPermissionAssignmentService;
+    private final WorkflowHelper workflowHelper;
 
     public List<ItemTypeConfigurationMigrationImpactDto.SelectablePermissionImpact> analyze(MigrationAnalysisContext context) {
         if (!context.workflowChanged()) {
@@ -124,7 +126,7 @@ public class ExecutorPermissionAnalysisStrategy {
                 .permissionId(permission.getId())
                 .permissionType("EXECUTORS")
                 .entityId(transitionId)
-                .entityName(transitionName != null ? transitionName : formatTransitionName(fromStatusName, toStatusName))
+                .entityName(transitionName != null ? transitionName : workflowHelper.formatTransitionName(fromStatusName, toStatusName))
                 .matchingEntityId(canPreserve && matchingTransition != null ? matchingTransition.getTransitionId() : null)
                 .matchingEntityName(canPreserve && matchingTransition != null ? matchingTransition.getTransitionName() : null)
                 .assignedRoles(assignedRoles)
@@ -145,15 +147,6 @@ public class ExecutorPermissionAnalysisStrategy {
                 .build();
     }
 
-    private String formatTransitionName(String fromStatusName, String toStatusName) {
-        if (fromStatusName == null && toStatusName == null) {
-            return null;
-        }
-        return String.format("%s -> %s",
-                fromStatusName != null ? fromStatusName : "?",
-                toStatusName != null ? toStatusName : "?"
-        );
-    }
 
     private List<ItemTypeConfigurationMigrationImpactDto.ProjectGrantInfo> collectProjectGrants(
             ExecutorPermission permission,

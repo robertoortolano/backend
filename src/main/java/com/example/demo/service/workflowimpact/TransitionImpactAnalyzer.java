@@ -4,10 +4,10 @@ import com.example.demo.entity.*;
 import com.example.demo.exception.ApiException;
 import com.example.demo.repository.ExecutorPermissionRepository;
 import com.example.demo.repository.ItemTypeSetRepository;
-import com.example.demo.repository.TransitionRepository;
 import com.example.demo.repository.WorkflowRepository;
 import com.example.demo.service.PermissionAssignmentService;
 import com.example.demo.service.ProjectPermissionAssignmentService;
+import com.example.demo.service.workflow.WorkflowHelper;
 import com.example.demo.service.workflowimpact.model.ExecutorPermissionImpactData;
 import com.example.demo.service.workflowimpact.model.ProjectGrantData;
 import com.example.demo.service.workflowimpact.model.TransitionImpactAnalysisResult;
@@ -24,11 +24,11 @@ import java.util.stream.Collectors;
 public class TransitionImpactAnalyzer {
 
     private final WorkflowRepository workflowRepository;
-    private final TransitionRepository transitionRepository;
     private final ItemTypeSetRepository itemTypeSetRepository;
     private final ExecutorPermissionRepository executorPermissionRepository;
     private final PermissionAssignmentService permissionAssignmentService;
     private final ProjectPermissionAssignmentService projectPermissionAssignmentService;
+    private final WorkflowHelper workflowHelper;
 
     public TransitionImpactAnalysisResult analyzeTransitionRemovalImpact(
             Tenant tenant,
@@ -56,7 +56,7 @@ public class TransitionImpactAnalyzer {
                 .filter(its -> itemTypeSetIdsWithImpact.contains(its.getId()))
                 .collect(Collectors.toList());
 
-        List<String> removedTransitionNames = getTransitionNames(removedTransitionIds, tenant);
+        List<String> removedTransitionNames = workflowHelper.getTransitionNames(removedTransitionIds, tenant);
 
         return TransitionImpactAnalysisResult.builder()
                 .workflow(workflow)
@@ -191,13 +191,6 @@ public class TransitionImpactAnalyzer {
         return itemTypeSetRepository.findByItemTypeConfigurationsWorkflowIdAndTenant(workflowId, tenant);
     }
 
-    private List<String> getTransitionNames(Set<Long> transitionIds, Tenant tenant) {
-        return transitionIds.stream()
-                .map(id -> transitionRepository.findByIdAndTenant(id, tenant)
-                        .map(Transition::getName)
-                        .orElse("Unknown"))
-                .collect(Collectors.toList());
-    }
 
     private record AssignmentData(
             List<String> assignedRoles,
